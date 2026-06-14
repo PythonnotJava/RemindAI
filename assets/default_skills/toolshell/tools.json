@@ -1,0 +1,129 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_read",
+      "description": "读取文件内容。支持指定行范围。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "文件路径(相对于项目根目录)"},
+          "encoding": {"type": "string", "default": "utf-8"},
+          "start_line": {"type": "integer", "description": "起始行号(从1开始)"},
+          "end_line": {"type": "integer", "description": "结束行号"}
+        },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_write",
+      "description": "写入文件。支持新建、覆盖、追加。自动创建父目录。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "目标文件路径"},
+          "content": {"type": "string", "description": "写入内容"},
+          "mode": {"type": "string", "enum": ["create", "overwrite", "append"]}
+        },
+        "required": ["path", "content", "mode"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_delete",
+      "description": "删除文件或目录。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "目标路径"},
+          "recursive": {"type": "boolean", "default": false}
+        },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_search",
+      "description": "搜索文件。按文件名glob匹配，可选按内容过滤。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": {"type": "string", "description": "glob模式(如 *.py, **/*.dart)"},
+          "scope": {"type": "string", "description": "搜索目录(默认项目根)"},
+          "content": {"type": "string", "description": "内容正则"},
+          "max_results": {"type": "integer", "default": 20}
+        },
+        "required": ["pattern"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_exec",
+      "description": "执行Shell命令。支持 git/flutter/npm/pip/cargo 等任意CLI。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string", "description": "Shell命令"},
+          "cwd": {"type": "string", "description": "工作目录(相对项目根)"},
+          "timeout": {"type": "integer", "default": 120, "description": "超时秒数"}
+        },
+        "required": ["command"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_memory_store",
+      "description": "存储记忆。保存重要决策、事实、上下文、错误教训。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "content": {"type": "string", "description": "记忆内容"},
+          "type": {"type": "string", "enum": ["fact", "decision", "context", "error", "outcome"]},
+          "importance": {"type": "number", "description": "0.0~1.0"}
+        },
+        "required": ["content", "type", "importance"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_memory_recall",
+      "description": "召回相关记忆。根据查询语义检索历史。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "检索查询"},
+          "limit": {"type": "integer", "default": 5}
+        },
+        "required": ["query"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_run_python",
+      "description": "执行Python代码并返回结果。【重要】当用户要求画图、可视化、数据分析、运行Python时，你必须调用此工具实际执行代码，禁止仅输出代码文本。自动捕获matplotlib图片并返回路径，用![](路径)在回复中展示图片。纯文本结果直接引用stdout。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": {"type": "string", "description": "Python代码"},
+          "timeout": {"type": "integer", "default": 60, "description": "超时秒数"}
+        },
+        "required": ["code"]
+      }
+    }
+  }
+]
