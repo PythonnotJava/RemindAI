@@ -72,3 +72,4 @@ flutter:
     - assets/default_skills/schedule/
     - assets/default_skills/system/
     - assets/icons/
+    - assets/scripts/paddle_ocr/
