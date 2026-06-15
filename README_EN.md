@@ -11,7 +11,8 @@
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
     <img src="https://img.shields.io/badge/platform-Windows-brightgreen.svg" alt="Platform" />
     <img src="https://img.shields.io/badge/Flutter-3.12+-02569B.svg?logo=flutter" alt="Flutter" />
-    <img src="https://img.shields.io/badge/MCP-purple.svg" alt="MCP" />
+   <img src="https://img.shields.io/badge/MCP Support-purple.svg" alt="MCP" />
+    <img src="https://img.shields.io/badge/Skill Support-purple.svg" alt="Skill" />
   </p>
 </div>
 
@@ -89,7 +90,7 @@ The app ships with these executables — no extra installation needed:
 |---|---|---|
 | `rg` | [ripgrep](https://github.com/BurntSushi/ripgrep) — blazing fast regex search | BurntSushi/ripgrep |
 | `fd` | [fd](https://github.com/sharkdp/fd) — modern file finder | sharkdp/fd |
-| `rtk` | [RTK](https://github.com/nicobailey/rtk) — Token compressor, 60-90% output reduction | nicobailey/rtk |
+| `rtk` | [RTK](https://github.com/rtk-ai/rtk) — Token compressor, 60-90% output reduction | nicobailey/rtk |
 
 ---
 
