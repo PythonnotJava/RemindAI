@@ -29,7 +29,7 @@ migrate_working_dir/
 # Agent workspace files (personal)
 SOUL.md
 USER.md
-memory/
+
 
 # Flutter/Dart/Pub related
 **/doc/api/
