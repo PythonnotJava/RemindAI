@@ -169,6 +169,12 @@ abstract class S {
   /// **'日志'**
   String get navLogs;
 
+  /// No description provided for @navPet.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物'**
+  String get navPet;
+
   /// No description provided for @settingsTitle.
   ///
   /// In zh, this message translates to:
@@ -270,6 +276,90 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'语言'**
   String get settingsLanguage;
+
+  /// No description provided for @settingsFont.
+  ///
+  /// In zh, this message translates to:
+  /// **'字体设置'**
+  String get settingsFont;
+
+  /// No description provided for @settingsUiFont.
+  ///
+  /// In zh, this message translates to:
+  /// **'界面字体'**
+  String get settingsUiFont;
+
+  /// No description provided for @settingsUiFontDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'控制导航、设置等非对话区域的字体'**
+  String get settingsUiFontDesc;
+
+  /// No description provided for @settingsUiFontSize.
+  ///
+  /// In zh, this message translates to:
+  /// **'界面字号'**
+  String get settingsUiFontSize;
+
+  /// No description provided for @settingsChatFont.
+  ///
+  /// In zh, this message translates to:
+  /// **'交互字体'**
+  String get settingsChatFont;
+
+  /// No description provided for @settingsChatFontDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'控制对话和多Agent协作区域的字体'**
+  String get settingsChatFontDesc;
+
+  /// No description provided for @settingsChatFontSize.
+  ///
+  /// In zh, this message translates to:
+  /// **'交互字号'**
+  String get settingsChatFontSize;
+
+  /// No description provided for @settingsFontDefault.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认'**
+  String get settingsFontDefault;
+
+  /// No description provided for @settingsFontPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'字体预览 AaBbCc 你好世界 123'**
+  String get settingsFontPreview;
+
+  /// No description provided for @settingsCustomFont.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义字体'**
+  String get settingsCustomFont;
+
+  /// No description provided for @settingsCustomFontDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'导入本地 .ttf/.otf 字体文件，存放于 .RemindAI/fonts/ 目录'**
+  String get settingsCustomFontDesc;
+
+  /// No description provided for @settingsCustomFontImport.
+  ///
+  /// In zh, this message translates to:
+  /// **'导入字体'**
+  String get settingsCustomFontImport;
+
+  /// No description provided for @settingsCustomFontPick.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择字体文件 (.ttf / .otf)'**
+  String get settingsCustomFontPick;
+
+  /// No description provided for @settingsCustomFontImported.
+  ///
+  /// In zh, this message translates to:
+  /// **'字体导入成功'**
+  String get settingsCustomFontImported;
 
   /// No description provided for @settingsChange.
   ///
@@ -1081,6 +1171,12 @@ abstract class S {
   /// **'点击卡片设为默认，长按拖动可调整顺序'**
   String get modelsReorderHint;
 
+  /// No description provided for @modelsSearchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入关键词搜索模型...'**
+  String get modelsSearchHint;
+
   /// No description provided for @skillsTitle.
   ///
   /// In zh, this message translates to:
@@ -1314,6 +1410,78 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'{name} 设置'**
   String toolsSettingsOf(String name);
+
+  /// No description provided for @toolShortcutsName.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图'**
+  String get toolShortcutsName;
+
+  /// No description provided for @toolShortcutsDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看和自定义应用快捷键'**
+  String get toolShortcutsDesc;
+
+  /// No description provided for @toolShortcutsCategory.
+  ///
+  /// In zh, this message translates to:
+  /// **'快捷键'**
+  String get toolShortcutsCategory;
+
+  /// No description provided for @shortcutReset.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复默认'**
+  String get shortcutReset;
+
+  /// No description provided for @shortcutResetDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'快捷键已恢复默认'**
+  String get shortcutResetDone;
+
+  /// No description provided for @shortcutHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击编辑按钮修改快捷键，需至少包含一个修饰键（Ctrl/Shift/Alt）'**
+  String get shortcutHint;
+
+  /// No description provided for @shortcutEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑'**
+  String get shortcutEdit;
+
+  /// No description provided for @shortcutEditTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改「{name}」快捷键'**
+  String shortcutEditTitle(String name);
+
+  /// No description provided for @shortcutEditHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'按下新的组合键'**
+  String get shortcutEditHint;
+
+  /// No description provided for @shortcutEditWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待按键...'**
+  String get shortcutEditWaiting;
+
+  /// No description provided for @shortcutCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消'**
+  String get shortcutCancel;
+
+  /// No description provided for @shortcutConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认'**
+  String get shortcutConfirm;
 
   /// No description provided for @multiAgentTitle.
   ///
@@ -4236,6 +4404,906 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'连接成功，API Key 有效'**
   String get searchTestSuccess;
+
+  /// No description provided for @petCatGray.
+  ///
+  /// In zh, this message translates to:
+  /// **'灰色小猫'**
+  String get petCatGray;
+
+  /// No description provided for @petCatOrange.
+  ///
+  /// In zh, this message translates to:
+  /// **'橘色小猫'**
+  String get petCatOrange;
+
+  /// No description provided for @petCatWhite.
+  ///
+  /// In zh, this message translates to:
+  /// **'白色小猫'**
+  String get petCatWhite;
+
+  /// No description provided for @petTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物设置'**
+  String get petTitle;
+
+  /// No description provided for @petShow.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示'**
+  String get petShow;
+
+  /// No description provided for @petSkinSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'精灵皮肤'**
+  String get petSkinSection;
+
+  /// No description provided for @petModelSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物模型 (AI)'**
+  String get petModelSection;
+
+  /// No description provided for @petModelHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择宠物使用的 AI 模型'**
+  String get petModelHint;
+
+  /// No description provided for @petModelLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载模型失败: {error}'**
+  String petModelLoadFailed(String error);
+
+  /// No description provided for @petTtsSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'语音合成'**
+  String get petTtsSection;
+
+  /// No description provided for @petTtsSystem.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统'**
+  String get petTtsSystem;
+
+  /// No description provided for @petTtsVolcano.
+  ///
+  /// In zh, this message translates to:
+  /// **'火山'**
+  String get petTtsVolcano;
+
+  /// No description provided for @petTtsAppId.
+  ///
+  /// In zh, this message translates to:
+  /// **'AppID'**
+  String get petTtsAppId;
+
+  /// No description provided for @petTtsAppIdHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'App ID'**
+  String get petTtsAppIdHint;
+
+  /// No description provided for @petTtsToken.
+  ///
+  /// In zh, this message translates to:
+  /// **'Token'**
+  String get petTtsToken;
+
+  /// No description provided for @petTtsTokenHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Access Token'**
+  String get petTtsTokenHint;
+
+  /// No description provided for @petTtsVoiceType.
+  ///
+  /// In zh, this message translates to:
+  /// **'音色'**
+  String get petTtsVoiceType;
+
+  /// No description provided for @petTtsVoiceTypeHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'voice_type (克隆音色 ID)'**
+  String get petTtsVoiceTypeHint;
+
+  /// No description provided for @petTtsSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存配置'**
+  String get petTtsSave;
+
+  /// No description provided for @petTtsSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'火山 TTS 配置已保存'**
+  String get petTtsSaved;
+
+  /// No description provided for @petTtsReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'✅ 配置完整'**
+  String get petTtsReady;
+
+  /// No description provided for @petTtsIncomplete.
+  ///
+  /// In zh, this message translates to:
+  /// **'⚠️ 请填写三项必填'**
+  String get petTtsIncomplete;
+
+  /// No description provided for @petTtsSpeedLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'语速({value})'**
+  String petTtsSpeedLabel(int value);
+
+  /// No description provided for @petTtsLoudnessLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'音量({value})'**
+  String petTtsLoudnessLabel(int value);
+
+  /// No description provided for @petTtsCredentialHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'凭证获取: 火山引擎控制台 → 语音合成 → 音色克隆\n参考: github.com/Radiant303/astrbot_plugin_clonetts'**
+  String get petTtsCredentialHint;
+
+  /// No description provided for @petBehaviorSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'回复行为'**
+  String get petBehaviorSection;
+
+  /// No description provided for @petTtsThresholdLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'语音阈值({value}字)'**
+  String petTtsThresholdLabel(int value);
+
+  /// No description provided for @petTtsThresholdHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'≤{value}字语音，超出文本气泡'**
+  String petTtsThresholdHint(int value);
+
+  /// No description provided for @petBubbleDismissLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'气泡倒计时({value}s)'**
+  String petBubbleDismissLabel(int value);
+
+  /// No description provided for @petBubbleDismissManual.
+  ///
+  /// In zh, this message translates to:
+  /// **'手动关闭气泡'**
+  String get petBubbleDismissManual;
+
+  /// No description provided for @petBubbleDismissAuto.
+  ///
+  /// In zh, this message translates to:
+  /// **'{value}秒后自动关闭气泡'**
+  String petBubbleDismissAuto(int value);
+
+  /// No description provided for @petCommandSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义右键指令'**
+  String get petCommandSection;
+
+  /// No description provided for @petCommandHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加自定义指令后会出现在右键菜单中'**
+  String get petCommandHint;
+
+  /// No description provided for @petCommandAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加指令'**
+  String get petCommandAdd;
+
+  /// No description provided for @petCommandAddTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加自定义指令'**
+  String get petCommandAddTitle;
+
+  /// No description provided for @petCommandEditTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑指令'**
+  String get petCommandEditTitle;
+
+  /// No description provided for @petCommandNameLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'指令名称'**
+  String get petCommandNameLabel;
+
+  /// No description provided for @petCommandNameHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：帮我优化'**
+  String get petCommandNameHint;
+
+  /// No description provided for @petCommandPromptLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统提示词'**
+  String get petCommandPromptLabel;
+
+  /// No description provided for @petCommandPromptHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：请帮我优化以下代码，提升性能和可读性：'**
+  String get petCommandPromptHint;
+
+  /// No description provided for @petTestSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试'**
+  String get petTestSection;
+
+  /// No description provided for @petTestShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'短语音'**
+  String get petTestShort;
+
+  /// No description provided for @petTestLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'长文本'**
+  String get petTestLong;
+
+  /// No description provided for @petDebugEvents.
+  ///
+  /// In zh, this message translates to:
+  /// **'事件'**
+  String get petDebugEvents;
+
+  /// No description provided for @petDebugAnimations.
+  ///
+  /// In zh, this message translates to:
+  /// **'动画'**
+  String get petDebugAnimations;
+
+  /// No description provided for @petDebugState.
+  ///
+  /// In zh, this message translates to:
+  /// **'状态'**
+  String get petDebugState;
+
+  /// No description provided for @petBubbleThinking.
+  ///
+  /// In zh, this message translates to:
+  /// **'小猫思考中...'**
+  String get petBubbleThinking;
+
+  /// No description provided for @petBubbleTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'小猫说'**
+  String get petBubbleTitle;
+
+  /// No description provided for @petBubbleGenerating.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在生成回答...'**
+  String get petBubbleGenerating;
+
+  /// No description provided for @petBubbleClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭'**
+  String get petBubbleClose;
+
+  /// No description provided for @petBubbleFeedAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂全文给小猫'**
+  String get petBubbleFeedAll;
+
+  /// No description provided for @petBubbleFeedFollow.
+  ///
+  /// In zh, this message translates to:
+  /// **'追问: {label}'**
+  String petBubbleFeedFollow(String label);
+
+  /// No description provided for @petBubbleFeedSelected.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂小猫: {label}'**
+  String petBubbleFeedSelected(String label);
+
+  /// No description provided for @petNoModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'喵~ 我还没有绑定模型，请在宠物设置中选择一个模型。'**
+  String get petNoModel;
+
+  /// No description provided for @petError.
+  ///
+  /// In zh, this message translates to:
+  /// **'喵呜...出错了: {error}'**
+  String petError(String error);
+
+  /// No description provided for @petContextHide.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐藏宠物'**
+  String get petContextHide;
+
+  /// No description provided for @petTestShortText.
+  ///
+  /// In zh, this message translates to:
+  /// **'你好呀主人！'**
+  String get petTestShortText;
+
+  /// No description provided for @petTestLongText.
+  ///
+  /// In zh, this message translates to:
+  /// **'主人你好，Flutter中Widget是不可变的，每次状态变化都会创建新的Widget树，这就是setState触发rebuild的原因。'**
+  String get petTestLongText;
+
+  /// No description provided for @petPageTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物'**
+  String get petPageTitle;
+
+  /// No description provided for @petTabSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置'**
+  String get petTabSettings;
+
+  /// No description provided for @petTabShop.
+  ///
+  /// In zh, this message translates to:
+  /// **'商店'**
+  String get petTabShop;
+
+  /// No description provided for @petTabAchievements.
+  ///
+  /// In zh, this message translates to:
+  /// **'成就'**
+  String get petTabAchievements;
+
+  /// No description provided for @petShopTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'商品'**
+  String get petShopTitle;
+
+  /// No description provided for @petInventoryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'背包'**
+  String get petInventoryTitle;
+
+  /// No description provided for @petInventoryEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'空空如也~'**
+  String get petInventoryEmpty;
+
+  /// No description provided for @petStatusTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'状态'**
+  String get petStatusTitle;
+
+  /// No description provided for @petStatusSatiety.
+  ///
+  /// In zh, this message translates to:
+  /// **'饱腹度'**
+  String get petStatusSatiety;
+
+  /// No description provided for @petStatusHappiness.
+  ///
+  /// In zh, this message translates to:
+  /// **'心情值'**
+  String get petStatusHappiness;
+
+  /// No description provided for @petStatusDecayHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'每小时饱腹 -5、心情 -3\n投喂食物可恢复'**
+  String get petStatusDecayHint;
+
+  /// No description provided for @petShopBuy.
+  ///
+  /// In zh, this message translates to:
+  /// **'购买'**
+  String get petShopBuy;
+
+  /// No description provided for @petShopBought.
+  ///
+  /// In zh, this message translates to:
+  /// **'购买了 {name}！'**
+  String petShopBought(String name);
+
+  /// No description provided for @petShopNoCoins.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物币不足~'**
+  String get petShopNoCoins;
+
+  /// No description provided for @petShopSatiety.
+  ///
+  /// In zh, this message translates to:
+  /// **'饱腹+{value}'**
+  String petShopSatiety(int value);
+
+  /// No description provided for @petShopHappiness.
+  ///
+  /// In zh, this message translates to:
+  /// **'心情+{value}'**
+  String petShopHappiness(int value);
+
+  /// No description provided for @petShopEffect.
+  ///
+  /// In zh, this message translates to:
+  /// **'特效: {effect}'**
+  String petShopEffect(String effect);
+
+  /// No description provided for @petAchievementsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'成就'**
+  String get petAchievementsTitle;
+
+  /// No description provided for @petAchievementsProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'{unlocked} / {total}'**
+  String petAchievementsProgress(int unlocked, int total);
+
+  /// No description provided for @petFeedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂小猫'**
+  String get petFeedTitle;
+
+  /// No description provided for @petFeedButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂'**
+  String get petFeedButton;
+
+  /// No description provided for @petFeedButtonEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂 (背包空)'**
+  String get petFeedButtonEmpty;
+
+  /// No description provided for @petFeedEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'背包空空如也~ 去商店买点食物吧！'**
+  String get petFeedEmpty;
+
+  /// No description provided for @petFeedStat.
+  ///
+  /// In zh, this message translates to:
+  /// **'x{quantity}  饱腹+{satiety} 心情+{happiness}'**
+  String petFeedStat(int quantity, int satiety, int happiness);
+
+  /// No description provided for @petFeedClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭'**
+  String get petFeedClose;
+
+  /// No description provided for @petCoinReward.
+  ///
+  /// In zh, this message translates to:
+  /// **'+{amount} 宠物币~'**
+  String petCoinReward(int amount);
+
+  /// No description provided for @petFoodBanana.
+  ///
+  /// In zh, this message translates to:
+  /// **'香蕉'**
+  String get petFoodBanana;
+
+  /// No description provided for @petFoodBananaDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'软糯香甜，猫猫也爱'**
+  String get petFoodBananaDesc;
+
+  /// No description provided for @petFoodApple.
+  ///
+  /// In zh, this message translates to:
+  /// **'苹果'**
+  String get petFoodApple;
+
+  /// No description provided for @petFoodAppleDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'一天一苹果，猫猫不找我'**
+  String get petFoodAppleDesc;
+
+  /// No description provided for @petFoodPurpleGrape.
+  ///
+  /// In zh, this message translates to:
+  /// **'紫葡萄'**
+  String get petFoodPurpleGrape;
+
+  /// No description provided for @petFoodPurpleGrapeDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'颗颗饱满的甜蜜'**
+  String get petFoodPurpleGrapeDesc;
+
+  /// No description provided for @petFoodGreenGrape.
+  ///
+  /// In zh, this message translates to:
+  /// **'绿葡萄'**
+  String get petFoodGreenGrape;
+
+  /// No description provided for @petFoodGreenGrapeDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'清爽酸甜，开胃小食'**
+  String get petFoodGreenGrapeDesc;
+
+  /// No description provided for @petFoodPineapple.
+  ///
+  /// In zh, this message translates to:
+  /// **'菠萝'**
+  String get petFoodPineapple;
+
+  /// No description provided for @petFoodPineappleDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'热带风味，酸甜爆汁'**
+  String get petFoodPineappleDesc;
+
+  /// No description provided for @petFoodKiwi.
+  ///
+  /// In zh, this message translates to:
+  /// **'猕猴桃'**
+  String get petFoodKiwi;
+
+  /// No description provided for @petFoodKiwiDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'维C满满的小绿球'**
+  String get petFoodKiwiDesc;
+
+  /// No description provided for @petFoodCherry.
+  ///
+  /// In zh, this message translates to:
+  /// **'樱桃'**
+  String get petFoodCherry;
+
+  /// No description provided for @petFoodCherryDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'小巧精致，猫猫当玩具拍'**
+  String get petFoodCherryDesc;
+
+  /// No description provided for @petFoodStrawberry.
+  ///
+  /// In zh, this message translates to:
+  /// **'草莓'**
+  String get petFoodStrawberry;
+
+  /// No description provided for @petFoodStrawberryDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'红彤彤的快乐果实'**
+  String get petFoodStrawberryDesc;
+
+  /// No description provided for @petFoodCarrot.
+  ///
+  /// In zh, this message translates to:
+  /// **'胡萝卜'**
+  String get petFoodCarrot;
+
+  /// No description provided for @petFoodCarrotDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'对眼睛好，虽然猫不在乎'**
+  String get petFoodCarrotDesc;
+
+  /// No description provided for @petFoodTomato.
+  ///
+  /// In zh, this message translates to:
+  /// **'番茄'**
+  String get petFoodTomato;
+
+  /// No description provided for @petFoodTomatoDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'水灵灵的新鲜番茄'**
+  String get petFoodTomatoDesc;
+
+  /// No description provided for @petFoodEggplant.
+  ///
+  /// In zh, this message translates to:
+  /// **'茄子'**
+  String get petFoodEggplant;
+
+  /// No description provided for @petFoodEggplantDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'紫色的健康蔬菜'**
+  String get petFoodEggplantDesc;
+
+  /// No description provided for @petFoodPumpkin.
+  ///
+  /// In zh, this message translates to:
+  /// **'南瓜'**
+  String get petFoodPumpkin;
+
+  /// No description provided for @petFoodPumpkinDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'大大的南瓜，够吃好久'**
+  String get petFoodPumpkinDesc;
+
+  /// No description provided for @petFoodBroccoli.
+  ///
+  /// In zh, this message translates to:
+  /// **'花菜'**
+  String get petFoodBroccoli;
+
+  /// No description provided for @petFoodBroccoliDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'像一棵小树，营养丰富'**
+  String get petFoodBroccoliDesc;
+
+  /// No description provided for @petFoodGarlic.
+  ///
+  /// In zh, this message translates to:
+  /// **'洋蒜'**
+  String get petFoodGarlic;
+
+  /// No description provided for @petFoodGarlicDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'猫猫闻了打喷嚏'**
+  String get petFoodGarlicDesc;
+
+  /// No description provided for @petFoodPepper.
+  ///
+  /// In zh, this message translates to:
+  /// **'辣椒'**
+  String get petFoodPepper;
+
+  /// No description provided for @petFoodPepperDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'呼~辣到跳起来！'**
+  String get petFoodPepperDesc;
+
+  /// No description provided for @petFoodMushroom.
+  ///
+  /// In zh, this message translates to:
+  /// **'蘑菇'**
+  String get petFoodMushroom;
+
+  /// No description provided for @petFoodMushroomDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'鲜美的菌菇，猫猫意外喜欢'**
+  String get petFoodMushroomDesc;
+
+  /// No description provided for @petFoodHam.
+  ///
+  /// In zh, this message translates to:
+  /// **'火腿'**
+  String get petFoodHam;
+
+  /// No description provided for @petFoodHamDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'浓郁肉香，猫猫口水直流'**
+  String get petFoodHamDesc;
+
+  /// No description provided for @petFoodChicken.
+  ///
+  /// In zh, this message translates to:
+  /// **'鸡腿'**
+  String get petFoodChicken;
+
+  /// No description provided for @petFoodChickenDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'外焦里嫩的大鸡腿'**
+  String get petFoodChickenDesc;
+
+  /// No description provided for @petFoodFish.
+  ///
+  /// In zh, this message translates to:
+  /// **'鱼'**
+  String get petFoodFish;
+
+  /// No description provided for @petFoodFishDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'猫猫的最爱！没有之一'**
+  String get petFoodFishDesc;
+
+  /// No description provided for @petFoodLobster.
+  ///
+  /// In zh, this message translates to:
+  /// **'大龙虾'**
+  String get petFoodLobster;
+
+  /// No description provided for @petFoodLobsterDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'顶级海鲜盛宴，猫猫疯狂'**
+  String get petFoodLobsterDesc;
+
+  /// No description provided for @petAchieveFirstCoin.
+  ///
+  /// In zh, this message translates to:
+  /// **'第一桶金'**
+  String get petAchieveFirstCoin;
+
+  /// No description provided for @petAchieveFirstCoinDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'获得第一枚宠物币'**
+  String get petAchieveFirstCoinDesc;
+
+  /// No description provided for @petAchieveRich100.
+  ///
+  /// In zh, this message translates to:
+  /// **'小有积蓄'**
+  String get petAchieveRich100;
+
+  /// No description provided for @petAchieveRich100Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计获得 100 宠物币'**
+  String get petAchieveRich100Desc;
+
+  /// No description provided for @petAchieveRich500.
+  ///
+  /// In zh, this message translates to:
+  /// **'小富翁'**
+  String get petAchieveRich500;
+
+  /// No description provided for @petAchieveRich500Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计获得 500 宠物币'**
+  String get petAchieveRich500Desc;
+
+  /// No description provided for @petAchieveRich2000.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物大亨'**
+  String get petAchieveRich2000;
+
+  /// No description provided for @petAchieveRich2000Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计获得 2000 宠物币'**
+  String get petAchieveRich2000Desc;
+
+  /// No description provided for @petAchieveFirstFeed.
+  ///
+  /// In zh, this message translates to:
+  /// **'初次投喂'**
+  String get petAchieveFirstFeed;
+
+  /// No description provided for @petAchieveFirstFeedDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'第一次喂食小猫'**
+  String get petAchieveFirstFeedDesc;
+
+  /// No description provided for @petAchieveFeed10.
+  ///
+  /// In zh, this message translates to:
+  /// **'尽职铲屎官'**
+  String get petAchieveFeed10;
+
+  /// No description provided for @petAchieveFeed10Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计投喂 10 次'**
+  String get petAchieveFeed10Desc;
+
+  /// No description provided for @petAchieveFeed50.
+  ///
+  /// In zh, this message translates to:
+  /// **'猫奴认证'**
+  String get petAchieveFeed50;
+
+  /// No description provided for @petAchieveFeed50Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计投喂 50 次'**
+  String get petAchieveFeed50Desc;
+
+  /// No description provided for @petAchieveFullBelly.
+  ///
+  /// In zh, this message translates to:
+  /// **'吃撑了'**
+  String get petAchieveFullBelly;
+
+  /// No description provided for @petAchieveFullBellyDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'饱腹度达到 100'**
+  String get petAchieveFullBellyDesc;
+
+  /// No description provided for @petAchieveHappyMax.
+  ///
+  /// In zh, this message translates to:
+  /// **'快乐猫猫'**
+  String get petAchieveHappyMax;
+
+  /// No description provided for @petAchieveHappyMaxDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'心情值达到 100'**
+  String get petAchieveHappyMaxDesc;
+
+  /// No description provided for @petAchieveShopper.
+  ///
+  /// In zh, this message translates to:
+  /// **'购物达人'**
+  String get petAchieveShopper;
+
+  /// No description provided for @petAchieveShopperDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'在商店购买 20 次'**
+  String get petAchieveShopperDesc;
+
+  /// No description provided for @petAchieveChat1m.
+  ///
+  /// In zh, this message translates to:
+  /// **'话痨'**
+  String get petAchieveChat1m;
+
+  /// No description provided for @petAchieveChat1mDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计消耗 100万 tokens'**
+  String get petAchieveChat1mDesc;
+
+  /// No description provided for @petAchieveChat50m.
+  ///
+  /// In zh, this message translates to:
+  /// **'深度用户'**
+  String get petAchieveChat50m;
+
+  /// No description provided for @petAchieveChat50mDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计消耗 5000万 tokens'**
+  String get petAchieveChat50mDesc;
+
+  /// No description provided for @petAchieveChat100m.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 重度依赖'**
+  String get petAchieveChat100m;
+
+  /// No description provided for @petAchieveChat100mDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计消耗 1亿 tokens'**
+  String get petAchieveChat100mDesc;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

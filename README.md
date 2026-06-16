@@ -10,9 +10,10 @@
   <p>
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
     <img src="https://img.shields.io/badge/platform-Windows-brightgreen.svg" alt="Platform" />
-    <img src="https://img.shields.io/badge/Flutter-3.12+-02569B.svg?logo=flutter" alt="Flutter" />
+    <img src="https://img.shields.io/badge/Flutter-3.44+-02569B.svg?logo=flutter" alt="Flutter" />
        <img src="https://img.shields.io/badge/MCP Support-purple.svg" alt="MCP" />
     <img src="https://img.shields.io/badge/Skill Support-purple.svg" alt="Skill" />
+    <img src="https://img.shields.io/badge/🐱 Global Pet Agent-orange.svg" alt="Pet Agent" />
 </p>
 </div>
 
@@ -60,6 +61,7 @@ RemindAI 是一个**开源桌面 AI 助手**，核心理念是为大模型提供
 | 领域专家系统 | ✅ | 预设/自定义角色 + 绑定技能 |
 | 对话导出 | ✅ | MD / PDF / Word / HTML |
 | 桌面体验 | ✅ | 托盘 / 通知 / 闪屏 / 主题动画 |
+| 全局宠物 Agent | ✅ | 像素猫 + TTS 语音 + 商店经济 + 成就系统 |
 
 ---
 
@@ -81,6 +83,7 @@ RemindAI 是一个**开源桌面 AI 助手**，核心理念是为大模型提供
 | 📤 导出 | Markdown / PDF / Word / HTML |
 | 🌍 国际化 | 完整中英双语 |
 | 🎨 主题 | Material 3 亮/暗 + 涟漪切换动画 |
+| 🐱 全局宠物 Agent | 像素猫陪伴 + 右键智能问答 + 火山TTS语音 + 商店/背包/投喂 + 成就系统 |
 
 ### 📦 内置 CLI 工具
 
@@ -102,7 +105,7 @@ RemindAI 是一个**开源桌面 AI 助手**，核心理念是为大模型提供
 
 | 平台 | 状态 | 说明 |
 |---|---|---|
-| 🪟 Windows | ✅ 正式支持 | 提供安装包 |
+| 💻 Windows | ✅ 正式支持 | 提供安装包 |
 | 🐧 Linux | 🔧 自行编译 | 源码构建即可使用 |
 | 🍎 macOS | 🔧 自行编译 | 源码构建即可使用 |
 

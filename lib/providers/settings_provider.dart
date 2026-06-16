@@ -32,6 +32,30 @@ Locale? _parseLocale(String locale) => switch (locale) {
   _ => null, // null = 跟随系统
 };
 
+/// 界面字体 Provider
+final uiFontProvider = StateProvider<String>((ref) {
+  final settings = ref.watch(settingsProvider).valueOrNull;
+  return settings?.uiFont ?? 'Noto Sans SC';
+});
+
+/// 界面字体大小 Provider
+final uiFontSizeProvider = StateProvider<double>((ref) {
+  final settings = ref.watch(settingsProvider).valueOrNull;
+  return settings?.uiFontSize ?? 14.0;
+});
+
+/// 交互字体 Provider
+final chatFontProvider = StateProvider<String>((ref) {
+  final settings = ref.watch(settingsProvider).valueOrNull;
+  return settings?.chatFont ?? 'Noto Sans SC';
+});
+
+/// 交互字体大小 Provider
+final chatFontSizeProvider = StateProvider<double>((ref) {
+  final settings = ref.watch(settingsProvider).valueOrNull;
+  return settings?.chatFontSize ?? 14.0;
+});
+
 final settingsProvider = AsyncNotifierProvider<SettingsNotifier, AppSettings>(
   SettingsNotifier.new,
 );
@@ -205,6 +229,46 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     state = AsyncData(updated);
     // 同步更新 localeProvider
     ref.read(localeProvider.notifier).state = _parseLocale(locale);
+  }
+
+  /// 更新界面字体
+  Future<void> updateUiFont(String font) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(uiFont: font);
+    await updated.save();
+    state = AsyncData(updated);
+    ref.read(uiFontProvider.notifier).state = font;
+  }
+
+  /// 更新界面字体大小
+  Future<void> updateUiFontSize(double size) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(uiFontSize: size);
+    await updated.save();
+    state = AsyncData(updated);
+    ref.read(uiFontSizeProvider.notifier).state = size;
+  }
+
+  /// 更新交互字体
+  Future<void> updateChatFont(String font) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(chatFont: font);
+    await updated.save();
+    state = AsyncData(updated);
+    ref.read(chatFontProvider.notifier).state = font;
+  }
+
+  /// 更新交互字体大小
+  Future<void> updateChatFontSize(double size) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(chatFontSize: size);
+    await updated.save();
+    state = AsyncData(updated);
+    ref.read(chatFontSizeProvider.notifier).state = size;
   }
 
   /// 新增或更新一个嵌入式模型配置。

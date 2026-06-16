@@ -9,6 +9,7 @@ import '../../providers/skills_provider.dart';
 import '../../shared/widgets/theme_transition.dart';
 import 'widgets/custom_license_page.dart';
 import 'widgets/embedding_section.dart';
+import 'widgets/font_section.dart';
 import 'widgets/qdrant_path_tile.dart';
 import 'version.dart' show version, repo;
 
@@ -36,6 +37,10 @@ class SettingsPage extends ConsumerWidget {
               _NotifyOnBlurTile(enabled: settings.notifyOnBlur),
               const SizedBox(height: 12),
               _LocaleSwitcher(currentLocale: settings.locale),
+              const SizedBox(height: 32),
+              _SectionHeader(title: s.settingsFont),
+              const SizedBox(height: 12),
+              const FontSection(),
               const SizedBox(height: 32),
               _SectionHeader(title: s.settingsStorage),
               const SizedBox(height: 12),

@@ -45,6 +45,9 @@ class SEn extends S {
   String get navLogs => 'Logs';
 
   @override
+  String get navPet => 'Pet';
+
+  @override
   String get settingsTitle => 'Settings';
 
   @override
@@ -95,6 +98,51 @@ class SEn extends S {
 
   @override
   String get settingsLanguage => 'Language';
+
+  @override
+  String get settingsFont => 'Font Settings';
+
+  @override
+  String get settingsUiFont => 'UI Font';
+
+  @override
+  String get settingsUiFontDesc =>
+      'Controls font in navigation, settings, and non-chat areas';
+
+  @override
+  String get settingsUiFontSize => 'UI Font Size';
+
+  @override
+  String get settingsChatFont => 'Chat Font';
+
+  @override
+  String get settingsChatFontDesc =>
+      'Controls font in conversations and multi-agent collaboration';
+
+  @override
+  String get settingsChatFontSize => 'Chat Font Size';
+
+  @override
+  String get settingsFontDefault => 'Default';
+
+  @override
+  String get settingsFontPreview => 'Font Preview AaBbCc Hello World 123';
+
+  @override
+  String get settingsCustomFont => 'Custom Fonts';
+
+  @override
+  String get settingsCustomFontDesc =>
+      'Import local .ttf/.otf font files, stored in .RemindAI/fonts/';
+
+  @override
+  String get settingsCustomFontImport => 'Import Font';
+
+  @override
+  String get settingsCustomFontPick => 'Select font files (.ttf / .otf)';
+
+  @override
+  String get settingsCustomFontImported => 'Font imported successfully';
 
   @override
   String get settingsChange => 'Change';
@@ -531,6 +579,9 @@ class SEn extends S {
       'Tap card to set default, long press to reorder';
 
   @override
+  String get modelsSearchHint => 'Type to search models...';
+
+  @override
   String get skillsTitle => 'Skill Management';
 
   @override
@@ -665,6 +716,45 @@ class SEn extends S {
   String toolsSettingsOf(String name) {
     return '$name settings';
   }
+
+  @override
+  String get toolShortcutsName => 'Screenshot';
+
+  @override
+  String get toolShortcutsDesc => 'View and customize keyboard shortcuts';
+
+  @override
+  String get toolShortcutsCategory => 'Shortcuts';
+
+  @override
+  String get shortcutReset => 'Reset to defaults';
+
+  @override
+  String get shortcutResetDone => 'Shortcuts reset to defaults';
+
+  @override
+  String get shortcutHint =>
+      'Click the edit button to change a shortcut. At least one modifier key (Ctrl/Shift/Alt) is required.';
+
+  @override
+  String get shortcutEdit => 'Edit';
+
+  @override
+  String shortcutEditTitle(String name) {
+    return 'Change \"$name\" shortcut';
+  }
+
+  @override
+  String get shortcutEditHint => 'Press a new key combination';
+
+  @override
+  String get shortcutEditWaiting => 'Waiting for input...';
+
+  @override
+  String get shortcutCancel => 'Cancel';
+
+  @override
+  String get shortcutConfirm => 'Confirm';
 
   @override
   String get multiAgentTitle => 'Multi-Agent Collaboration';
@@ -2262,4 +2352,494 @@ class SEn extends S {
 
   @override
   String get searchTestSuccess => 'Connected successfully, API Key is valid';
+
+  @override
+  String get petCatGray => 'Gray Kitty';
+
+  @override
+  String get petCatOrange => 'Orange Kitty';
+
+  @override
+  String get petCatWhite => 'White Kitty';
+
+  @override
+  String get petTitle => 'Pet Settings';
+
+  @override
+  String get petShow => 'Show';
+
+  @override
+  String get petSkinSection => 'Sprite Skin';
+
+  @override
+  String get petModelSection => 'Pet Model (AI)';
+
+  @override
+  String get petModelHint => 'Select AI model for pet';
+
+  @override
+  String petModelLoadFailed(String error) {
+    return 'Failed to load models: $error';
+  }
+
+  @override
+  String get petTtsSection => 'Text-to-Speech';
+
+  @override
+  String get petTtsSystem => 'System';
+
+  @override
+  String get petTtsVolcano => 'Volcano';
+
+  @override
+  String get petTtsAppId => 'AppID';
+
+  @override
+  String get petTtsAppIdHint => 'App ID';
+
+  @override
+  String get petTtsToken => 'Token';
+
+  @override
+  String get petTtsTokenHint => 'Access Token';
+
+  @override
+  String get petTtsVoiceType => 'Voice';
+
+  @override
+  String get petTtsVoiceTypeHint => 'voice_type (cloned voice ID)';
+
+  @override
+  String get petTtsSave => 'Save Config';
+
+  @override
+  String get petTtsSaved => 'Volcano TTS config saved';
+
+  @override
+  String get petTtsReady => '✅ Config complete';
+
+  @override
+  String get petTtsIncomplete => '⚠️ Please fill all 3 required fields';
+
+  @override
+  String petTtsSpeedLabel(int value) {
+    return 'Speed($value)';
+  }
+
+  @override
+  String petTtsLoudnessLabel(int value) {
+    return 'Volume($value)';
+  }
+
+  @override
+  String get petTtsCredentialHint =>
+      'Get credentials: Volcano Engine Console → TTS → Voice Clone\nRef: github.com/Radiant303/astrbot_plugin_clonetts';
+
+  @override
+  String get petBehaviorSection => 'Reply Behavior';
+
+  @override
+  String petTtsThresholdLabel(int value) {
+    return 'TTS threshold($value chars)';
+  }
+
+  @override
+  String petTtsThresholdHint(int value) {
+    return '≤$value chars → voice, longer → text bubble';
+  }
+
+  @override
+  String petBubbleDismissLabel(int value) {
+    return 'Bubble timeout(${value}s)';
+  }
+
+  @override
+  String get petBubbleDismissManual => 'Manual close';
+
+  @override
+  String petBubbleDismissAuto(int value) {
+    return 'Auto-close after ${value}s';
+  }
+
+  @override
+  String get petCommandSection => 'Custom Commands';
+
+  @override
+  String get petCommandHint =>
+      'Custom commands will appear in the right-click menu';
+
+  @override
+  String get petCommandAdd => 'Add Command';
+
+  @override
+  String get petCommandAddTitle => 'Add Custom Command';
+
+  @override
+  String get petCommandEditTitle => 'Edit Command';
+
+  @override
+  String get petCommandNameLabel => 'Command Name';
+
+  @override
+  String get petCommandNameHint => 'e.g. Optimize this';
+
+  @override
+  String get petCommandPromptLabel => 'System Prompt';
+
+  @override
+  String get petCommandPromptHint =>
+      'e.g. Please optimize the following code for performance and readability:';
+
+  @override
+  String get petTestSection => 'Test';
+
+  @override
+  String get petTestShort => 'Short voice';
+
+  @override
+  String get petTestLong => 'Long text';
+
+  @override
+  String get petDebugEvents => 'Events';
+
+  @override
+  String get petDebugAnimations => 'Animations';
+
+  @override
+  String get petDebugState => 'State';
+
+  @override
+  String get petBubbleThinking => 'Kitty is thinking...';
+
+  @override
+  String get petBubbleTitle => 'Kitty says';
+
+  @override
+  String get petBubbleGenerating => 'Generating reply...';
+
+  @override
+  String get petBubbleClose => 'Close';
+
+  @override
+  String get petBubbleFeedAll => 'Feed full text to kitty';
+
+  @override
+  String petBubbleFeedFollow(String label) {
+    return 'Ask: $label';
+  }
+
+  @override
+  String petBubbleFeedSelected(String label) {
+    return 'Ask kitty: $label';
+  }
+
+  @override
+  String get petNoModel =>
+      'Meow~ No model bound yet, please select one in Pet Settings.';
+
+  @override
+  String petError(String error) {
+    return 'Meow... error: $error';
+  }
+
+  @override
+  String get petContextHide => 'Hide Pet';
+
+  @override
+  String get petTestShortText => 'Hello master!';
+
+  @override
+  String get petTestLongText =>
+      'Hi master, in Flutter Widgets are immutable. Every state change creates a new Widget tree, which is why setState triggers a rebuild.';
+
+  @override
+  String get petPageTitle => 'Pet';
+
+  @override
+  String get petTabSettings => 'Settings';
+
+  @override
+  String get petTabShop => 'Shop';
+
+  @override
+  String get petTabAchievements => 'Achievements';
+
+  @override
+  String get petShopTitle => 'Items';
+
+  @override
+  String get petInventoryTitle => 'Inventory';
+
+  @override
+  String get petInventoryEmpty => 'Nothing here~';
+
+  @override
+  String get petStatusTitle => 'Status';
+
+  @override
+  String get petStatusSatiety => 'Satiety';
+
+  @override
+  String get petStatusHappiness => 'Happiness';
+
+  @override
+  String get petStatusDecayHint =>
+      'Satiety -5/hr, Happiness -3/hr\nFeed to restore';
+
+  @override
+  String get petShopBuy => 'Buy';
+
+  @override
+  String petShopBought(String name) {
+    return 'Bought $name!';
+  }
+
+  @override
+  String get petShopNoCoins => 'Not enough coins~';
+
+  @override
+  String petShopSatiety(int value) {
+    return 'Satiety+$value';
+  }
+
+  @override
+  String petShopHappiness(int value) {
+    return 'Happiness+$value';
+  }
+
+  @override
+  String petShopEffect(String effect) {
+    return 'Effect: $effect';
+  }
+
+  @override
+  String get petAchievementsTitle => 'Achievements';
+
+  @override
+  String petAchievementsProgress(int unlocked, int total) {
+    return '$unlocked / $total';
+  }
+
+  @override
+  String get petFeedTitle => 'Feed Kitty';
+
+  @override
+  String get petFeedButton => 'Feed';
+
+  @override
+  String get petFeedButtonEmpty => 'Feed (empty bag)';
+
+  @override
+  String get petFeedEmpty => 'Bag is empty~ Buy some food in the shop!';
+
+  @override
+  String petFeedStat(int quantity, int satiety, int happiness) {
+    return 'x$quantity  Satiety+$satiety Happiness+$happiness';
+  }
+
+  @override
+  String get petFeedClose => 'Close';
+
+  @override
+  String petCoinReward(int amount) {
+    return '+$amount Pet Coins~';
+  }
+
+  @override
+  String get petFoodBanana => 'Banana';
+
+  @override
+  String get petFoodBananaDesc => 'Soft and sweet, kitty loves it';
+
+  @override
+  String get petFoodApple => 'Apple';
+
+  @override
+  String get petFoodAppleDesc => 'An apple a day keeps kitty at play';
+
+  @override
+  String get petFoodPurpleGrape => 'Purple Grape';
+
+  @override
+  String get petFoodPurpleGrapeDesc => 'Plump and sweet clusters';
+
+  @override
+  String get petFoodGreenGrape => 'Green Grape';
+
+  @override
+  String get petFoodGreenGrapeDesc => 'Refreshingly tangy appetizer';
+
+  @override
+  String get petFoodPineapple => 'Pineapple';
+
+  @override
+  String get petFoodPineappleDesc => 'Tropical flavor, juicy burst';
+
+  @override
+  String get petFoodKiwi => 'Kiwi';
+
+  @override
+  String get petFoodKiwiDesc => 'Little green ball packed with vitamin C';
+
+  @override
+  String get petFoodCherry => 'Cherry';
+
+  @override
+  String get petFoodCherryDesc => 'Tiny and cute, kitty bats it around';
+
+  @override
+  String get petFoodStrawberry => 'Strawberry';
+
+  @override
+  String get petFoodStrawberryDesc => 'Red and happy little fruit';
+
+  @override
+  String get petFoodCarrot => 'Carrot';
+
+  @override
+  String get petFoodCarrotDesc => 'Good for eyes, not that kitty cares';
+
+  @override
+  String get petFoodTomato => 'Tomato';
+
+  @override
+  String get petFoodTomatoDesc => 'Fresh and juicy tomato';
+
+  @override
+  String get petFoodEggplant => 'Eggplant';
+
+  @override
+  String get petFoodEggplantDesc => 'Purple healthy veggie';
+
+  @override
+  String get petFoodPumpkin => 'Pumpkin';
+
+  @override
+  String get petFoodPumpkinDesc => 'Big pumpkin, lasts a while';
+
+  @override
+  String get petFoodBroccoli => 'Broccoli';
+
+  @override
+  String get petFoodBroccoliDesc => 'Like a little tree, full of nutrients';
+
+  @override
+  String get petFoodGarlic => 'Garlic';
+
+  @override
+  String get petFoodGarlicDesc => 'Kitty sneezes at the smell';
+
+  @override
+  String get petFoodPepper => 'Pepper';
+
+  @override
+  String get petFoodPepperDesc => 'Whew~ spicy jump!';
+
+  @override
+  String get petFoodMushroom => 'Mushroom';
+
+  @override
+  String get petFoodMushroomDesc => 'Savory fungi, kitty surprisingly likes it';
+
+  @override
+  String get petFoodHam => 'Ham';
+
+  @override
+  String get petFoodHamDesc => 'Rich meaty aroma, kitty drools';
+
+  @override
+  String get petFoodChicken => 'Chicken Leg';
+
+  @override
+  String get petFoodChickenDesc => 'Crispy outside, juicy inside';
+
+  @override
+  String get petFoodFish => 'Fish';
+
+  @override
+  String get petFoodFishDesc => 'Kitty\'s absolute favorite!';
+
+  @override
+  String get petFoodLobster => 'Lobster';
+
+  @override
+  String get petFoodLobsterDesc => 'Premium seafood feast, kitty goes wild';
+
+  @override
+  String get petAchieveFirstCoin => 'First Coin';
+
+  @override
+  String get petAchieveFirstCoinDesc => 'Earned your first pet coin';
+
+  @override
+  String get petAchieveRich100 => 'Savings Started';
+
+  @override
+  String get petAchieveRich100Desc => 'Earned 100 pet coins total';
+
+  @override
+  String get petAchieveRich500 => 'Little Rich';
+
+  @override
+  String get petAchieveRich500Desc => 'Earned 500 pet coins total';
+
+  @override
+  String get petAchieveRich2000 => 'Pet Tycoon';
+
+  @override
+  String get petAchieveRich2000Desc => 'Earned 2000 pet coins total';
+
+  @override
+  String get petAchieveFirstFeed => 'First Feeding';
+
+  @override
+  String get petAchieveFirstFeedDesc => 'Fed kitty for the first time';
+
+  @override
+  String get petAchieveFeed10 => 'Dutiful Owner';
+
+  @override
+  String get petAchieveFeed10Desc => 'Fed kitty 10 times';
+
+  @override
+  String get petAchieveFeed50 => 'Cat Servant';
+
+  @override
+  String get petAchieveFeed50Desc => 'Fed kitty 50 times';
+
+  @override
+  String get petAchieveFullBelly => 'Stuffed';
+
+  @override
+  String get petAchieveFullBellyDesc => 'Satiety reached 100';
+
+  @override
+  String get petAchieveHappyMax => 'Happy Kitty';
+
+  @override
+  String get petAchieveHappyMaxDesc => 'Happiness reached 100';
+
+  @override
+  String get petAchieveShopper => 'Shopaholic';
+
+  @override
+  String get petAchieveShopperDesc => 'Made 20 purchases in the shop';
+
+  @override
+  String get petAchieveChat1m => 'Chatterbox';
+
+  @override
+  String get petAchieveChat1mDesc => 'Consumed 1 million tokens';
+
+  @override
+  String get petAchieveChat50m => 'Power User';
+
+  @override
+  String get petAchieveChat50mDesc => 'Consumed 50 million tokens';
+
+  @override
+  String get petAchieveChat100m => 'AI Addict';
+
+  @override
+  String get petAchieveChat100mDesc => 'Consumed 100 million tokens';
 }

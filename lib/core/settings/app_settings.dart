@@ -89,6 +89,10 @@ class AppSettings {
   final String qdrantPath; // 手动指定的 Qdrant 可执行文件路径 (空=自动检测)
   final bool notifyOnBlur; // 失焦时是否发送系统通知 (默认开启)
   final String locale; // 语言: 'system' / 'zh' / 'en'
+  final String uiFont; // 界面字体
+  final double uiFontSize; // 界面字体大小
+  final String chatFont; // 交互字体（对话+多Agent）
+  final double chatFontSize; // 交互字体大小
 
   const AppSettings({
     required this.databasePath,
@@ -103,6 +107,10 @@ class AppSettings {
     this.qdrantPath = '',
     this.notifyOnBlur = true,
     this.locale = 'system',
+    this.uiFont = 'Noto Sans SC',
+    this.uiFontSize = 14.0,
+    this.chatFont = 'Noto Sans SC',
+    this.chatFontSize = 14.0,
   });
 
   /// 向后兼容: 返回当前选中的嵌入模型配置。
@@ -129,6 +137,10 @@ class AppSettings {
     String? qdrantPath,
     bool? notifyOnBlur,
     String? locale,
+    String? uiFont,
+    double? uiFontSize,
+    String? chatFont,
+    double? chatFontSize,
   }) {
     return AppSettings(
       databasePath: databasePath ?? this.databasePath,
@@ -143,6 +155,10 @@ class AppSettings {
       qdrantPath: qdrantPath ?? this.qdrantPath,
       notifyOnBlur: notifyOnBlur ?? this.notifyOnBlur,
       locale: locale ?? this.locale,
+      uiFont: uiFont ?? this.uiFont,
+      uiFontSize: uiFontSize ?? this.uiFontSize,
+      chatFont: chatFont ?? this.chatFont,
+      chatFontSize: chatFontSize ?? this.chatFontSize,
     );
   }
 
@@ -159,6 +175,10 @@ class AppSettings {
     'qdrantPath': qdrantPath,
     'notifyOnBlur': notifyOnBlur,
     'locale': locale,
+    'uiFont': uiFont,
+    'uiFontSize': uiFontSize,
+    'chatFont': chatFont,
+    'chatFontSize': chatFontSize,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -202,6 +222,10 @@ class AppSettings {
       qdrantPath: json['qdrantPath'] as String? ?? '',
       notifyOnBlur: json['notifyOnBlur'] as bool? ?? true,
       locale: json['locale'] as String? ?? 'system',
+      uiFont: json['uiFont'] as String? ?? 'Noto Sans SC',
+      uiFontSize: (json['uiFontSize'] as num?)?.toDouble() ?? 14.0,
+      chatFont: json['chatFont'] as String? ?? 'Noto Sans SC',
+      chatFontSize: (json['chatFontSize'] as num?)?.toDouble() ?? 14.0,
     );
   }
 
@@ -248,6 +272,10 @@ class AppSettings {
         qdrantPath: settings.qdrantPath,
         notifyOnBlur: settings.notifyOnBlur,
         locale: settings.locale,
+        uiFont: settings.uiFont,
+        uiFontSize: settings.uiFontSize,
+        chatFont: settings.chatFont,
+        chatFontSize: settings.chatFontSize,
       );
     } catch (_) {
       return defaults;

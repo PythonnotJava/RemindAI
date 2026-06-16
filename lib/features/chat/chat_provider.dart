@@ -10,8 +10,11 @@ import '../../core/llm/models.dart';
 import '../../core/models/file_attachment.dart';
 import '../../core/logger/app_logger.dart';
 import '../../core/notification/notification_service.dart';
+import '../../core/pet/pet_economy.dart';
+import '../../core/pet/pet_chat_service.dart';
 import '../../core/toolshell/agent_loop.dart';
 import '../../core/utils/file_processor.dart';
+import '../../core/pet/pet_observer.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/settings_provider.dart';
 export '../../providers/session_provider.dart';
@@ -147,6 +150,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   /// 当前对话轮次的 hooks 引用 (用于 AgentDone 后触发 onAgentDone)
   List<AgentHook> _activeHooks = [];
+
+  /// 当前轮次的 token 计数（用于宠物经济系统奖励）
+  int _currentTokenCount = 0;
 
   ChatNotifier(this._ref) : super(const ChatState());
 
@@ -355,6 +361,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       error: null,
       attachments: [],
     );
+    PetObserver.instance.notifyUserMessage(
+      preview: input.length > 30 ? '${input.substring(0, 30)}...' : input,
+    );
 
     await _conversationsDao.saveMessage(conversationId, userMsg);
 
@@ -399,6 +408,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     // 监听事件流
     _subscription?.cancel();
+    _currentTokenCount = 0;
+    PetObserver.instance.notifyAiGenerating();
     _subscription = agentLoop
         .chat(input, contentParts: contentParts)
         .listen(
@@ -406,6 +417,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           onError: (e, stackTrace) {
             AppLogger.instance.log('[ChatProvider] Stream error: $e');
             AppLogger.instance.log('[ChatProvider] StackTrace: $stackTrace');
+            PetObserver.instance.notifyAiError(error: e.toString());
             _setError(e.toString());
           },
         );
@@ -414,6 +426,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void _handleEvent(AgentEvent event, int conversationId) {
     switch (event) {
       case AgentToken(text: final text):
+        _currentTokenCount += text.length ~/ 4; // 粗略估算: 4字符≈1 token
         state = state.copyWith(streamingText: state.streamingText + text);
       case AgentToolStart(name: final name, args: final args):
         final toolCall = ToolCallDisplay(
@@ -479,8 +492,24 @@ class ChatNotifier extends StateNotifier<ChatState> {
             body: finalContent.isEmpty ? '助手已完成回复' : finalContent,
           );
         }
+        PetObserver.instance.notifyAiCompleted(
+          summary: finalContent.length > 50
+              ? '${finalContent.substring(0, 50)}...'
+              : finalContent,
+        );
+        // 宠物经济：根据 token 消耗奖励宠物币
+        if (_currentTokenCount > 0) {
+          PetEconomy.instance.rewardForTokens(_currentTokenCount).then((reward) {
+            if (reward > 0) {
+              // 通过宠物气泡通知用户
+              PetChatService.instance.showCoinReward(reward);
+            }
+          });
+          _currentTokenCount = 0;
+        }
       case AgentError(message: final message):
         AppLogger.instance.log('[ChatProvider] AgentError: $message');
+        PetObserver.instance.notifyAiError(error: message);
         _setError(message);
     }
   }

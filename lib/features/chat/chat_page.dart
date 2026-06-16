@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:path/path.dart' as p;
@@ -387,25 +388,38 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildMessageList(BuildContext context, ChatState chatState) {
+    // 虚拟化列表：只渲染可见区域的消息
+    final messages = chatState.messages;
+    final activeToolCalls = chatState.activeToolCalls;
+    final isLoading = chatState.isLoading;
+
+    // 总 item 数 = 消息 + 活跃 tool calls + 流式输出 (可选)
+    final itemCount = messages.length +
+        activeToolCalls.length +
+        (isLoading ? 1 : 0);
+
     return Scrollbar(
       controller: _scrollController,
       thumbVisibility: true,
-      child: SingleChildScrollView(
+      child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Column(
-          children: [
-            // 消息列表
-            for (int i = 0; i < chatState.messages.length; i++)
-              _buildMessageItem(chatState.messages[i], i),
-            // 活跃的 tool calls
-            for (final toolCall in chatState.activeToolCalls)
-              ToolCallCard(toolCall: toolCall),
-            // 流式输出 loading
-            if (chatState.isLoading)
-              StreamingBubble(text: chatState.streamingText),
-          ],
-        ),
+        itemCount: itemCount,
+        // 预渲染 500px 区域外的项，减少快速滚动白屏
+        scrollCacheExtent: ScrollCacheExtent.pixels(500),
+        itemBuilder: (context, index) {
+          // 消息区
+          if (index < messages.length) {
+            return _buildMessageItem(messages[index], index);
+          }
+          // 活跃 tool calls 区
+          final toolCallIndex = index - messages.length;
+          if (toolCallIndex < activeToolCalls.length) {
+            return ToolCallCard(toolCall: activeToolCalls[toolCallIndex]);
+          }
+          // 流式输出 bubble
+          return StreamingBubble(text: chatState.streamingText);
+        },
       ),
     );
   }

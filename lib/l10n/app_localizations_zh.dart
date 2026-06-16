@@ -45,6 +45,9 @@ class SZh extends S {
   String get navLogs => '日志';
 
   @override
+  String get navPet => '宠物';
+
+  @override
   String get settingsTitle => '设置';
 
   @override
@@ -94,6 +97,49 @@ class SZh extends S {
 
   @override
   String get settingsLanguage => '语言';
+
+  @override
+  String get settingsFont => '字体设置';
+
+  @override
+  String get settingsUiFont => '界面字体';
+
+  @override
+  String get settingsUiFontDesc => '控制导航、设置等非对话区域的字体';
+
+  @override
+  String get settingsUiFontSize => '界面字号';
+
+  @override
+  String get settingsChatFont => '交互字体';
+
+  @override
+  String get settingsChatFontDesc => '控制对话和多Agent协作区域的字体';
+
+  @override
+  String get settingsChatFontSize => '交互字号';
+
+  @override
+  String get settingsFontDefault => '默认';
+
+  @override
+  String get settingsFontPreview => '字体预览 AaBbCc 你好世界 123';
+
+  @override
+  String get settingsCustomFont => '自定义字体';
+
+  @override
+  String get settingsCustomFontDesc =>
+      '导入本地 .ttf/.otf 字体文件，存放于 .RemindAI/fonts/ 目录';
+
+  @override
+  String get settingsCustomFontImport => '导入字体';
+
+  @override
+  String get settingsCustomFontPick => '选择字体文件 (.ttf / .otf)';
+
+  @override
+  String get settingsCustomFontImported => '字体导入成功';
 
   @override
   String get settingsChange => '修改';
@@ -516,6 +562,9 @@ class SZh extends S {
   String get modelsReorderHint => '点击卡片设为默认，长按拖动可调整顺序';
 
   @override
+  String get modelsSearchHint => '输入关键词搜索模型...';
+
+  @override
   String get skillsTitle => '技能管理';
 
   @override
@@ -650,6 +699,44 @@ class SZh extends S {
   String toolsSettingsOf(String name) {
     return '$name 设置';
   }
+
+  @override
+  String get toolShortcutsName => '截图';
+
+  @override
+  String get toolShortcutsDesc => '查看和自定义应用快捷键';
+
+  @override
+  String get toolShortcutsCategory => '快捷键';
+
+  @override
+  String get shortcutReset => '恢复默认';
+
+  @override
+  String get shortcutResetDone => '快捷键已恢复默认';
+
+  @override
+  String get shortcutHint => '点击编辑按钮修改快捷键，需至少包含一个修饰键（Ctrl/Shift/Alt）';
+
+  @override
+  String get shortcutEdit => '编辑';
+
+  @override
+  String shortcutEditTitle(String name) {
+    return '修改「$name」快捷键';
+  }
+
+  @override
+  String get shortcutEditHint => '按下新的组合键';
+
+  @override
+  String get shortcutEditWaiting => '等待按键...';
+
+  @override
+  String get shortcutCancel => '取消';
+
+  @override
+  String get shortcutConfirm => '确认';
 
   @override
   String get multiAgentTitle => '多Agent协作';
@@ -2211,4 +2298,490 @@ class SZh extends S {
 
   @override
   String get searchTestSuccess => '连接成功，API Key 有效';
+
+  @override
+  String get petCatGray => '灰色小猫';
+
+  @override
+  String get petCatOrange => '橘色小猫';
+
+  @override
+  String get petCatWhite => '白色小猫';
+
+  @override
+  String get petTitle => '宠物设置';
+
+  @override
+  String get petShow => '显示';
+
+  @override
+  String get petSkinSection => '精灵皮肤';
+
+  @override
+  String get petModelSection => '宠物模型 (AI)';
+
+  @override
+  String get petModelHint => '选择宠物使用的 AI 模型';
+
+  @override
+  String petModelLoadFailed(String error) {
+    return '加载模型失败: $error';
+  }
+
+  @override
+  String get petTtsSection => '语音合成';
+
+  @override
+  String get petTtsSystem => '系统';
+
+  @override
+  String get petTtsVolcano => '火山';
+
+  @override
+  String get petTtsAppId => 'AppID';
+
+  @override
+  String get petTtsAppIdHint => 'App ID';
+
+  @override
+  String get petTtsToken => 'Token';
+
+  @override
+  String get petTtsTokenHint => 'Access Token';
+
+  @override
+  String get petTtsVoiceType => '音色';
+
+  @override
+  String get petTtsVoiceTypeHint => 'voice_type (克隆音色 ID)';
+
+  @override
+  String get petTtsSave => '保存配置';
+
+  @override
+  String get petTtsSaved => '火山 TTS 配置已保存';
+
+  @override
+  String get petTtsReady => '✅ 配置完整';
+
+  @override
+  String get petTtsIncomplete => '⚠️ 请填写三项必填';
+
+  @override
+  String petTtsSpeedLabel(int value) {
+    return '语速($value)';
+  }
+
+  @override
+  String petTtsLoudnessLabel(int value) {
+    return '音量($value)';
+  }
+
+  @override
+  String get petTtsCredentialHint =>
+      '凭证获取: 火山引擎控制台 → 语音合成 → 音色克隆\n参考: github.com/Radiant303/astrbot_plugin_clonetts';
+
+  @override
+  String get petBehaviorSection => '回复行为';
+
+  @override
+  String petTtsThresholdLabel(int value) {
+    return '语音阈值($value字)';
+  }
+
+  @override
+  String petTtsThresholdHint(int value) {
+    return '≤$value字语音，超出文本气泡';
+  }
+
+  @override
+  String petBubbleDismissLabel(int value) {
+    return '气泡倒计时(${value}s)';
+  }
+
+  @override
+  String get petBubbleDismissManual => '手动关闭气泡';
+
+  @override
+  String petBubbleDismissAuto(int value) {
+    return '$value秒后自动关闭气泡';
+  }
+
+  @override
+  String get petCommandSection => '自定义右键指令';
+
+  @override
+  String get petCommandHint => '添加自定义指令后会出现在右键菜单中';
+
+  @override
+  String get petCommandAdd => '添加指令';
+
+  @override
+  String get petCommandAddTitle => '添加自定义指令';
+
+  @override
+  String get petCommandEditTitle => '编辑指令';
+
+  @override
+  String get petCommandNameLabel => '指令名称';
+
+  @override
+  String get petCommandNameHint => '例如：帮我优化';
+
+  @override
+  String get petCommandPromptLabel => '系统提示词';
+
+  @override
+  String get petCommandPromptHint => '例如：请帮我优化以下代码，提升性能和可读性：';
+
+  @override
+  String get petTestSection => '测试';
+
+  @override
+  String get petTestShort => '短语音';
+
+  @override
+  String get petTestLong => '长文本';
+
+  @override
+  String get petDebugEvents => '事件';
+
+  @override
+  String get petDebugAnimations => '动画';
+
+  @override
+  String get petDebugState => '状态';
+
+  @override
+  String get petBubbleThinking => '小猫思考中...';
+
+  @override
+  String get petBubbleTitle => '小猫说';
+
+  @override
+  String get petBubbleGenerating => '正在生成回答...';
+
+  @override
+  String get petBubbleClose => '关闭';
+
+  @override
+  String get petBubbleFeedAll => '投喂全文给小猫';
+
+  @override
+  String petBubbleFeedFollow(String label) {
+    return '追问: $label';
+  }
+
+  @override
+  String petBubbleFeedSelected(String label) {
+    return '投喂小猫: $label';
+  }
+
+  @override
+  String get petNoModel => '喵~ 我还没有绑定模型，请在宠物设置中选择一个模型。';
+
+  @override
+  String petError(String error) {
+    return '喵呜...出错了: $error';
+  }
+
+  @override
+  String get petContextHide => '隐藏宠物';
+
+  @override
+  String get petTestShortText => '你好呀主人！';
+
+  @override
+  String get petTestLongText =>
+      '主人你好，Flutter中Widget是不可变的，每次状态变化都会创建新的Widget树，这就是setState触发rebuild的原因。';
+
+  @override
+  String get petPageTitle => '宠物';
+
+  @override
+  String get petTabSettings => '设置';
+
+  @override
+  String get petTabShop => '商店';
+
+  @override
+  String get petTabAchievements => '成就';
+
+  @override
+  String get petShopTitle => '商品';
+
+  @override
+  String get petInventoryTitle => '背包';
+
+  @override
+  String get petInventoryEmpty => '空空如也~';
+
+  @override
+  String get petStatusTitle => '状态';
+
+  @override
+  String get petStatusSatiety => '饱腹度';
+
+  @override
+  String get petStatusHappiness => '心情值';
+
+  @override
+  String get petStatusDecayHint => '每小时饱腹 -5、心情 -3\n投喂食物可恢复';
+
+  @override
+  String get petShopBuy => '购买';
+
+  @override
+  String petShopBought(String name) {
+    return '购买了 $name！';
+  }
+
+  @override
+  String get petShopNoCoins => '宠物币不足~';
+
+  @override
+  String petShopSatiety(int value) {
+    return '饱腹+$value';
+  }
+
+  @override
+  String petShopHappiness(int value) {
+    return '心情+$value';
+  }
+
+  @override
+  String petShopEffect(String effect) {
+    return '特效: $effect';
+  }
+
+  @override
+  String get petAchievementsTitle => '成就';
+
+  @override
+  String petAchievementsProgress(int unlocked, int total) {
+    return '$unlocked / $total';
+  }
+
+  @override
+  String get petFeedTitle => '投喂小猫';
+
+  @override
+  String get petFeedButton => '投喂';
+
+  @override
+  String get petFeedButtonEmpty => '投喂 (背包空)';
+
+  @override
+  String get petFeedEmpty => '背包空空如也~ 去商店买点食物吧！';
+
+  @override
+  String petFeedStat(int quantity, int satiety, int happiness) {
+    return 'x$quantity  饱腹+$satiety 心情+$happiness';
+  }
+
+  @override
+  String get petFeedClose => '关闭';
+
+  @override
+  String petCoinReward(int amount) {
+    return '+$amount 宠物币~';
+  }
+
+  @override
+  String get petFoodBanana => '香蕉';
+
+  @override
+  String get petFoodBananaDesc => '软糯香甜，猫猫也爱';
+
+  @override
+  String get petFoodApple => '苹果';
+
+  @override
+  String get petFoodAppleDesc => '一天一苹果，猫猫不找我';
+
+  @override
+  String get petFoodPurpleGrape => '紫葡萄';
+
+  @override
+  String get petFoodPurpleGrapeDesc => '颗颗饱满的甜蜜';
+
+  @override
+  String get petFoodGreenGrape => '绿葡萄';
+
+  @override
+  String get petFoodGreenGrapeDesc => '清爽酸甜，开胃小食';
+
+  @override
+  String get petFoodPineapple => '菠萝';
+
+  @override
+  String get petFoodPineappleDesc => '热带风味，酸甜爆汁';
+
+  @override
+  String get petFoodKiwi => '猕猴桃';
+
+  @override
+  String get petFoodKiwiDesc => '维C满满的小绿球';
+
+  @override
+  String get petFoodCherry => '樱桃';
+
+  @override
+  String get petFoodCherryDesc => '小巧精致，猫猫当玩具拍';
+
+  @override
+  String get petFoodStrawberry => '草莓';
+
+  @override
+  String get petFoodStrawberryDesc => '红彤彤的快乐果实';
+
+  @override
+  String get petFoodCarrot => '胡萝卜';
+
+  @override
+  String get petFoodCarrotDesc => '对眼睛好，虽然猫不在乎';
+
+  @override
+  String get petFoodTomato => '番茄';
+
+  @override
+  String get petFoodTomatoDesc => '水灵灵的新鲜番茄';
+
+  @override
+  String get petFoodEggplant => '茄子';
+
+  @override
+  String get petFoodEggplantDesc => '紫色的健康蔬菜';
+
+  @override
+  String get petFoodPumpkin => '南瓜';
+
+  @override
+  String get petFoodPumpkinDesc => '大大的南瓜，够吃好久';
+
+  @override
+  String get petFoodBroccoli => '花菜';
+
+  @override
+  String get petFoodBroccoliDesc => '像一棵小树，营养丰富';
+
+  @override
+  String get petFoodGarlic => '洋蒜';
+
+  @override
+  String get petFoodGarlicDesc => '猫猫闻了打喷嚏';
+
+  @override
+  String get petFoodPepper => '辣椒';
+
+  @override
+  String get petFoodPepperDesc => '呼~辣到跳起来！';
+
+  @override
+  String get petFoodMushroom => '蘑菇';
+
+  @override
+  String get petFoodMushroomDesc => '鲜美的菌菇，猫猫意外喜欢';
+
+  @override
+  String get petFoodHam => '火腿';
+
+  @override
+  String get petFoodHamDesc => '浓郁肉香，猫猫口水直流';
+
+  @override
+  String get petFoodChicken => '鸡腿';
+
+  @override
+  String get petFoodChickenDesc => '外焦里嫩的大鸡腿';
+
+  @override
+  String get petFoodFish => '鱼';
+
+  @override
+  String get petFoodFishDesc => '猫猫的最爱！没有之一';
+
+  @override
+  String get petFoodLobster => '大龙虾';
+
+  @override
+  String get petFoodLobsterDesc => '顶级海鲜盛宴，猫猫疯狂';
+
+  @override
+  String get petAchieveFirstCoin => '第一桶金';
+
+  @override
+  String get petAchieveFirstCoinDesc => '获得第一枚宠物币';
+
+  @override
+  String get petAchieveRich100 => '小有积蓄';
+
+  @override
+  String get petAchieveRich100Desc => '累计获得 100 宠物币';
+
+  @override
+  String get petAchieveRich500 => '小富翁';
+
+  @override
+  String get petAchieveRich500Desc => '累计获得 500 宠物币';
+
+  @override
+  String get petAchieveRich2000 => '宠物大亨';
+
+  @override
+  String get petAchieveRich2000Desc => '累计获得 2000 宠物币';
+
+  @override
+  String get petAchieveFirstFeed => '初次投喂';
+
+  @override
+  String get petAchieveFirstFeedDesc => '第一次喂食小猫';
+
+  @override
+  String get petAchieveFeed10 => '尽职铲屎官';
+
+  @override
+  String get petAchieveFeed10Desc => '累计投喂 10 次';
+
+  @override
+  String get petAchieveFeed50 => '猫奴认证';
+
+  @override
+  String get petAchieveFeed50Desc => '累计投喂 50 次';
+
+  @override
+  String get petAchieveFullBelly => '吃撑了';
+
+  @override
+  String get petAchieveFullBellyDesc => '饱腹度达到 100';
+
+  @override
+  String get petAchieveHappyMax => '快乐猫猫';
+
+  @override
+  String get petAchieveHappyMaxDesc => '心情值达到 100';
+
+  @override
+  String get petAchieveShopper => '购物达人';
+
+  @override
+  String get petAchieveShopperDesc => '在商店购买 20 次';
+
+  @override
+  String get petAchieveChat1m => '话痨';
+
+  @override
+  String get petAchieveChat1mDesc => '累计消耗 100万 tokens';
+
+  @override
+  String get petAchieveChat50m => '深度用户';
+
+  @override
+  String get petAchieveChat50mDesc => '累计消耗 5000万 tokens';
+
+  @override
+  String get petAchieveChat100m => 'AI 重度依赖';
+
+  @override
+  String get petAchieveChat100mDesc => '累计消耗 1亿 tokens';
 }

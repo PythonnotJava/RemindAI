@@ -32,6 +32,8 @@ class MessageBubble extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final hasText = (message.content ?? '').trim().isNotEmpty;
     final hasAttachments = message.attachments.isNotEmpty;
+    final chatFont = ref.watch(chatFontProvider);
+    final chatFontSize = ref.watch(chatFontSizeProvider);
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -72,8 +74,8 @@ class MessageBubble extends ConsumerWidget {
                   ),
                 ),
                 child: isUser
-                    ? _buildUserContent(context)
-                    : _buildAssistantContent(context),
+                    ? _buildUserContent(context, chatFont, chatFontSize)
+                    : _buildAssistantContent(context, chatFont, chatFontSize),
               ),
             // 操作按钮行
             if (hasText)
@@ -89,20 +91,27 @@ class MessageBubble extends ConsumerWidget {
     );
   }
 
-  Widget _buildUserContent(BuildContext context) {
+  Widget _buildUserContent(BuildContext context, String chatFont, double chatFontSize) {
     final colorScheme = Theme.of(context).colorScheme;
     return MarkdownView(
       data: message.content ?? '',
       textColor: colorScheme.onPrimaryContainer,
+      fontFamily: chatFont,
+      fontSize: chatFontSize,
     );
   }
 
-  Widget _buildAssistantContent(BuildContext context) {
+  Widget _buildAssistantContent(BuildContext context, String chatFont, double chatFontSize) {
     final colorScheme = Theme.of(context).colorScheme;
     final content = message.content ?? '';
     if (content.isEmpty) return const SizedBox.shrink();
 
-    return MarkdownView(data: content, textColor: colorScheme.onSurface);
+    return MarkdownView(
+      data: content,
+      textColor: colorScheme.onSurface,
+      fontFamily: chatFont,
+      fontSize: chatFontSize,
+    );
   }
 }
 

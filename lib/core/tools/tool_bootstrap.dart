@@ -5,6 +5,7 @@ import '../../features/tools/paddle_ocr/paddle_ocr_tool.dart';
 import '../../features/tools/vpl/vpl_tool.dart';
 import '../../features/tools/flowchart/flowchart_tool.dart';
 import '../../features/tools/siyu/siyu_tool.dart';
+import '../../features/tools/shortcuts/shortcuts_tool.dart';
 
 /// 创建并初始化全局工具注册表
 Future<ToolRegistry> createToolRegistry() async {
@@ -17,6 +18,7 @@ Future<ToolRegistry> createToolRegistry() async {
   registry.register(VplTool());
   registry.register(FlowchartTool());
   registry.register(SiyuTool());
+  registry.register(ShortcutsTool());
 
   // 初始化（加载持久化配置）
   await registry.initAll();

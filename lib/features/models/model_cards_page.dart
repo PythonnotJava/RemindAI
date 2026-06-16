@@ -705,30 +705,37 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
                               return null;
                             },
                           )
-                        : DropdownButtonFormField<String>(
-                            initialValue:
-                                _availableModels.contains(_selectedModel)
-                                ? _selectedModel
+                        : Autocomplete<String>(
+                            optionsBuilder: (textEditingValue) {
+                              final query = textEditingValue.text.toLowerCase();
+                              if (query.isEmpty) return _availableModels;
+                              return _availableModels.where(
+                                (m) => m.toLowerCase().contains(query),
+                              );
+                            },
+                            initialValue: _selectedModel != null
+                                ? TextEditingValue(text: _selectedModel!)
                                 : null,
-                            decoration: InputDecoration(
-                              labelText: '模型 (${_availableModels.length} 个可用)',
-                              errorText: _fetchError,
-                            ),
-                            items: _availableModels
-                                .map(
-                                  (m) => DropdownMenuItem(
-                                    value: m,
-                                    child: Text(
-                                      m,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) =>
+                            onSelected: (v) =>
                                 setState(() => _selectedModel = v),
-                            validator: (v) => v == null ? '请选择模型' : null,
+                            optionsMaxHeight: 240,
+                            fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                              return TextFormField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                decoration: InputDecoration(
+                                  labelText: '模型 (${_availableModels.length} 个可用)',
+                                  hintText: context.s.modelsSearchHint,
+                                  errorText: _fetchError,
+                                  suffixIcon: const Icon(Icons.search, size: 20),
+                                ),
+                                style: const TextStyle(fontSize: 13),
+                                onChanged: (v) => _selectedModel = v.trim(),
+                                validator: (v) => (v == null || v.trim().isEmpty)
+                                    ? '请选择模型'
+                                    : null,
+                              );
+                            },
                           ),
                   ),
                   const SizedBox(width: 8),
