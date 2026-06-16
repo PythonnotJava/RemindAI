@@ -1,0 +1,188 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "schedule_load",
+      "description": "加载并解析 SCHEDULE.md 文件。如果文件不存在则创建模板。返回当前所有任务的结构化数据。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "计划文件路径，默认为工作目录下的 SCHEDULE.md",
+            "default": "SCHEDULE.md"
+          }
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "schedule_add_task",
+      "description": "向计划中添加新任务。自动插入到指定优先级区域的合适位置。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "description": "任务描述文本"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["P0", "P1", "P2"],
+            "description": "优先级: P0=紧急阻塞, P1=重要, P2=一般"
+          },
+          "after": {
+            "type": "string",
+            "description": "插入到哪个任务之后（任务文本的前缀匹配）。留空则追加到该优先级末尾。"
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "标签列表，如 ['feature', 'bugfix']"
+          },
+          "note": {
+            "type": "string",
+            "description": "简要备注"
+          },
+          "path": {
+            "type": "string",
+            "description": "计划文件路径",
+            "default": "SCHEDULE.md"
+          }
+        },
+        "required": ["task", "priority"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "schedule_complete",
+      "description": "将指定任务标记为已完成，移动到已完成区域并记录完成时间。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_match": {
+            "type": "string",
+            "description": "任务文本的前缀或关键词，用于匹配要完成的任务"
+          },
+          "summary": {
+            "type": "string",
+            "description": "完成情况的简要总结（附加在任务后）"
+          },
+          "path": {
+            "type": "string",
+            "description": "计划文件路径",
+            "default": "SCHEDULE.md"
+          }
+        },
+        "required": ["task_match"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "schedule_update",
+      "description": "更新已有任务的描述、优先级或位置。可用于提升/降低优先级、修改描述、添加备注。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_match": {
+            "type": "string",
+            "description": "要更新的任务文本前缀或关键词"
+          },
+          "new_priority": {
+            "type": "string",
+            "enum": ["P0", "P1", "P2"],
+            "description": "新优先级（留空表示不变）"
+          },
+          "new_text": {
+            "type": "string",
+            "description": "新的任务描述（留空表示不变）"
+          },
+          "new_note": {
+            "type": "string",
+            "description": "新的备注（留空表示不变）"
+          },
+          "path": {
+            "type": "string",
+            "description": "计划文件路径",
+            "default": "SCHEDULE.md"
+          }
+        },
+        "required": ["task_match"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "schedule_delete",
+      "description": "删除一个不再需要的待办任务（取消、无效、重复等）。不同于 complete，delete 不会留下完成记录。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_match": {
+            "type": "string",
+            "description": "任务文本的前缀或关键词，用于匹配要删除的任务"
+          },
+          "reason": {
+            "type": "string",
+            "description": "删除原因（可选，不写入文件，仅日志记录）"
+          },
+          "path": {
+            "type": "string",
+            "description": "计划文件路径",
+            "default": "SCHEDULE.md"
+          }
+        },
+        "required": ["task_match"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "schedule_review",
+      "description": "生成当前计划的进度报告。统计各优先级待办数、完成数，列出下一步建议。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "计划文件路径",
+            "default": "SCHEDULE.md"
+          }
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "schedule_archive",
+      "description": "将已完成区域中超过指定天数的条目归档到 SCHEDULE_ARCHIVE.md，保持主文件简洁。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "description": "已完成超过多少天的任务会被归档，默认 7",
+            "default": 7
+          },
+          "path": {
+            "type": "string",
+            "description": "计划文件路径",
+            "default": "SCHEDULE.md"
+          }
+        },
+        "required": []
+      }
+    }
+  }
+]
