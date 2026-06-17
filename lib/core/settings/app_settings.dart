@@ -93,6 +93,7 @@ class AppSettings {
   final double uiFontSize; // 界面字体大小
   final String chatFont; // 交互字体（对话+多Agent）
   final double chatFontSize; // 交互字体大小
+  final String enterAction; // 回车行为: 'send' / 'newline'
 
   const AppSettings({
     required this.databasePath,
@@ -111,6 +112,7 @@ class AppSettings {
     this.uiFontSize = 14.0,
     this.chatFont = 'Noto Sans SC',
     this.chatFontSize = 14.0,
+    this.enterAction = 'send',
   });
 
   /// 向后兼容: 返回当前选中的嵌入模型配置。
@@ -141,6 +143,7 @@ class AppSettings {
     double? uiFontSize,
     String? chatFont,
     double? chatFontSize,
+    String? enterAction,
   }) {
     return AppSettings(
       databasePath: databasePath ?? this.databasePath,
@@ -159,6 +162,7 @@ class AppSettings {
       uiFontSize: uiFontSize ?? this.uiFontSize,
       chatFont: chatFont ?? this.chatFont,
       chatFontSize: chatFontSize ?? this.chatFontSize,
+      enterAction: enterAction ?? this.enterAction,
     );
   }
 
@@ -179,6 +183,7 @@ class AppSettings {
     'uiFontSize': uiFontSize,
     'chatFont': chatFont,
     'chatFontSize': chatFontSize,
+    'enterAction': enterAction,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -226,6 +231,7 @@ class AppSettings {
       uiFontSize: (json['uiFontSize'] as num?)?.toDouble() ?? 14.0,
       chatFont: json['chatFont'] as String? ?? 'Noto Sans SC',
       chatFontSize: (json['chatFontSize'] as num?)?.toDouble() ?? 14.0,
+      enterAction: json['enterAction'] as String? ?? 'send',
     );
   }
 
@@ -276,6 +282,7 @@ class AppSettings {
         uiFontSize: settings.uiFontSize,
         chatFont: settings.chatFont,
         chatFontSize: settings.chatFontSize,
+        enterAction: settings.enterAction,
       );
     } catch (_) {
       return defaults;

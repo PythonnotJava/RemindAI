@@ -36,6 +36,8 @@ class SettingsPage extends ConsumerWidget {
               const SizedBox(height: 12),
               _NotifyOnBlurTile(enabled: settings.notifyOnBlur),
               const SizedBox(height: 12),
+              _EnterActionSwitcher(currentAction: settings.enterAction),
+              const SizedBox(height: 12),
               _LocaleSwitcher(currentLocale: settings.locale),
               const SizedBox(height: 32),
               _SectionHeader(title: s.settingsFont),
@@ -512,6 +514,59 @@ class _LocaleSwitcher extends ConsumerWidget {
                 final newLocale = set.first;
                 if (newLocale == currentLocale) return;
                 ref.read(settingsProvider.notifier).updateLocale(newLocale);
+              },
+              showSelectedIcon: false,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EnterActionSwitcher extends ConsumerWidget {
+  final String currentAction;
+  const _EnterActionSwitcher({required this.currentAction});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              Icons.keyboard,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              context.s.settingsEnterAction,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const Spacer(),
+            SegmentedButton<String>(
+              segments: [
+                ButtonSegment(
+                  value: 'send',
+                  icon: const Icon(Icons.send, size: 16),
+                  label: Text(context.s.settingsEnterSend),
+                ),
+                ButtonSegment(
+                  value: 'newline',
+                  icon: const Icon(Icons.keyboard_return, size: 16),
+                  label: Text(context.s.settingsEnterNewline),
+                ),
+              ],
+              selected: {currentAction},
+              onSelectionChanged: (set) {
+                final newAction = set.first;
+                if (newAction == currentAction) return;
+                ref
+                    .read(settingsProvider.notifier)
+                    .updateEnterAction(newAction);
               },
               showSelectedIcon: false,
             ),

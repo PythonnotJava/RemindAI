@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:path/path.dart' as p;
@@ -394,9 +395,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final isLoading = chatState.isLoading;
 
     // 总 item 数 = 消息 + 活跃 tool calls + 流式输出 (可选)
-    final itemCount = messages.length +
-        activeToolCalls.length +
-        (isLoading ? 1 : 0);
+    final itemCount =
+        messages.length + activeToolCalls.length + (isLoading ? 1 : 0);
 
     return Scrollbar(
       controller: _scrollController,
@@ -599,6 +599,8 @@ class _ChatInput extends ConsumerStatefulWidget {
 
 class _ChatInputState extends ConsumerState<_ChatInput> {
   /// 发送逻辑: 如果正在 loading，先中断当前响应再发送新消息
+
+  /// 发送逻辑: 如果正在 loading，先中断当前响应再发送新消息
   void _handleSend() {
     final text = widget.controller.text.trim();
     if (text.isEmpty) return;
@@ -675,23 +677,45 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: TextField(
-                  controller: widget.controller,
-                  focusNode: widget.focusNode,
-                  maxLines: 5,
-                  minLines: 1,
-                  textInputAction: TextInputAction.newline,
-                  onSubmitted: (_) => _handleSend(),
-                  decoration: InputDecoration(
-                    hintText: widget.isLoading
-                        ? context.s.chatInterruptHint
-                        : context.s.chatInputHint,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                child: Focus(
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.enter) {
+                      final enterAction = ref.read(
+                        settingsProvider.select(
+                          (s) => s.valueOrNull?.enterAction ?? 'send',
+                        ),
+                      );
+                      final hasModifier =
+                          HardwareKeyboard.instance.isControlPressed ||
+                          HardwareKeyboard.instance.isMetaPressed ||
+                          HardwareKeyboard.instance.isAltPressed;
+                      final shouldSend =
+                          (enterAction == 'send' && !hasModifier) ||
+                          (enterAction == 'newline' && hasModifier);
+                      if (shouldSend) {
+                        _handleSend();
+                        return KeyEventResult.handled;
+                      }
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: widget.focusNode,
+                    maxLines: null,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      hintText: widget.isLoading
+                          ? context.s.chatInterruptHint
+                          : context.s.chatInputHint,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -1588,9 +1612,9 @@ class _SearchChip extends ConsumerWidget {
                       secondary: const Icon(Icons.travel_explore, size: 20),
                       enabled:
                           searchSettings
-                                  ?.getConfig(SearchProvider.tavily)
-                                  .isConfigured ==
-                              true,
+                              ?.getConfig(SearchProvider.tavily)
+                              .isConfigured ==
+                          true,
                     ),
                     // Brave
                     RadioListTile<SearchProvider>(
@@ -1607,9 +1631,9 @@ class _SearchChip extends ConsumerWidget {
                       secondary: const Icon(Icons.shield_outlined, size: 20),
                       enabled:
                           searchSettings
-                                  ?.getConfig(SearchProvider.brave)
-                                  .isConfigured ==
-                              true,
+                              ?.getConfig(SearchProvider.brave)
+                              .isConfigured ==
+                          true,
                     ),
                     // Baidu
                     RadioListTile<SearchProvider>(
@@ -1626,9 +1650,9 @@ class _SearchChip extends ConsumerWidget {
                       secondary: const Icon(Icons.search, size: 20),
                       enabled:
                           searchSettings
-                                  ?.getConfig(SearchProvider.baidu)
-                                  .isConfigured ==
-                              true,
+                              ?.getConfig(SearchProvider.baidu)
+                              .isConfigured ==
+                          true,
                     ),
                   ],
                 ),

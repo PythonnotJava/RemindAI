@@ -63,6 +63,21 @@ class SZh extends S {
   String get settingsNotifyOnBlurDesc => '窗口不在前台时，对话完成后弹出系统通知';
 
   @override
+  String get settingsEnterAction => '回车行为';
+
+  @override
+  String get settingsEnterSend => '发送';
+
+  @override
+  String get settingsEnterNewline => '换行';
+
+  @override
+  String get settingsEnterSendHint => 'Enter 直接发送';
+
+  @override
+  String get settingsEnterNewlineHint => 'Enter 换行，按钮发送';
+
+  @override
   String get settingsStorage => '存储设置';
 
   @override

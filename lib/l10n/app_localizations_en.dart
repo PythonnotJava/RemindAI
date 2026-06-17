@@ -64,6 +64,21 @@ class SEn extends S {
       'Show system notification when conversation completes while window is in background';
 
   @override
+  String get settingsEnterAction => 'Enter Key Behavior';
+
+  @override
+  String get settingsEnterSend => 'Send';
+
+  @override
+  String get settingsEnterNewline => 'New Line';
+
+  @override
+  String get settingsEnterSendHint => 'Enter sends directly';
+
+  @override
+  String get settingsEnterNewlineHint => 'Enter newlines, button sends';
+
+  @override
   String get settingsStorage => 'Storage';
 
   @override

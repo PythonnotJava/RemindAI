@@ -271,6 +271,15 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     ref.read(chatFontSizeProvider.notifier).state = size;
   }
 
+  /// 更新回车行为 ('send' / 'newline')
+  Future<void> updateEnterAction(String action) async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(enterAction: action);
+    await updated.save();
+    state = AsyncData(updated);
+  }
+
   /// 新增或更新一个嵌入式模型配置。
   /// 若 [config].id 已存在则更新，否则追加。
   /// 列表中首个加入的配置会自动设为选中。
