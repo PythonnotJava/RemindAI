@@ -205,6 +205,36 @@ abstract class S {
   /// **'窗口不在前台时，对话完成后弹出系统通知'**
   String get settingsNotifyOnBlurDesc;
 
+  /// No description provided for @settingsEnterAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'回车行为'**
+  String get settingsEnterAction;
+
+  /// No description provided for @settingsEnterSend.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送'**
+  String get settingsEnterSend;
+
+  /// No description provided for @settingsEnterNewline.
+  ///
+  /// In zh, this message translates to:
+  /// **'换行'**
+  String get settingsEnterNewline;
+
+  /// No description provided for @settingsEnterSendHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Enter 直接发送'**
+  String get settingsEnterSendHint;
+
+  /// No description provided for @settingsEnterNewlineHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Enter 换行，按钮发送'**
+  String get settingsEnterNewlineHint;
+
   /// No description provided for @settingsStorage.
   ///
   /// In zh, this message translates to:
