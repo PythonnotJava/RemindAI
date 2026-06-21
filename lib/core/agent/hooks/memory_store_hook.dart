@@ -23,7 +23,9 @@ class MemoryStoreHook extends AgentHook {
 
   @override
   Future<void> onAgentDone(String content, List<ToolCall> toolCalls) async {
-    AppLogger.instance.log('[Memory] MemoryStoreHook.onAgentDone, content=${content.length}字符');
+    AppLogger.instance.log(
+      '[Memory] MemoryStoreHook.onAgentDone, content=${content.length}字符',
+    );
 
     // 获取本轮用户输入
     String userInput = '';

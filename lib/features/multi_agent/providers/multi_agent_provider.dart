@@ -630,6 +630,8 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
     );
 
     // 创建 Executor
+    // 注意: 多智能体全自动执行 (无权限中间件确认)，故保持目录边界沙箱
+    // (allowOutsideRoot 默认 false)，避免子智能体无确认地越界写/删。
     final executor = CombinedExecutor(
       projectRoot: state.workingDirectory ?? '',
       mcpClients: {},

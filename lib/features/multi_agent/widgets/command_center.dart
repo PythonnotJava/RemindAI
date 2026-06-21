@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/font/custom_font_loader.dart';
 import '../../../core/l10n/l10n_ext.dart';
+import '../../../providers/settings_provider.dart';
 import '../models/agent_config.dart';
 import '../models/agent_message.dart';
 import '../providers/multi_agent_provider.dart';
@@ -375,14 +378,16 @@ class _TimelineView extends StatelessWidget {
 }
 
 /// 时间线中的单条消息
-class _TimelineItem extends StatelessWidget {
+class _TimelineItem extends ConsumerWidget {
   const _TimelineItem({required this.message, required this.agents});
   final AgentMessage message;
   final Map<String, AgentRuntime> agents;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final chatFont = ref.watch(chatFontProvider);
+    final chatFontSize = ref.watch(chatFontSizeProvider);
 
     final fromAgent = agents[message.fromAgentId];
     final fromName = message.fromAgentId == 'user'
@@ -462,9 +467,10 @@ class _TimelineItem extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   message.content,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                    height: 1.4,
+                  style: _safeChatStyle(
+                    chatFont,
+                    chatFontSize,
+                    theme.colorScheme.onSurface.withValues(alpha: 0.8),
                   ),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -663,5 +669,27 @@ class _AgentStatusCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// 安全获取聊天字体样式，自定义字体直接用 fontFamily，Google Font 走 getFont
+TextStyle _safeChatStyle(String fontFamily, double fontSize, Color color) {
+  if (CustomFontLoader.instance.loadedFonts.contains(fontFamily)) {
+    return TextStyle(
+      fontFamily: fontFamily,
+      color: color,
+      fontSize: fontSize,
+      height: 1.4,
+    );
+  }
+  try {
+    return GoogleFonts.getFont(
+      fontFamily,
+      color: color,
+      fontSize: fontSize,
+      height: 1.4,
+    );
+  } catch (_) {
+    return TextStyle(color: color, fontSize: fontSize, height: 1.4);
   }
 }

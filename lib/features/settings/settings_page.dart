@@ -9,6 +9,7 @@ import '../../providers/skills_provider.dart';
 import '../../shared/widgets/theme_transition.dart';
 import 'widgets/custom_license_page.dart';
 import 'widgets/embedding_section.dart';
+import 'widgets/font_section.dart';
 import 'widgets/qdrant_path_tile.dart';
 import 'version.dart' show version, repo;
 
@@ -35,7 +36,13 @@ class SettingsPage extends ConsumerWidget {
               const SizedBox(height: 12),
               _NotifyOnBlurTile(enabled: settings.notifyOnBlur),
               const SizedBox(height: 12),
+              _EnterActionSwitcher(currentAction: settings.enterAction),
+              const SizedBox(height: 12),
               _LocaleSwitcher(currentLocale: settings.locale),
+              const SizedBox(height: 32),
+              _SectionHeader(title: s.settingsFont),
+              const SizedBox(height: 12),
+              const FontSection(),
               const SizedBox(height: 32),
               _SectionHeader(title: s.settingsStorage),
               const SizedBox(height: 12),
@@ -299,65 +306,135 @@ class _ThemeSwitcher extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final s = context.s;
+    final settings = ref.watch(settingsProvider).valueOrNull;
+    final currentAccent = settings?.accentColor ?? 'purple';
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.palette_outlined,
-              size: 20,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              context.s.settingsTheme,
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const Spacer(),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'light',
-                  icon: Icon(Icons.light_mode, size: 18),
+            // 第一行：主题模式
+            Row(
+              children: [
+                Icon(
+                  Icons.palette_outlined,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
-                ButtonSegment(
-                  value: 'system',
-                  icon: Icon(Icons.brightness_auto, size: 18),
+                const SizedBox(width: 12),
+                Text(
+                  s.settingsTheme,
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
-                ButtonSegment(
-                  value: 'dark',
-                  icon: Icon(Icons.dark_mode, size: 18),
+                const Spacer(),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'light',
+                      icon: Icon(Icons.light_mode, size: 18),
+                    ),
+                    ButtonSegment(
+                      value: 'system',
+                      icon: Icon(Icons.brightness_auto, size: 18),
+                    ),
+                    ButtonSegment(
+                      value: 'dark',
+                      icon: Icon(Icons.dark_mode, size: 18),
+                    ),
+                  ],
+                  selected: {currentMode},
+                  onSelectionChanged: (set) async {
+                    final newMode = set.first;
+                    if (newMode == currentMode) return;
+
+                    // 获取 SegmentedButton 的中心位置作为圆形扩散的圆心
+                    final renderBox = context.findRenderObject() as RenderBox?;
+                    if (renderBox != null) {
+                      final position = renderBox.localToGlobal(Offset.zero);
+                      final center =
+                          position +
+                          Offset(
+                            renderBox.size.width * 0.75,
+                            renderBox.size.height / 2,
+                          );
+                      await ThemeTransitionController.instance.startTransition(
+                        center,
+                      );
+                    }
+
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      ref
+                          .read(settingsProvider.notifier)
+                          .updateThemeMode(newMode);
+                    });
+                  },
+                  showSelectedIcon: false,
                 ),
               ],
-              selected: {currentMode},
-              onSelectionChanged: (set) async {
-                final newMode = set.first;
-                if (newMode == currentMode) return;
+            ),
+            const SizedBox(height: 12),
+            // 第二行：主题色
+            Row(
+              children: [
+                const SizedBox(width: 32),
+                Text(
+                  s.settingsAccentColorTitle,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const Spacer(),
+                SegmentedButton<String>(
+                  segments: [
+                    ButtonSegment(
+                      value: 'purple',
+                      label: Text(s.settingsAccentColorPurple),
+                    ),
+                    ButtonSegment(
+                      value: 'green',
+                      label: Text(s.settingsAccentColorGreen),
+                    ),
+                    ButtonSegment(
+                      value: 'blue',
+                      label: Text(s.settingsAccentColorBlue),
+                    ),
+                    ButtonSegment(
+                      value: 'cyan',
+                      label: Text(s.settingsAccentColorCyan),
+                    ),
+                  ],
+                  selected: {currentAccent},
+                  onSelectionChanged: (set) async {
+                    final newAccent = set.first;
+                    if (newAccent == currentAccent) return;
 
-                // 获取 SegmentedButton 的中心位置作为圆形扩散的圆心
-                final renderBox = context.findRenderObject() as RenderBox?;
-                if (renderBox != null) {
-                  final position = renderBox.localToGlobal(Offset.zero);
-                  final center =
-                      position +
-                      Offset(
-                        renderBox.size.width * 0.75, // 偏向右侧按钮区域
-                        renderBox.size.height / 2,
+                    // 获取圆心位置
+                    final renderBox = context.findRenderObject() as RenderBox?;
+                    if (renderBox != null) {
+                      final position = renderBox.localToGlobal(Offset.zero);
+                      final center =
+                          position +
+                          Offset(
+                            renderBox.size.width * 0.75,
+                            renderBox.size.height * 1.5,
+                          );
+                      await ThemeTransitionController.instance.startTransition(
+                        center,
                       );
-                  await ThemeTransitionController.instance.startTransition(
-                    center,
-                  );
-                }
+                    }
 
-                // 延后一帧再改主题，让动画先启动、截图覆盖旧画面
-                // 这样 widget tree 的全量 rebuild 发生在截图之下，用户看不到卡顿
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  ref.read(settingsProvider.notifier).updateThemeMode(newMode);
-                });
-              },
-              showSelectedIcon: false,
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      ref
+                          .read(settingsProvider.notifier)
+                          .updateAccentColor(newAccent);
+                    });
+                  },
+                ),
+              ],
             ),
           ],
         ),
@@ -507,6 +584,59 @@ class _LocaleSwitcher extends ConsumerWidget {
                 final newLocale = set.first;
                 if (newLocale == currentLocale) return;
                 ref.read(settingsProvider.notifier).updateLocale(newLocale);
+              },
+              showSelectedIcon: false,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EnterActionSwitcher extends ConsumerWidget {
+  final String currentAction;
+  const _EnterActionSwitcher({required this.currentAction});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              Icons.keyboard,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              context.s.settingsEnterAction,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const Spacer(),
+            SegmentedButton<String>(
+              segments: [
+                ButtonSegment(
+                  value: 'send',
+                  icon: const Icon(Icons.send, size: 16),
+                  label: Text(context.s.settingsEnterSend),
+                ),
+                ButtonSegment(
+                  value: 'newline',
+                  icon: const Icon(Icons.keyboard_return, size: 16),
+                  label: Text(context.s.settingsEnterNewline),
+                ),
+              ],
+              selected: {currentAction},
+              onSelectionChanged: (set) {
+                final newAction = set.first;
+                if (newAction == currentAction) return;
+                ref
+                    .read(settingsProvider.notifier)
+                    .updateEnterAction(newAction);
               },
               showSelectedIcon: false,
             ),

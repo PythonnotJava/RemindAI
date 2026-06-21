@@ -43,6 +43,14 @@ class AgentContext {
   final List<AgentHook> hooks;
   final List<Map<String, dynamic>> tools;
   final String systemPrompt;
+
+  /// system prompt 的稳定前缀（领域专家 + 元技能），会话期间不随用户技能变化。
+  /// 用于中途刷新 system prompt 时保留专家角色与元技能说明。
+  final String systemPromptPrefix;
+
+  /// system prompt 的用户技能区（可能随会话中途启用/停用技能而变化）。
+  final String skillsSection;
+
   final List<Map<String, dynamic>> messages;
   final MessagePipeline messagePipeline;
 
@@ -52,6 +60,8 @@ class AgentContext {
     required this.hooks,
     required this.tools,
     required this.systemPrompt,
+    this.systemPromptPrefix = '',
+    this.skillsSection = '',
     required this.messages,
     this.messagePipeline = const MessagePipeline(),
   });
@@ -175,11 +185,17 @@ class AgentContextBuilder {
       customHandlers.addAll(cap.toolHandlers);
       // 注册 source mapping
       toolSourceMapping.addAll(cap.sourceMapping);
-      AppLogger.instance.log('[AgentContext] Capability 已注册: ${cap.displayName}');
+      AppLogger.instance.log(
+        '[AgentContext] Capability 已注册: ${cap.displayName}',
+      );
     }
 
     // ─── 系统提示词 ───
-    final systemPrompt = await _loadSystemPrompt();
+    // 拆成稳定前缀（专家+元技能）与用户技能区两段，
+    // 便于会话中途技能变化时只刷新技能区，保护 prompt cache。
+    final systemPromptPrefix = await _buildSystemPromptPrefix();
+    final skillsSection = await _buildSkillsSection();
+    final systemPrompt = '$systemPromptPrefix$skillsSection';
 
     // ─── 初始化消息历史 ───
     if (existingMessages.isEmpty) {
@@ -211,6 +227,9 @@ class AgentContextBuilder {
       memoryManager: memoryManager,
       memoryCollection: memoryCollection,
       readableExtraPaths: activeSkillPaths,
+      // 交互式桌面会话：解除目录边界限制，可跨工作目录操作；
+      // 越界写/删/执行仍由权限中间件逐次确认。
+      allowOutsideRoot: true,
     );
 
     // ─── ToolPipeline ───
@@ -250,6 +269,8 @@ class AgentContextBuilder {
       hooks: hooks,
       tools: tools,
       systemPrompt: systemPrompt,
+      systemPromptPrefix: systemPromptPrefix,
+      skillsSection: skillsSection,
       messages: existingMessages,
       messagePipeline: const MessagePipeline(), // 默认空管线，零开销透传
     );
@@ -304,9 +325,19 @@ class AgentContextBuilder {
     final registry = _ref.read(skillRegistryProvider);
     final skillsState = _ref.read(skillsProvider);
     final skills = skillsState.valueOrNull ?? [];
+    final allSkillNames = skills
+        .map((s) => '${s.name}(${s.isActive ? "激活" : "未启用"})')
+        .toList();
+    print('[SKILL] 技能列表(共${skills.length}): ${allSkillNames.join(", ")}');
     for (final skill in skills) {
       if (!skill.isActive) continue;
       final skillTools = await registry.loadSkillTools(skill);
+      final toolNames = skillTools
+          .map((t) => (t['function'] as Map)['name'])
+          .join(", ");
+      print(
+        '[SKILL] ✓ 加载技能「${skill.name}」工具(${skillTools.length}个): $toolNames',
+      );
       for (final t in skillTools) {
         sourceMapping[(t['function'] as Map)['name'] as String] =
             '技能:${skill.name}';
@@ -332,9 +363,29 @@ class AgentContextBuilder {
   }
 
   /// 公开方法: 构建系统提示词 (供 loadConversation 等外部场景使用)
-  Future<String> buildSystemPrompt() => _loadSystemPrompt();
+  Future<String> buildSystemPrompt() async {
+    final prefix = await _buildSystemPromptPrefix();
+    final skills = await _buildSkillsSection();
+    return '$prefix$skills';
+  }
 
-  Future<String> _loadSystemPrompt() async {
+  /// 计算当前激活用户技能的轻量签名。
+  /// 用于判断会话中途技能集合是否变化，决定是否需要刷新 system prompt。
+  /// 与 [_buildSkillsSection] 的数据来源保持一致。
+  String computeSkillSignature() {
+    final skills = _ref.read(skillsProvider).valueOrNull ?? [];
+    final active =
+        skills
+            .where((s) => s.isActive)
+            .map((s) => '${s.name}|${s.path}')
+            .toList()
+          ..sort();
+    return active.join(';;');
+  }
+
+  /// 构建 system prompt 的稳定前缀：领域专家 + 元技能（或全局模式提示）。
+  /// 注意：领域专家为一次性消费（读取后置空），仅在新会话首次构建时注入。
+  Future<String> _buildSystemPromptPrefix() async {
     final parts = <String>[];
     final hasWorkspace = _ref.read(workingDirectoryProvider).isNotEmpty;
 
@@ -369,7 +420,12 @@ class AgentContextBuilder {
       );
     }
 
-    // 用户技能提示
+    return parts.join();
+  }
+
+  /// 构建 system prompt 的用户技能区。会话中途可能因启用/停用技能而变化。
+  Future<String> _buildSkillsSection() async {
+    final parts = <String>[];
     final registry = _ref.read(skillRegistryProvider);
     final skillsState = _ref.read(skillsProvider);
     final skills = skillsState.valueOrNull ?? [];
@@ -385,7 +441,6 @@ class AgentContextBuilder {
         );
       }
     }
-
     return parts.join();
   }
 

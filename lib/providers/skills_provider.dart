@@ -48,6 +48,17 @@ class SkillsNotifier extends AsyncNotifier<List<Skill>> {
     ref.invalidateSelf();
   }
 
+  /// 更新技能描述 (用户手动编辑)
+  Future<void> updateDescription(String skillId, String description) async {
+    await _registry.setDescription(skillId, description);
+    ref.invalidateSelf();
+  }
+
+  /// 读取技能的 SKILL.md 原文 (用于查看渲染)
+  Future<String> loadSkillMd(Skill skill) async {
+    return _registry.loadSkillPrompt(skill);
+  }
+
   /// 按新顺序重排卡片 (拖拽排序)
   Future<void> reorder(List<Skill> ordered) async {
     // 乐观更新本地状态，立即反映拖拽结果

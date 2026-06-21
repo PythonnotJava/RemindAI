@@ -42,18 +42,23 @@ class MemoryRecallHook extends AgentHook {
       for (final m in memories) {
         final text = m['text'] as String? ?? '';
         AppLogger.instance.log(
-          '[Memory]   score=${m['score']}, '
+          '[Memory]   source=${m['source']}, score=${m['score']}, '
           'text="${text.substring(0, text.length.clamp(0, 80))}"',
         );
       }
 
       if (memories.isNotEmpty) {
+        // 标注来源: qdrant=语义检索(高可信)，sqlite=关键词降级(仅供参考)
+        final src = memories.first['source'] as String? ?? 'unknown';
+        final isFallback = src == 'sqlite';
         final memoryContext = memories.map((m) => '- ${m['text']}').join('\n');
-        messages.add({
-          'role': 'system',
-          'content': '[自动召回的相关记忆]\n$memoryContext',
-        });
-        AppLogger.instance.log('[Memory] 已注入 ${memories.length} 条记忆到 system message');
+        final header = isFallback
+            ? '[自动召回的相关记忆 — 关键词匹配，相关性仅供参考]'
+            : '[自动召回的相关记忆 — 语义检索]';
+        messages.add({'role': 'system', 'content': '$header\n$memoryContext'});
+        AppLogger.instance.log(
+          '[Memory] 已注入 ${memories.length} 条记忆 (source=$src) 到 system message',
+        );
       }
     } catch (e) {
       AppLogger.instance.log('[Memory] 自动召回失败: $e');

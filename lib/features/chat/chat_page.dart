@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:path/path.dart' as p;
@@ -22,6 +25,7 @@ import '../../core/db/tables/model_cards.dart' as db;
 import '../../widgets/model_logo.dart';
 import 'chat_provider.dart';
 import 'widgets/chat_scroll_nav.dart';
+import 'widgets/markdown_view.dart';
 import 'widgets/message_bubble.dart';
 import 'widgets/new_workspace_dialog.dart';
 import 'widgets/tool_call_card.dart';
@@ -171,6 +175,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   ref.read(chatProvider.notifier).rejectPermission(),
               onAlways: () => ref.read(chatProvider.notifier).approveAlways(),
             ),
+          // Thinking timer bar
+          _ThinkingBar(isLoading: chatState.isLoading),
           // Input bar
           _ChatInput(
             controller: _controller,
@@ -387,25 +393,37 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildMessageList(BuildContext context, ChatState chatState) {
+    // 虚拟化列表：只渲染可见区域的消息
+    final messages = chatState.messages;
+    final activeToolCalls = chatState.activeToolCalls;
+    final isLoading = chatState.isLoading;
+
+    // 总 item 数 = 消息 + 活跃 tool calls + 流式输出 (可选)
+    final itemCount =
+        messages.length + activeToolCalls.length + (isLoading ? 1 : 0);
+
     return Scrollbar(
       controller: _scrollController,
       thumbVisibility: true,
-      child: SingleChildScrollView(
+      child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Column(
-          children: [
-            // 消息列表
-            for (int i = 0; i < chatState.messages.length; i++)
-              _buildMessageItem(chatState.messages[i], i),
-            // 活跃的 tool calls
-            for (final toolCall in chatState.activeToolCalls)
-              ToolCallCard(toolCall: toolCall),
-            // 流式输出 loading
-            if (chatState.isLoading)
-              StreamingBubble(text: chatState.streamingText),
-          ],
-        ),
+        itemCount: itemCount,
+        // 预渲染 500px 区域外的项，减少快速滚动白屏
+        scrollCacheExtent: ScrollCacheExtent.pixels(500),
+        itemBuilder: (context, index) {
+          // 消息区
+          if (index < messages.length) {
+            return _buildMessageItem(messages[index], index);
+          }
+          // 活跃 tool calls 区
+          final toolCallIndex = index - messages.length;
+          if (toolCallIndex < activeToolCalls.length) {
+            return ToolCallCard(toolCall: activeToolCalls[toolCallIndex]);
+          }
+          // 流式输出 bubble
+          return StreamingBubble(text: chatState.streamingText);
+        },
       ),
     );
   }
@@ -585,6 +603,8 @@ class _ChatInput extends ConsumerStatefulWidget {
 
 class _ChatInputState extends ConsumerState<_ChatInput> {
   /// 发送逻辑: 如果正在 loading，先中断当前响应再发送新消息
+
+  /// 发送逻辑: 如果正在 loading，先中断当前响应再发送新消息
   void _handleSend() {
     final text = widget.controller.text.trim();
     if (text.isEmpty) return;
@@ -661,23 +681,45 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: TextField(
-                  controller: widget.controller,
-                  focusNode: widget.focusNode,
-                  maxLines: 5,
-                  minLines: 1,
-                  textInputAction: TextInputAction.newline,
-                  onSubmitted: (_) => _handleSend(),
-                  decoration: InputDecoration(
-                    hintText: widget.isLoading
-                        ? context.s.chatInterruptHint
-                        : context.s.chatInputHint,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                child: Focus(
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.enter) {
+                      final enterAction = ref.read(
+                        settingsProvider.select(
+                          (s) => s.valueOrNull?.enterAction ?? 'send',
+                        ),
+                      );
+                      final hasModifier =
+                          HardwareKeyboard.instance.isControlPressed ||
+                          HardwareKeyboard.instance.isMetaPressed ||
+                          HardwareKeyboard.instance.isAltPressed;
+                      final shouldSend =
+                          (enterAction == 'send' && !hasModifier) ||
+                          (enterAction == 'newline' && hasModifier);
+                      if (shouldSend) {
+                        _handleSend();
+                        return KeyEventResult.handled;
+                      }
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: widget.focusNode,
+                    maxLines: null,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      hintText: widget.isLoading
+                          ? context.s.chatInterruptHint
+                          : context.s.chatInputHint,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -962,13 +1004,10 @@ class _SkillsChip extends ConsumerWidget {
           width: 500,
           height: 400,
           child: SingleChildScrollView(
-            child: SelectableText(
-              content,
-              style: const TextStyle(
-                fontSize: 13,
-                fontFamily: 'Consolas',
-                height: 1.5,
-              ),
+            child: MarkdownView(
+              data: content,
+              textColor: Theme.of(ctx).colorScheme.onSurface,
+              fontSize: 14,
             ),
           ),
         ),
@@ -1296,16 +1335,16 @@ class _WorkDirChip extends ConsumerWidget {
     final dir = await FilePicker.platform.getDirectoryPath(
       dialogTitle: context.s.chatSelectWorkingDir,
     );
-    if (dir != null) {
+    if (dir != null && context.mounted) {
       ref.read(workingDirectoryProvider.notifier).state = dir;
       // 同步到设置持久化
       await ref.read(settingsProvider.notifier).updateWorkingDirectory(dir);
     }
   }
 
-  void _clearDir(WidgetRef ref) {
+  Future<void> _clearDir(WidgetRef ref) async {
     ref.read(workingDirectoryProvider.notifier).state = '';
-    ref.read(settingsProvider.notifier).updateWorkingDirectory('');
+    await ref.read(settingsProvider.notifier).updateWorkingDirectory('');
   }
 
   String _basename(String path) {
@@ -1574,9 +1613,9 @@ class _SearchChip extends ConsumerWidget {
                       secondary: const Icon(Icons.travel_explore, size: 20),
                       enabled:
                           searchSettings
-                                  ?.getConfig(SearchProvider.tavily)
-                                  .isConfigured ==
-                              true,
+                              ?.getConfig(SearchProvider.tavily)
+                              .isConfigured ==
+                          true,
                     ),
                     // Brave
                     RadioListTile<SearchProvider>(
@@ -1593,9 +1632,9 @@ class _SearchChip extends ConsumerWidget {
                       secondary: const Icon(Icons.shield_outlined, size: 20),
                       enabled:
                           searchSettings
-                                  ?.getConfig(SearchProvider.brave)
-                                  .isConfigured ==
-                              true,
+                              ?.getConfig(SearchProvider.brave)
+                              .isConfigured ==
+                          true,
                     ),
                     // Baidu
                     RadioListTile<SearchProvider>(
@@ -1612,9 +1651,9 @@ class _SearchChip extends ConsumerWidget {
                       secondary: const Icon(Icons.search, size: 20),
                       enabled:
                           searchSettings
-                                  ?.getConfig(SearchProvider.baidu)
-                                  .isConfigured ==
-                              true,
+                              ?.getConfig(SearchProvider.baidu)
+                              .isConfigured ==
+                          true,
                     ),
                   ],
                 ),
@@ -1899,3 +1938,130 @@ class _PermissionBar extends StatelessWidget {
     );
   }
 }
+
+// ─── Thinking Timer Bar ──────────────────────────────────────
+
+/// 输入框上方的思考计时条，当模型正在生成时始终可见。
+class _ThinkingBar extends StatefulWidget {
+  final bool isLoading;
+
+  const _ThinkingBar({required this.isLoading});
+
+  @override
+  State<_ThinkingBar> createState() => _ThinkingBarState();
+}
+
+class _ThinkingBarState extends State<_ThinkingBar>
+    with SingleTickerProviderStateMixin {
+  Timer? _timer;
+  int _elapsedSeconds = 0;
+
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+    if (widget.isLoading) _startTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ThinkingBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isLoading && widget.isLoading) {
+      _startTimer();
+    } else if (oldWidget.isLoading && !widget.isLoading) {
+      _stopTimer();
+    }
+  }
+
+  void _startTimer() {
+    _elapsedSeconds = 0;
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _elapsedSeconds++);
+    });
+  }
+
+  void _stopTimer() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isLoading) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final timeLabel = _formatElapsed(_elapsedSeconds);
+
+    return FadeTransition(
+      opacity: _pulseAnimation,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+          border: Border(
+            top: BorderSide(
+              color: colorScheme.primary.withValues(alpha: 0.3),
+              width: 0.5,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              context.s.msgThinking,
+              style: TextStyle(
+                color: colorScheme.onPrimaryContainer,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              timeLabel,
+              style: TextStyle(
+                color: colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                fontSize: 11,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatElapsed(int seconds) {
+    if (seconds < 60) return '${seconds}s';
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+

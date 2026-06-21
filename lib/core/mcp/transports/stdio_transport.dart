@@ -51,7 +51,9 @@ class StdioTransport implements McpTransport {
       ...?env,
     };
 
-    AppLogger.instance.log('[MCP/stdio] 连接: $cleanCommand ${cleanArgs.join(" ")}');
+    AppLogger.instance.log(
+      '[MCP/stdio] 连接: $cleanCommand ${cleanArgs.join(" ")}',
+    );
 
     try {
       _process = await Process.start(

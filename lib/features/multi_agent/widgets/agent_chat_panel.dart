@@ -3,8 +3,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/font/custom_font_loader.dart';
 import '../../../core/l10n/l10n_ext.dart';
+import '../../../providers/settings_provider.dart';
 import '../../chat/widgets/markdown_view.dart';
 import '../models/agent_config.dart';
 import '../models/agent_message.dart';
@@ -250,7 +253,7 @@ class _StatusBar extends StatelessWidget {
 }
 
 /// 消息气泡
-class _MessageBubble extends StatelessWidget {
+class _MessageBubble extends ConsumerWidget {
   const _MessageBubble({
     required this.message,
     required this.agentName,
@@ -262,9 +265,11 @@ class _MessageBubble extends StatelessWidget {
   final Color agentColor;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isUser = message.type == AgentMessageType.user;
+    final chatFont = ref.watch(chatFontProvider);
+    final chatFontSize = ref.watch(chatFontSizeProvider);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -290,14 +295,17 @@ class _MessageBubble extends StatelessWidget {
           child: isUser
               ? SelectableText(
                   message.content,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface,
-                    height: 1.5,
+                  style: _safeChatStyle(
+                    chatFont,
+                    chatFontSize,
+                    theme.colorScheme.onSurface,
                   ),
                 )
               : MarkdownView(
                   data: message.content,
                   textColor: theme.colorScheme.onSurface,
+                  fontFamily: chatFont,
+                  fontSize: chatFontSize,
                 ),
         ),
       ),
@@ -306,7 +314,7 @@ class _MessageBubble extends StatelessWidget {
 }
 
 /// 流式输出气泡
-class _StreamingBubble extends StatelessWidget {
+class _StreamingBubble extends ConsumerWidget {
   const _StreamingBubble({
     required this.text,
     required this.agentName,
@@ -318,8 +326,11 @@ class _StreamingBubble extends StatelessWidget {
   final Color agentColor;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final chatFont = ref.watch(chatFontProvider);
+    final chatFontSize = ref.watch(chatFontSizeProvider);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Align(
@@ -341,7 +352,12 @@ class _StreamingBubble extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              MarkdownView(data: text, textColor: theme.colorScheme.onSurface),
+              MarkdownView(
+                data: text,
+                textColor: theme.colorScheme.onSurface,
+                fontFamily: chatFont,
+                fontSize: chatFontSize,
+              ),
               const SizedBox(height: 4),
               SizedBox(
                 width: 10,
@@ -476,5 +492,27 @@ class _InputBar extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// 安全获取聊天字体样式，自定义字体直接用 fontFamily，Google Font 走 getFont
+TextStyle _safeChatStyle(String fontFamily, double fontSize, Color color) {
+  if (CustomFontLoader.instance.loadedFonts.contains(fontFamily)) {
+    return TextStyle(
+      fontFamily: fontFamily,
+      color: color,
+      fontSize: fontSize,
+      height: 1.5,
+    );
+  }
+  try {
+    return GoogleFonts.getFont(
+      fontFamily,
+      color: color,
+      fontSize: fontSize,
+      height: 1.5,
+    );
+  } catch (_) {
+    return TextStyle(color: color, fontSize: fontSize, height: 1.5);
   }
 }

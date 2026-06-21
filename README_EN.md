@@ -10,10 +10,12 @@
   <p>
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
     <img src="https://img.shields.io/badge/platform-Windows-brightgreen.svg" alt="Platform" />
-    <img src="https://img.shields.io/badge/Flutter-3.12+-02569B.svg?logo=flutter" alt="Flutter" />
-   <img src="https://img.shields.io/badge/MCP Support-purple.svg" alt="MCP" />
+    <img src="https://img.shields.io/badge/Flutter-3.44+-02569B.svg?logo=flutter" alt="Flutter" />
+       <img src="https://img.shields.io/badge/MCP Support-purple.svg" alt="MCP" />
     <img src="https://img.shields.io/badge/Skill Support-purple.svg" alt="Skill" />
-  </p>
+    <img src="https://img.shields.io/badge/API Server-green.svg" alt="API Server" />
+    <img src="https://img.shields.io/badge/🐱 Global Pet Agent-orange.svg" alt="Pet Agent" />
+</p>
 </div>
 
 ---
@@ -60,6 +62,7 @@ RemindAI is an **open-source desktop AI assistant** built around a complete **To
 | Domain Experts | ✅ | Preset/custom roles + skill binding |
 | Conversation Export | ✅ | MD / PDF / Word / HTML |
 | Desktop Experience | ✅ | Tray / notifications / splash / theme animation |
+| Global Pet Agent | ✅ | Pixel cat + TTS voice + shop economy + achievements |
 
 ---
 
@@ -68,6 +71,7 @@ RemindAI is an **open-source desktop AI assistant** built around a complete **To
 | Feature | Description |
 |---|---|
 | 🐚 ToolShell | File sandbox + Python/Shell exec + rg/fd/rtk + RTK compression 60-90% token savings |
+| 🌐 API Server | Built-in HTTP server with three endpoints: OpenAI aggregation, Claude Agent (RemindAI's own agent loop), and Claude proxy (pass-through) |
 | 🔌 MCP Protocol | stdio/SSE/Streamable HTTP + auto-discovery + drag-and-drop management |
 | 🧠 Vector Memory | Qdrant semantic search + SQLite backup + auto-ops + index rebuild |
 | 🤝 Multi-Agent | Commander/Worker/Reviewer roles + permission isolation + auto-routing |
@@ -81,6 +85,7 @@ RemindAI is an **open-source desktop AI assistant** built around a complete **To
 | 📤 Export | Markdown / PDF / Word / HTML |
 | 🌍 i18n | Full Chinese and English |
 | 🎨 Themes | Material 3 light/dark + ripple transition animation |
+| 🐱 Global Pet Agent | Pixel cat companion + right-click AI Q&A + Volcano TTS + shop/inventory/feeding + achievements |
 
 ### 📦 Bundled CLI Tools
 
@@ -102,7 +107,7 @@ Head to [Releases](https://github.com/PythonnotJava/RemindAI/releases) for pre-b
 
 | Platform | Status | Notes |
 |---|---|---|
-| 🪟 Windows | ✅ Officially supported | Installer available |
+| 💻 Windows | ✅ Officially supported | Installer available |
 | 🐧 Linux | 🔧 Build from source | Compiles and runs fine |
 | 🍎 macOS | 🔧 Build from source | Compiles and runs fine |
 

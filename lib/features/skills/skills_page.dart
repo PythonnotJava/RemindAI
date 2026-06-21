@@ -1,11 +1,13 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/l10n/l10n_ext.dart';
 import '../../core/skill/skill_model.dart';
 import '../../providers/skills_provider.dart';
 import '../../widgets/reorderable_card_grid.dart';
+import '../chat/widgets/markdown_view.dart';
 
 class SkillsPage extends ConsumerWidget {
   const SkillsPage({super.key});
@@ -82,26 +84,43 @@ class SkillsPageBody extends ConsumerWidget {
           Center(child: Text(context.s.chatLoadFailedWithError(e.toString()))),
       data: (skills) {
         if (skills.isEmpty) {
-          return Center(
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.extension_off, size: 64, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(
-                  context.s.skillsEmpty,
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.s.skillsEmptyHint,
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () => importZip(context, ref),
-                  icon: const Icon(Icons.upload_file),
-                  label: Text(context.s.skillsImport),
+                const _RecommendedMarketsPanel(),
+                const SizedBox(height: 24),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.extension_off,
+                        size: 64,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        context.s.skillsEmpty,
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.s.skillsEmptyHint,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: () => importZip(context, ref),
+                        icon: const Icon(Icons.upload_file),
+                        label: Text(context.s.skillsImport),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -113,6 +132,8 @@ class SkillsPageBody extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const _RecommendedMarketsPanel(),
+              const SizedBox(height: 20),
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
@@ -205,7 +226,9 @@ class _SkillCardTile extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              skill.description.isEmpty ? '—' : skill.description,
+              skill.description.isEmpty
+                  ? context.s.skillsNoDesc
+                  : skill.description,
               style: TextStyle(
                 fontSize: 12,
                 color: colorScheme.onSurfaceVariant,
@@ -230,6 +253,19 @@ class _SkillCardTile extends ConsumerWidget {
                             .toggleActive(skill.id),
                 ),
                 const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.description_outlined, size: 18),
+                  tooltip: context.s.skillsViewMd,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _showSkillMd(context, ref),
+                ),
+                if (!skill.isBuiltIn)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    tooltip: context.s.skillsEditDesc,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _editDescription(context, ref),
+                  ),
                 if (!skill.isBuiltIn)
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 18),
@@ -274,6 +310,76 @@ class _SkillCardTile extends ConsumerWidget {
       ),
     );
   }
+
+  /// 查看 SKILL.md（gpt_markdown 渲染）
+  Future<void> _showSkillMd(BuildContext context, WidgetRef ref) async {
+    String content;
+    try {
+      content = await ref.read(skillsProvider.notifier).loadSkillMd(skill);
+      if (content.trim().isEmpty) content = '_(SKILL.md 为空)_';
+    } catch (e) {
+      content = '无法读取 SKILL.md:\n$e';
+    }
+
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(skill.name),
+        content: SizedBox(
+          width: 500,
+          height: 400,
+          child: SingleChildScrollView(
+            child: MarkdownView(
+              data: content,
+              textColor: Theme.of(ctx).colorScheme.onSurface,
+              fontSize: 14,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.s.commonClose),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 编辑技能描述（用户手动填写，仅用于展示）
+  Future<void> _editDescription(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController(text: skill.description);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.s.skillsEditDescTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 4,
+          minLines: 2,
+          decoration: InputDecoration(
+            hintText: context.s.skillsEditDescHint,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.s.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text(context.s.commonSave),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null) return;
+    await ref.read(skillsProvider.notifier).updateDescription(skill.id, result);
+  }
 }
 
 /// 新增技能卡片 (虚线占位)
@@ -310,6 +416,173 @@ class _AddSkillCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 单个推荐 skill 市场的元信息
+class _SkillMarket {
+  final String name;
+  final String url;
+  final String descKey;
+
+  const _SkillMarket(this.name, this.url, this.descKey);
+}
+
+/// 推荐 skill 服务商面板 — 列出第三方技能市场入口，点击打开官网
+class _RecommendedMarketsPanel extends StatelessWidget {
+  const _RecommendedMarketsPanel();
+
+  static const List<_SkillMarket> _markets = [
+    _SkillMarket('Skills MP', 'https://skillsmp.com', 'skillsMarketSkillsMp'),
+    _SkillMarket(
+      'Claud Skills',
+      'https://claudskills.com',
+      'skillsMarketClaudSkills',
+    ),
+    _SkillMarket('Skills.sh', 'https://www.skills.sh', 'skillsMarketSkillsSh'),
+  ];
+
+  Future<void> _open(BuildContext context, _SkillMarket market) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final failMsg = context.s.skillsMarketOpenFailed(market.url);
+    try {
+      final ok = await launchUrl(
+        Uri.parse(market.url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!ok) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(failMsg),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (_) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(failMsg), duration: const Duration(seconds: 3)),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.storefront_outlined,
+                  size: 18,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  context.s.skillsMarketTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.s.skillsMarketHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final market in _markets)
+                  _MarketCard(
+                    market: market,
+                    onTap: () => _open(context, market),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 单个市场入口卡片
+class _MarketCard extends StatelessWidget {
+  final _SkillMarket market;
+  final VoidCallback onTap;
+
+  const _MarketCard({required this.market, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return SizedBox(
+      width: 220,
+      child: Material(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        market.name,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Icon(
+                      Icons.open_in_new,
+                      size: 14,
+                      color: colorScheme.outline,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  skillsMarketDescL10n(context.s, market.descKey),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
         ),

@@ -163,6 +163,30 @@ class SkillRegistry {
     }
   }
 
+  /// 更新技能描述 (用户手动编辑，写入 .skill_meta.json)
+  Future<void> setDescription(String skillId, String description) async {
+    final skills = await listInstalled();
+    final skill = skills.firstWhere(
+      (s) => s.id == skillId,
+      orElse: () => throw Exception('技能不存在'),
+    );
+
+    final metaFile = File(p.join(skill.path, '.skill_meta.json'));
+    Map<String, dynamic> meta = {};
+    if (await metaFile.exists()) {
+      meta = jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
+    } else {
+      meta = {
+        'id': skill.id,
+        'installed_at': skill.installedAt.toIso8601String(),
+        'is_active': skill.isActive,
+        'sort_index': skill.sortIndex,
+      };
+    }
+    meta['description'] = description;
+    await metaFile.writeAsString(jsonEncode(meta));
+  }
+
   /// 按给定 id 顺序重写各技能的 sort_index (写入各自的 .skill_meta.json)
   Future<void> reorder(List<String> orderedIds) async {
     final skills = await listInstalled();
@@ -230,6 +254,8 @@ class SkillRegistry {
     bool isActive = true;
     DateTime installedAt = DateTime.now();
     int sortIndex = 0;
+    // 描述完全由用户编辑，默认无描述 (不再自动解析 SKILL.md / frontmatter)
+    String description = '';
 
     final metaFile = File(p.join(dir.path, '.skill_meta.json'));
     if (await metaFile.exists()) {
@@ -238,18 +264,11 @@ class SkillRegistry {
       id = meta['id'] as String? ?? id;
       isActive = meta['is_active'] as bool? ?? true;
       sortIndex = (meta['sort_index'] as num?)?.toInt() ?? 0;
+      description = (meta['description'] as String?)?.trim() ?? '';
       if (meta['installed_at'] != null) {
         installedAt = DateTime.parse(meta['installed_at'] as String);
       }
     }
-
-    // 读取描述 (SKILL.md 第一行)
-    final skillMdContent = await skillMdFile.readAsString();
-    final firstLine = skillMdContent
-        .split('\n')
-        .firstWhere((line) => line.trim().isNotEmpty, orElse: () => '');
-    // 去掉 markdown 标题符号
-    final description = firstLine.replaceAll(RegExp(r'^#+\s*'), '').trim();
 
     // 统计工具数量
     int toolCount = 0;

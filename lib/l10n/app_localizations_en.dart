@@ -45,6 +45,9 @@ class SEn extends S {
   String get navLogs => 'Logs';
 
   @override
+  String get navPet => 'Pet';
+
+  @override
   String get settingsTitle => 'Settings';
 
   @override
@@ -54,11 +57,41 @@ class SEn extends S {
   String get settingsTheme => 'Theme';
 
   @override
+  String get settingsAccentColorTitle => 'Accent Color';
+
+  @override
+  String get settingsAccentColorPurple => 'Purple';
+
+  @override
+  String get settingsAccentColorGreen => 'Eye Care';
+
+  @override
+  String get settingsAccentColorBlue => 'Blue';
+
+  @override
+  String get settingsAccentColorCyan => 'Cyan';
+
+  @override
   String get settingsNotifyOnBlur => 'Notify when unfocused';
 
   @override
   String get settingsNotifyOnBlurDesc =>
       'Show system notification when conversation completes while window is in background';
+
+  @override
+  String get settingsEnterAction => 'Enter Key Behavior';
+
+  @override
+  String get settingsEnterSend => 'Send';
+
+  @override
+  String get settingsEnterNewline => 'New Line';
+
+  @override
+  String get settingsEnterSendHint => 'Enter sends directly';
+
+  @override
+  String get settingsEnterNewlineHint => 'Enter newlines, button sends';
 
   @override
   String get settingsStorage => 'Storage';
@@ -95,6 +128,51 @@ class SEn extends S {
 
   @override
   String get settingsLanguage => 'Language';
+
+  @override
+  String get settingsFont => 'Font Settings';
+
+  @override
+  String get settingsUiFont => 'UI Font';
+
+  @override
+  String get settingsUiFontDesc =>
+      'Controls font in navigation, settings, and non-chat areas';
+
+  @override
+  String get settingsUiFontSize => 'UI Font Size';
+
+  @override
+  String get settingsChatFont => 'Chat Font';
+
+  @override
+  String get settingsChatFontDesc =>
+      'Controls font in conversations and multi-agent collaboration';
+
+  @override
+  String get settingsChatFontSize => 'Chat Font Size';
+
+  @override
+  String get settingsFontDefault => 'Default';
+
+  @override
+  String get settingsFontPreview => 'Font Preview AaBbCc Hello World 123';
+
+  @override
+  String get settingsCustomFont => 'Custom Fonts';
+
+  @override
+  String get settingsCustomFontDesc =>
+      'Import local .ttf/.otf font files, stored in .RemindAI/fonts/';
+
+  @override
+  String get settingsCustomFontImport => 'Import Font';
+
+  @override
+  String get settingsCustomFontPick => 'Select font files (.ttf / .otf)';
+
+  @override
+  String get settingsCustomFontImported => 'Font imported successfully';
 
   @override
   String get settingsChange => 'Change';
@@ -394,6 +472,9 @@ class SEn extends S {
   String get msgThinking => 'Thinking...';
 
   @override
+  String get msgInterrupted => 'Interrupted';
+
+  @override
   String get toolCardArgs => 'Arguments';
 
   @override
@@ -531,6 +612,9 @@ class SEn extends S {
       'Tap card to set default, long press to reorder';
 
   @override
+  String get modelsSearchHint => 'Type to search models...';
+
+  @override
   String get skillsTitle => 'Skill Management';
 
   @override
@@ -665,6 +749,45 @@ class SEn extends S {
   String toolsSettingsOf(String name) {
     return '$name settings';
   }
+
+  @override
+  String get toolShortcutsName => 'Screenshot';
+
+  @override
+  String get toolShortcutsDesc => 'View and customize keyboard shortcuts';
+
+  @override
+  String get toolShortcutsCategory => 'Shortcuts';
+
+  @override
+  String get shortcutReset => 'Reset to defaults';
+
+  @override
+  String get shortcutResetDone => 'Shortcuts reset to defaults';
+
+  @override
+  String get shortcutHint =>
+      'Click the edit button to change a shortcut. At least one modifier key (Ctrl/Shift/Alt) is required.';
+
+  @override
+  String get shortcutEdit => 'Edit';
+
+  @override
+  String shortcutEditTitle(String name) {
+    return 'Change \"$name\" shortcut';
+  }
+
+  @override
+  String get shortcutEditHint => 'Press a new key combination';
+
+  @override
+  String get shortcutEditWaiting => 'Waiting for input...';
+
+  @override
+  String get shortcutCancel => 'Cancel';
+
+  @override
+  String get shortcutConfirm => 'Confirm';
 
   @override
   String get multiAgentTitle => 'Multi-Agent Collaboration';
@@ -1190,6 +1313,27 @@ class SEn extends S {
   }
 
   @override
+  String get imgSaveAs => 'Save As…';
+
+  @override
+  String get imgCopyPath => 'Copy Path';
+
+  @override
+  String get imgOpenExternal => 'Show in Folder';
+
+  @override
+  String get imgSaved => 'Image saved';
+
+  @override
+  String get imgPathCopied => 'Path copied';
+
+  @override
+  String get codeSource => 'Source';
+
+  @override
+  String get codePreview => 'Preview';
+
+  @override
   String get scrollUp => 'Scroll up (hold to continue)';
 
   @override
@@ -1306,6 +1450,28 @@ class SEn extends S {
       'Toggle to enable/disable, long press to reorder';
 
   @override
+  String get skillsMarketTitle => 'Recommended Skill Markets';
+
+  @override
+  String get skillsMarketHint =>
+      'Discover and download skill packs (ZIP) from these third-party markets, then load them via the import button below.';
+
+  @override
+  String get skillsMarketSkillsMp =>
+      'Skill market aggregating multiple sources';
+
+  @override
+  String get skillsMarketClaudSkills => 'Claude skill sharing community';
+
+  @override
+  String get skillsMarketSkillsSh => 'Open-source skill index and CLI';
+
+  @override
+  String skillsMarketOpenFailed(String url) {
+    return 'Could not open link: $url';
+  }
+
+  @override
   String get skillsBuiltin => 'Built-in';
 
   @override
@@ -1314,10 +1480,139 @@ class SEn extends S {
   }
 
   @override
+  String get skillsNoDesc => 'No description';
+
+  @override
+  String get skillsViewMd => 'View SKILL.md';
+
+  @override
+  String get skillsEditDesc => 'Edit description';
+
+  @override
+  String get skillsEditDescTitle => 'Edit skill description';
+
+  @override
+  String get skillsEditDescHint =>
+      'Write a description for this skill (display only)';
+
+  @override
   String get servicesTitle => 'Services';
 
   @override
   String get servicesSkillsTab => 'Skills';
+
+  @override
+  String get servicesToolchainTab => 'Toolchain';
+
+  @override
+  String get toolchainDescription =>
+      'Recommended command-line tools below. Detection relies on your system PATH — once a tool is on PATH, the model can call it from the tool shell. To avoid needless overhead, nothing is checked automatically; click the button below to probe manually.';
+
+  @override
+  String get toolchainDetect => 'Detect Tools';
+
+  @override
+  String get toolchainDetecting => 'Detecting';
+
+  @override
+  String toolchainSummary(int found, int total) {
+    return 'Found $found / $total';
+  }
+
+  @override
+  String get toolchainInstall => 'Get';
+
+  @override
+  String toolchainOpenFailed(String url) {
+    return 'Could not open link: $url';
+  }
+
+  @override
+  String get toolchainGroupRuntime => 'Runtimes';
+
+  @override
+  String get toolchainGroupPkg => 'Package Managers';
+
+  @override
+  String get toolchainGroupVcs => 'Version Control';
+
+  @override
+  String get toolchainGroupDoc => 'Documents';
+
+  @override
+  String get toolchainGroupMedia => 'Media';
+
+  @override
+  String get toolchainGroupNet => 'Network';
+
+  @override
+  String get toolchainDescNode =>
+      'JavaScript / TypeScript runtime for scripts and build tools';
+
+  @override
+  String get toolchainDescBun =>
+      'Fast JS/TS runtime with bundler and package manager built in';
+
+  @override
+  String get toolchainDescPython =>
+      'Python interpreter for data, plotting and automation scripts';
+
+  @override
+  String get toolchainDescDeno =>
+      'Secure JS/TS runtime with native TypeScript support';
+
+  @override
+  String get toolchainDescNpm => 'Default package manager for Node';
+
+  @override
+  String get toolchainDescPnpm => 'Fast, disk-efficient Node package manager';
+
+  @override
+  String get toolchainDescYarn => 'Another popular Node package manager';
+
+  @override
+  String get toolchainDescPip =>
+      'Python package installer for third-party libraries';
+
+  @override
+  String get toolchainDescUv =>
+      'Blazing-fast Python package and project manager (in Rust)';
+
+  @override
+  String get toolchainDescGit =>
+      'Distributed version control to clone and manage repos';
+
+  @override
+  String get toolchainDescPandoc =>
+      'Universal document converter: Markdown / Word / PDF';
+
+  @override
+  String get toolchainDescPdftotext =>
+      'Poppler tools to extract text from PDF (used for PDF attachments)';
+
+  @override
+  String get toolchainDescXelatex =>
+      'LaTeX typesetting engine for high-quality PDFs';
+
+  @override
+  String get toolchainDescTypst =>
+      'Modern typesetting system, fast compile, clean syntax';
+
+  @override
+  String get toolchainDescFfmpeg =>
+      'Audio/video processing: transcode, trim, convert';
+
+  @override
+  String get toolchainDescMagick =>
+      'ImageMagick for image conversion and batch processing';
+
+  @override
+  String get toolchainDescCurl =>
+      'Command-line HTTP client for requests and downloads';
+
+  @override
+  String get toolchainDescWget =>
+      'Command-line downloader for fetching web resources';
 
   @override
   String get expertEditorEdit => 'Edit Expert';
@@ -1640,165 +1935,7 @@ class SEn extends S {
   String get fcToolCategory => 'Development';
 
   @override
-  String get fcShapeRect => 'Rectangle';
-
-  @override
-  String get fcShapeRoundRect => 'Rounded rectangle';
-
-  @override
-  String get fcShapeDiamond => 'Diamond';
-
-  @override
-  String get fcShapeCircle => 'Circle';
-
-  @override
-  String get fcShapeParallelogram => 'Parallelogram';
-
-  @override
-  String get fcShapeHexagon => 'Hexagon';
-
-  @override
-  String get fcShapeDatabase => 'Database';
-
-  @override
-  String get fcShapeCapsule => 'Capsule';
-
-  @override
-  String get fcArrowSingle => 'Single arrow';
-
-  @override
-  String get fcArrowDouble => 'Double arrow';
-
-  @override
-  String get fcArrowNone => 'No arrow';
-
-  @override
-  String get fcLineSolid => 'Solid';
-
-  @override
-  String get fcLineDashed => 'Dashed';
-
-  @override
-  String get fcLineDotted => 'Dotted';
-
-  @override
-  String get fcUnsavedTitle => 'Unsaved changes';
-
-  @override
-  String get fcUnsavedContent =>
-      'The current flowchart has unsaved changes. Save now?';
-
-  @override
-  String get fcDontSave => 'Don\'t save';
-
-  @override
-  String get fcSaveTitle => 'Save flowchart';
-
-  @override
-  String get fcDefaultFilename => 'Untitled.fc.json';
-
-  @override
-  String fcSaved(String path) {
-    return 'Saved: $path';
-  }
-
-  @override
-  String fcSaveFailed(String error) {
-    return 'Save failed: $error';
-  }
-
-  @override
-  String get fcOpenTitle => 'Open flowchart';
-
-  @override
-  String fcOpened(String path) {
-    return 'Opened: $path';
-  }
-
-  @override
-  String fcOpenFailed(String error) {
-    return 'Open failed: $error';
-  }
-
-  @override
-  String get fcNewChart => 'New flowchart';
-
-  @override
-  String get fcCanvasNotReady => 'Canvas not ready';
-
-  @override
-  String get fcImageFailed => 'Image generation failed';
-
-  @override
-  String get fcExportPng => 'Export flowchart as PNG';
-
-  @override
-  String fcExported(String path) {
-    return 'Exported: $path';
-  }
-
-  @override
-  String fcExportFailed(String error) {
-    return 'Export failed: $error';
-  }
-
-  @override
-  String get fcBtnNew => 'New';
-
-  @override
-  String get fcBtnOpen => 'Open';
-
-  @override
-  String get fcBtnSave => 'Save';
-
-  @override
-  String get fcBtnExportImage => 'Export image';
-
-  @override
-  String get fcBtnShowGrid => 'Show grid';
-
-  @override
-  String get fcBtnHideGrid => 'Hide grid';
-
-  @override
-  String get fcBtnFitCanvas => 'Fit canvas';
-
-  @override
-  String get fcBtnSelectAll => 'Select all';
-
-  @override
-  String get fcBtnDeleteSelected => 'Delete selected';
-
-  @override
-  String get fcStatusReady =>
-      'Ready - Click shapes on the left to add nodes, drag from ports to connect';
-
-  @override
-  String fcStatusNodes(int count, int edges) {
-    return 'Nodes: $count';
-  }
-
-  @override
-  String get fcCustomColor => 'Custom color';
-
-  @override
-  String get fcClickToAdd => 'Click to add to canvas';
-
-  @override
-  String get fcNodeColor => 'Node color';
-
-  @override
-  String get fcHelpText =>
-      'Tips:\n• Click a shape to add a node\n• Double-click a node to edit text/style\n• Drag from node edges to connect\n• Scroll to zoom, drag to pan';
-
-  @override
-  String get fcEditNode => 'Edit node';
-
-  @override
-  String get fcTextContent => 'Text content';
-
-  @override
-  String get siyuToolName => 'Siyu';
+  String get siyuToolName => 'LostYu';
 
   @override
   String get siyuToolDesc =>
@@ -1855,7 +1992,7 @@ class SEn extends S {
   String get siyuPlaceholder => 'Start writing...';
 
   @override
-  String get siyuWelcomeTitle => 'Siyu';
+  String get siyuWelcomeTitle => 'LostYu';
 
   @override
   String get siyuWelcomeDesc => 'Rich text document editor';
@@ -2201,6 +2338,164 @@ class SEn extends S {
   String get modelNameFallback => 'Unnamed model';
 
   @override
+  String get fcShapeRect => 'Rectangle';
+
+  @override
+  String get fcShapeRoundRect => 'Rounded Rectangle';
+
+  @override
+  String get fcShapeDiamond => 'Diamond';
+
+  @override
+  String get fcShapeCircle => 'Circle';
+
+  @override
+  String get fcShapeParallelogram => 'Parallelogram';
+
+  @override
+  String get fcShapeHexagon => 'Hexagon';
+
+  @override
+  String get fcShapeDatabase => 'Database';
+
+  @override
+  String get fcShapeCapsule => 'Capsule';
+
+  @override
+  String get fcArrowSingle => 'Single arrow';
+
+  @override
+  String get fcArrowDouble => 'Double arrow';
+
+  @override
+  String get fcArrowNone => 'No arrow';
+
+  @override
+  String get fcLineSolid => 'Solid';
+
+  @override
+  String get fcLineDashed => 'Dashed';
+
+  @override
+  String get fcLineDotted => 'Dotted';
+
+  @override
+  String get fcUnsavedTitle => 'Unsaved changes';
+
+  @override
+  String get fcUnsavedContent =>
+      'This flowchart has unsaved changes. Save now?';
+
+  @override
+  String get fcDontSave => 'Don\'t save';
+
+  @override
+  String get fcSaveTitle => 'Save flowchart';
+
+  @override
+  String get fcDefaultFilename => 'Untitled.fc.json';
+
+  @override
+  String fcSaved(String path) {
+    return 'Saved: $path';
+  }
+
+  @override
+  String fcSaveFailed(String error) {
+    return 'Save failed: $error';
+  }
+
+  @override
+  String get fcOpenTitle => 'Open flowchart';
+
+  @override
+  String fcOpened(String path) {
+    return 'Opened: $path';
+  }
+
+  @override
+  String fcOpenFailed(String error) {
+    return 'Open failed: $error';
+  }
+
+  @override
+  String get fcNewChart => 'New flowchart';
+
+  @override
+  String get fcCanvasNotReady => 'Canvas not ready';
+
+  @override
+  String get fcImageFailed => 'Image generation failed';
+
+  @override
+  String get fcExportPng => 'Export flowchart as PNG';
+
+  @override
+  String fcExported(String path) {
+    return 'Exported: $path';
+  }
+
+  @override
+  String fcExportFailed(String error) {
+    return 'Export failed: $error';
+  }
+
+  @override
+  String get fcBtnNew => 'New';
+
+  @override
+  String get fcBtnOpen => 'Open';
+
+  @override
+  String get fcBtnSave => 'Save';
+
+  @override
+  String get fcBtnExportImage => 'Export image';
+
+  @override
+  String get fcBtnHideGrid => 'Hide grid';
+
+  @override
+  String get fcBtnShowGrid => 'Show grid';
+
+  @override
+  String get fcBtnFitCanvas => 'Fit canvas';
+
+  @override
+  String get fcBtnSelectAll => 'Select all';
+
+  @override
+  String get fcBtnDeleteSelected => 'Delete selected';
+
+  @override
+  String get fcStatusReady =>
+      'Ready · Click shapes to add nodes, drag from ports to connect';
+
+  @override
+  String fcStatusNodes(int count, int edges) {
+    return 'Nodes: $count  Edges: $edges';
+  }
+
+  @override
+  String get fcCustomColor => 'Custom color';
+
+  @override
+  String get fcClickToAdd => 'Click to add to canvas';
+
+  @override
+  String get fcNodeColor => 'Node color';
+
+  @override
+  String get fcHelpText =>
+      'Tips:\n• Click a shape to add a node\n• Double-click node to edit text/style\n• Drag from node edge to connect\n• Scroll to zoom, drag to pan';
+
+  @override
+  String get fcEditNode => 'Edit node';
+
+  @override
+  String get fcTextContent => 'Text content';
+
+  @override
   String get servicesSearchTab => 'Search';
 
   @override
@@ -2262,4 +2557,693 @@ class SEn extends S {
 
   @override
   String get searchTestSuccess => 'Connected successfully, API Key is valid';
+
+  @override
+  String get petCatGray => 'Gray Kitty';
+
+  @override
+  String get petCatOrange => 'Orange Kitty';
+
+  @override
+  String get petCatWhite => 'White Kitty';
+
+  @override
+  String get petTitle => 'Pet Settings';
+
+  @override
+  String get petShow => 'Show';
+
+  @override
+  String get petSkinSection => 'Sprite Skin';
+
+  @override
+  String get petModelSection => 'Pet Model (AI)';
+
+  @override
+  String get petModelHint => 'Select AI model for pet';
+
+  @override
+  String petModelLoadFailed(String error) {
+    return 'Failed to load models: $error';
+  }
+
+  @override
+  String get petTtsSection => 'Text-to-Speech';
+
+  @override
+  String get petTtsSystem => 'System';
+
+  @override
+  String get petTtsVolcano => 'Volcano';
+
+  @override
+  String get petTtsAppId => 'AppID';
+
+  @override
+  String get petTtsAppIdHint => 'App ID';
+
+  @override
+  String get petTtsToken => 'Token';
+
+  @override
+  String get petTtsTokenHint => 'Access Token';
+
+  @override
+  String get petTtsVoiceType => 'Voice';
+
+  @override
+  String get petTtsVoiceTypeHint => 'voice_type (cloned voice ID)';
+
+  @override
+  String get petTtsSave => 'Save Config';
+
+  @override
+  String get petTtsSaved => 'Volcano TTS config saved';
+
+  @override
+  String get petTtsReady => '✅ Config complete';
+
+  @override
+  String get petTtsIncomplete => '⚠️ Please fill all 3 required fields';
+
+  @override
+  String petTtsSpeedLabel(int value) {
+    return 'Speed($value)';
+  }
+
+  @override
+  String petTtsLoudnessLabel(int value) {
+    return 'Volume($value)';
+  }
+
+  @override
+  String get petTtsCredentialHint =>
+      'Get credentials: Volcano Engine Console → TTS → Voice Clone\nRef: github.com/Radiant303/astrbot_plugin_clonetts';
+
+  @override
+  String get petBehaviorSection => 'Reply Behavior';
+
+  @override
+  String petTtsThresholdLabel(int value) {
+    return 'TTS threshold($value chars)';
+  }
+
+  @override
+  String petTtsThresholdHint(int value) {
+    return '≤$value chars → voice, longer → text bubble';
+  }
+
+  @override
+  String petBubbleDismissLabel(int value) {
+    return 'Bubble timeout(${value}s)';
+  }
+
+  @override
+  String get petBubbleDismissManual => 'Manual close';
+
+  @override
+  String petBubbleDismissAuto(int value) {
+    return 'Auto-close after ${value}s';
+  }
+
+  @override
+  String get petCommandSection => 'Custom Commands';
+
+  @override
+  String get petCommandHint =>
+      'Custom commands will appear in the right-click menu';
+
+  @override
+  String get petCommandAdd => 'Add Command';
+
+  @override
+  String get petCommandAddTitle => 'Add Custom Command';
+
+  @override
+  String get petCommandEditTitle => 'Edit Command';
+
+  @override
+  String get petCommandNameLabel => 'Command Name';
+
+  @override
+  String get petCommandNameHint => 'e.g. Optimize this';
+
+  @override
+  String get petCommandPromptLabel => 'System Prompt';
+
+  @override
+  String get petCommandPromptHint =>
+      'e.g. Please optimize the following code for performance and readability:';
+
+  @override
+  String get petTestSection => 'Test';
+
+  @override
+  String get petTestShort => 'Short voice';
+
+  @override
+  String get petTestLong => 'Long text';
+
+  @override
+  String get petDebugEvents => 'Events';
+
+  @override
+  String get petDebugAnimations => 'Animations';
+
+  @override
+  String get petDebugState => 'State';
+
+  @override
+  String get petBubbleThinking => 'Kitty is thinking...';
+
+  @override
+  String get petBubbleTitle => 'Kitty says';
+
+  @override
+  String get petBubbleGenerating => 'Generating reply...';
+
+  @override
+  String get petBubbleClose => 'Close';
+
+  @override
+  String get petBubbleFeedAll => 'Feed full text to kitty';
+
+  @override
+  String petBubbleFeedFollow(String label) {
+    return 'Ask: $label';
+  }
+
+  @override
+  String petBubbleFeedSelected(String label) {
+    return 'Ask kitty: $label';
+  }
+
+  @override
+  String get petNoModel =>
+      'Meow~ No model bound yet, please select one in Pet Settings.';
+
+  @override
+  String petError(String error) {
+    return 'Meow... error: $error';
+  }
+
+  @override
+  String get petContextHide => 'Hide Pet';
+
+  @override
+  String get petTestShortText => 'Hello master!';
+
+  @override
+  String get petTestLongText =>
+      'Hi master, in Flutter Widgets are immutable. Every state change creates a new Widget tree, which is why setState triggers a rebuild.';
+
+  @override
+  String get petPageTitle => 'Pet';
+
+  @override
+  String get petTabSettings => 'Settings';
+
+  @override
+  String get petTabShop => 'Shop';
+
+  @override
+  String get petTabAchievements => 'Achievements';
+
+  @override
+  String get petShopTitle => 'Items';
+
+  @override
+  String get petInventoryTitle => 'Inventory';
+
+  @override
+  String get petInventoryEmpty => 'Nothing here~';
+
+  @override
+  String get petStatusTitle => 'Status';
+
+  @override
+  String get petStatusSatiety => 'Satiety';
+
+  @override
+  String get petStatusHappiness => 'Happiness';
+
+  @override
+  String get petStatusDecayHint =>
+      'Satiety -5/hr, Happiness -3/hr\nFeed to restore';
+
+  @override
+  String get petShopBuy => 'Buy';
+
+  @override
+  String petShopBought(String name) {
+    return 'Bought $name!';
+  }
+
+  @override
+  String get petShopNoCoins => 'Not enough coins~';
+
+  @override
+  String petShopSatiety(int value) {
+    return 'Satiety+$value';
+  }
+
+  @override
+  String petShopHappiness(int value) {
+    return 'Happiness+$value';
+  }
+
+  @override
+  String petShopEffect(String effect) {
+    return 'Effect: $effect';
+  }
+
+  @override
+  String get petAchievementsTitle => 'Achievements';
+
+  @override
+  String petAchievementsProgress(int unlocked, int total) {
+    return '$unlocked / $total';
+  }
+
+  @override
+  String get petFeedTitle => 'Feed Kitty';
+
+  @override
+  String get petFeedButton => 'Feed';
+
+  @override
+  String get petFeedButtonEmpty => 'Feed (empty bag)';
+
+  @override
+  String get petFeedEmpty => 'Bag is empty~ Buy some food in the shop!';
+
+  @override
+  String petFeedStat(int quantity, int satiety, int happiness) {
+    return 'x$quantity  Satiety+$satiety Happiness+$happiness';
+  }
+
+  @override
+  String get petFeedClose => 'Close';
+
+  @override
+  String petCoinReward(int amount) {
+    return '+$amount Pet Coins~';
+  }
+
+  @override
+  String get petFoodBanana => 'Banana';
+
+  @override
+  String get petFoodBananaDesc => 'Soft and sweet, kitty loves it';
+
+  @override
+  String get petFoodApple => 'Apple';
+
+  @override
+  String get petFoodAppleDesc => 'An apple a day keeps kitty at play';
+
+  @override
+  String get petFoodPurpleGrape => 'Purple Grape';
+
+  @override
+  String get petFoodPurpleGrapeDesc => 'Plump and sweet clusters';
+
+  @override
+  String get petFoodGreenGrape => 'Green Grape';
+
+  @override
+  String get petFoodGreenGrapeDesc => 'Refreshingly tangy appetizer';
+
+  @override
+  String get petFoodPineapple => 'Pineapple';
+
+  @override
+  String get petFoodPineappleDesc => 'Tropical flavor, juicy burst';
+
+  @override
+  String get petFoodKiwi => 'Kiwi';
+
+  @override
+  String get petFoodKiwiDesc => 'Little green ball packed with vitamin C';
+
+  @override
+  String get petFoodCherry => 'Cherry';
+
+  @override
+  String get petFoodCherryDesc => 'Tiny and cute, kitty bats it around';
+
+  @override
+  String get petFoodStrawberry => 'Strawberry';
+
+  @override
+  String get petFoodStrawberryDesc => 'Red and happy little fruit';
+
+  @override
+  String get petFoodCarrot => 'Carrot';
+
+  @override
+  String get petFoodCarrotDesc => 'Good for eyes, not that kitty cares';
+
+  @override
+  String get petFoodTomato => 'Tomato';
+
+  @override
+  String get petFoodTomatoDesc => 'Fresh and juicy tomato';
+
+  @override
+  String get petFoodEggplant => 'Eggplant';
+
+  @override
+  String get petFoodEggplantDesc => 'Purple healthy veggie';
+
+  @override
+  String get petFoodPumpkin => 'Pumpkin';
+
+  @override
+  String get petFoodPumpkinDesc => 'Big pumpkin, lasts a while';
+
+  @override
+  String get petFoodBroccoli => 'Broccoli';
+
+  @override
+  String get petFoodBroccoliDesc => 'Like a little tree, full of nutrients';
+
+  @override
+  String get petFoodGarlic => 'Garlic';
+
+  @override
+  String get petFoodGarlicDesc => 'Kitty sneezes at the smell';
+
+  @override
+  String get petFoodPepper => 'Pepper';
+
+  @override
+  String get petFoodPepperDesc => 'Whew~ spicy jump!';
+
+  @override
+  String get petFoodMushroom => 'Mushroom';
+
+  @override
+  String get petFoodMushroomDesc => 'Savory fungi, kitty surprisingly likes it';
+
+  @override
+  String get petFoodHam => 'Ham';
+
+  @override
+  String get petFoodHamDesc => 'Rich meaty aroma, kitty drools';
+
+  @override
+  String get petFoodChicken => 'Chicken Leg';
+
+  @override
+  String get petFoodChickenDesc => 'Crispy outside, juicy inside';
+
+  @override
+  String get petFoodFish => 'Fish';
+
+  @override
+  String get petFoodFishDesc => 'Kitty\'s absolute favorite!';
+
+  @override
+  String get petFoodLobster => 'Lobster';
+
+  @override
+  String get petFoodLobsterDesc => 'Premium seafood feast, kitty goes wild';
+
+  @override
+  String get petAchieveFirstCoin => 'First Coin';
+
+  @override
+  String get petAchieveFirstCoinDesc => 'Earned your first pet coin';
+
+  @override
+  String get petAchieveRich100 => 'Savings Started';
+
+  @override
+  String get petAchieveRich100Desc => 'Earned 100 pet coins total';
+
+  @override
+  String get petAchieveRich500 => 'Little Rich';
+
+  @override
+  String get petAchieveRich500Desc => 'Earned 500 pet coins total';
+
+  @override
+  String get petAchieveRich2000 => 'Pet Tycoon';
+
+  @override
+  String get petAchieveRich2000Desc => 'Earned 2000 pet coins total';
+
+  @override
+  String get petAchieveFirstFeed => 'First Feeding';
+
+  @override
+  String get petAchieveFirstFeedDesc => 'Fed kitty for the first time';
+
+  @override
+  String get petAchieveFeed10 => 'Dutiful Owner';
+
+  @override
+  String get petAchieveFeed10Desc => 'Fed kitty 10 times';
+
+  @override
+  String get petAchieveFeed50 => 'Cat Servant';
+
+  @override
+  String get petAchieveFeed50Desc => 'Fed kitty 50 times';
+
+  @override
+  String get petAchieveFullBelly => 'Stuffed';
+
+  @override
+  String get petAchieveFullBellyDesc => 'Satiety reached 100';
+
+  @override
+  String get petAchieveHappyMax => 'Happy Kitty';
+
+  @override
+  String get petAchieveHappyMaxDesc => 'Happiness reached 100';
+
+  @override
+  String get petAchieveShopper => 'Shopaholic';
+
+  @override
+  String get petAchieveShopperDesc => 'Made 20 purchases in the shop';
+
+  @override
+  String get petAchieveChat1m => 'Chatterbox';
+
+  @override
+  String get petAchieveChat1mDesc => 'Consumed 1 million tokens';
+
+  @override
+  String get petAchieveChat50m => 'Power User';
+
+  @override
+  String get petAchieveChat50mDesc => 'Consumed 50 million tokens';
+
+  @override
+  String get petAchieveChat100m => 'AI Addict';
+
+  @override
+  String get petAchieveChat100mDesc => 'Consumed 100 million tokens';
+
+  @override
+  String get servicesServerTab => 'Server';
+
+  @override
+  String get serverTitle => 'Server';
+
+  @override
+  String get serverApiServiceTitle => 'External API Service';
+
+  @override
+  String get serverApiServiceDesc =>
+      'Expose your locally configured models, skills, MCP, memory and search via standard protocols. Local-only by default; an access token is required. Review the security settings before opening to the LAN.';
+
+  @override
+  String get apiServerTitle => 'External API Service';
+
+  @override
+  String apiServerRunningPort(Object port) {
+    return 'Running · port $port';
+  }
+
+  @override
+  String get apiServerStopped => 'Stopped';
+
+  @override
+  String get apiServerIntro =>
+      'Expose aggregated capabilities (model/skill/MCP/memory/search) via OpenAI / Anthropic compatible APIs. Local-only by default (127.0.0.1); an access token is required.';
+
+  @override
+  String get apiServerPort => 'Port';
+
+  @override
+  String get apiServerToken => 'Access Token (Bearer Token)';
+
+  @override
+  String get apiServerTokenRandom => 'Generate random';
+
+  @override
+  String get apiServerTokenShow => 'Show token';
+
+  @override
+  String get apiServerTokenHide => 'Hide token';
+
+  @override
+  String get apiServerTestInBrowser => 'Test in browser';
+
+  @override
+  String apiServerTestInBrowserFailed(Object url) {
+    return 'Failed to open browser: $url';
+  }
+
+  @override
+  String get apiServerSaveRestart => 'Save port/token and restart service';
+
+  @override
+  String get apiServerProtocolTitle => 'Protocol Endpoints';
+
+  @override
+  String get apiServerProtocolHint =>
+      'Enable any of the three endpoints independently. The token works with both Bearer and x-api-key headers.';
+
+  @override
+  String get apiServerOpenAiAggTitle => 'OpenAI Aggregate';
+
+  @override
+  String get apiServerOpenAiAggDesc =>
+      'Runs RemindAI\'s own Agent (skill/MCP/memory/search) and outputs in OpenAI-compatible format. Good for generic OpenAI clients.';
+
+  @override
+  String get apiServerClaudeAggTitle => 'Claude Aggregate';
+
+  @override
+  String get apiServerClaudeAggDesc =>
+      'Also runs RemindAI\'s aggregate Agent but outputs in the Anthropic protocol, letting Claude-only clients use the full aggregated capability. Tools run inside the server.';
+
+  @override
+  String get apiServerClaudeProxyTitle => 'Claude Pure Proxy';
+
+  @override
+  String get apiServerClaudeProxyDesc =>
+      'Pure protocol conversion: passes the tools and tasks carried by the client (e.g. CherryStudio Agent) to the selected model; the client executes the tools itself (this service\'s skills/MCP/memory are not mounted). Ideal for driving CherryStudio\'s Agent with Kimi/GPT/Gemini.';
+
+  @override
+  String get apiServerModelsTitle => 'Available Models';
+
+  @override
+  String get apiServerModelsHint =>
+      'Check the model cards to expose; none selected = expose all model cards, client can choose any';
+
+  @override
+  String get apiServerModelsEmpty => 'No model cards configured yet';
+
+  @override
+  String get apiServerModelsAllOpen =>
+      'Unrestricted: all model cards are currently exposed';
+
+  @override
+  String get apiServerMemoryTitle => 'Memory';
+
+  @override
+  String get apiServerMemoryHint =>
+      'Isolated = physically separated from the main app\'s memory; Shared = reads/writes the main app\'s memory (use with care)';
+
+  @override
+  String get apiServerMemoryNone => 'None';
+
+  @override
+  String get apiServerMemoryIsolated => 'Isolated';
+
+  @override
+  String get apiServerMemoryShared => 'Shared';
+
+  @override
+  String get apiServerSearchTitle => 'Web Search';
+
+  @override
+  String get apiServerSearchHint =>
+      'Configure the engine\'s API key in Search settings first';
+
+  @override
+  String get apiServerSearchOff => 'Off';
+
+  @override
+  String get apiServerSkillsTitle => 'Skills';
+
+  @override
+  String get apiServerSkillsHint =>
+      'Selected skills expose their tools and prompts externally';
+
+  @override
+  String get apiServerSkillsEmpty => 'No skills available';
+
+  @override
+  String get apiServerMcpTitle => 'MCP Services';
+
+  @override
+  String get apiServerMcpHint =>
+      'Only connected MCP servers take effect externally (grey = not connected)';
+
+  @override
+  String get apiServerMcpEmpty => 'No MCP services';
+
+  @override
+  String get apiServerBindAllTitle => 'Allow LAN access (0.0.0.0)';
+
+  @override
+  String get apiServerBindAllDesc =>
+      'When enabled, other devices on the same network can call this service, effectively exposing your models/memory/tools to the LAN. Make sure the token is strong.';
+
+  @override
+  String get apiServerBindAllConfirmTitle => 'Expose to the LAN?';
+
+  @override
+  String get apiServerBindAllConfirmBody =>
+      'Once enabled, any device on the same network can access this service with the token and call your configured models, memory and tools. Only enable on trusted networks.';
+
+  @override
+  String get apiServerBindAllConfirmCancel => 'Cancel';
+
+  @override
+  String get apiServerBindAllConfirmOk => 'I understand the risk';
+
+  @override
+  String get apiServerIpWhitelistTitle => 'IP Allowlist';
+
+  @override
+  String get apiServerIpWhitelistHint =>
+      'Empty = unrestricted (any device on the network can access); when set, only listed addresses are allowed (localhost always allowed)';
+
+  @override
+  String get apiServerIpWhitelistEmpty =>
+      'No IPs configured; currently open to the entire LAN';
+
+  @override
+  String get apiServerIpWhitelistInputHint => '192.168.1.5 or 192.168.1.0/24';
+
+  @override
+  String get apiServerIpWhitelistAdd => 'Add';
+
+  @override
+  String get apiServerIpWhitelistInvalid =>
+      'Invalid format. Enter an IPv4 or CIDR (e.g. 192.168.1.0/24)';
+
+  @override
+  String apiServerLoadFailed(Object error) {
+    return 'Load failed: $error';
+  }
+
+  @override
+  String trayServerOn(Object port) {
+    return 'API Server · Running (port $port)';
+  }
+
+  @override
+  String get trayServerOff => 'API Server · Stopped';
+
+  @override
+  String get trayServerNeedConfig => 'API Server (configure token first)';
 }

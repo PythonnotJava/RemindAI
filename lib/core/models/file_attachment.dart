@@ -150,7 +150,17 @@ class FileAttachment {
     'css',
     'sql',
   };
-  static const _documentExtensions = {'pdf', 'doc', 'docx', 'xls', 'xlsx'};
+  static const _documentExtensions = {
+    'pdf',
+    'doc',
+    'docx',
+    'xls',
+    'xlsx',
+    'ppt',
+    'pptx',
+    'odt',
+    'rtf',
+  };
   static const _archiveExtensions = {'zip'};
 
   /// 所有支持的扩展名
@@ -164,6 +174,10 @@ class FileAttachment {
     'pdf',
     'doc',
     'docx',
+    'ppt',
+    'pptx',
+    'odt',
+    'rtf',
     'txt',
     'md',
     'csv',
@@ -204,6 +218,11 @@ class FileAttachment {
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'xls': 'application/vnd.ms-excel',
     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'ppt': 'application/vnd.ms-powerpoint',
+    'pptx':
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'odt': 'application/vnd.oasis.opendocument.text',
+    'rtf': 'application/rtf',
     'txt': 'text/plain',
     'md': 'text/markdown',
     'csv': 'text/csv',

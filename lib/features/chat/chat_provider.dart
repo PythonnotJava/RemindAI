@@ -10,8 +10,11 @@ import '../../core/llm/models.dart';
 import '../../core/models/file_attachment.dart';
 import '../../core/logger/app_logger.dart';
 import '../../core/notification/notification_service.dart';
+import '../../core/pet/pet_economy.dart';
+import '../../core/pet/pet_chat_service.dart';
 import '../../core/toolshell/agent_loop.dart';
 import '../../core/utils/file_processor.dart';
+import '../../core/pet/pet_observer.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/settings_provider.dart';
 export '../../providers/session_provider.dart';
@@ -145,8 +148,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
   /// AgentLoop 使用的消息历史 (Map 格式)
   final List<Map<String, dynamic>> _agentMessages = [];
 
+  /// 上一次构建上下文时激活的用户技能签名。
+  /// 用于检测会话中途技能集合变化，决定是否刷新 system prompt 的技能区。
+  /// null 表示尚未捕获（首条消息时初始化）。
+  String? _activeSkillSig;
+
   /// 当前对话轮次的 hooks 引用 (用于 AgentDone 后触发 onAgentDone)
   List<AgentHook> _activeHooks = [];
+
+  /// 当前轮次的 token 计数（用于宠物经济系统奖励）
+  int _currentTokenCount = 0;
 
   ChatNotifier(this._ref) : super(const ChatState());
 
@@ -158,6 +169,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     // hooks: onSessionEnd
     await _fireSessionEnd();
     _agentMessages.clear();
+    _activeSkillSig = null;
     state = const ChatState();
     // 刷新历史列表
     _ref.read(conversationsProvider.notifier).refresh();
@@ -167,6 +179,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   Future<void> loadConversation(int conversationId) async {
     _subscription?.cancel();
     _agentMessages.clear();
+    _activeSkillSig = null;
 
     // 进入加载状态，让 UI 显示过渡动画
     state = state.copyWith(isLoadingHistory: true);
@@ -355,6 +368,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       error: null,
       attachments: [],
     );
+    PetObserver.instance.notifyUserMessage(
+      preview: input.length > 30 ? '${input.substring(0, 30)}...' : input,
+    );
 
     await _conversationsDao.saveMessage(conversationId, userMsg);
 
@@ -382,6 +398,37 @@ class ChatNotifier extends StateNotifier<ChatState> {
     // 保存 hooks 引用 (AgentDone 后触发)
     _activeHooks = agentContext.hooks;
 
+    // ─── 中途技能变化时刷新 system prompt 的技能区 ───
+    // 工具列表每条消息都实时重建（新技能/MCP 工具会自动生效），
+    // 但 system prompt 仅在首条消息注入一次。若用户在会话中途启用/停用了技能，
+    // 其 SKILL.md 引导文字不会进入上下文，导致"有工具却不知如何用"。
+    // 这里仅在"激活技能集合发生变化"时替换 system 消息的技能区，
+    // 保留专家角色与元技能前缀；技能未变则保持原样以维护 LLM 的 prompt cache。
+    final currentSig = contextBuilder.computeSkillSignature();
+    if (_activeSkillSig == null) {
+      // 首条消息：记录基线签名，不触发刷新
+      _activeSkillSig = currentSig;
+      print('[SKILL] 会话基线技能签名: ${currentSig.isEmpty ? "(无激活技能)" : currentSig}');
+    } else if (currentSig != _activeSkillSig &&
+        _agentMessages.isNotEmpty &&
+        _agentMessages.first['role'] == 'system') {
+      print('[SKILL] ⟳ 检测到技能变化，刷新 system prompt');
+      print(
+        '[SKILL]   旧签名: ${_activeSkillSig!.isEmpty ? "(无)" : _activeSkillSig}',
+      );
+      print('[SKILL]   新签名: ${currentSig.isEmpty ? "(无)" : currentSig}');
+      _agentMessages.first['content'] =
+          '${agentContext.systemPromptPrefix}${agentContext.skillsSection}';
+      _activeSkillSig = currentSig;
+      print(
+        '[SKILL]   ✓ 已注入技能引导，system prompt 长度=${(_agentMessages.first['content'] as String).length}',
+      );
+    } else {
+      print(
+        '[SKILL] 技能签名未变，保持 prompt cache: ${currentSig.isEmpty ? "(无激活技能)" : currentSig}',
+      );
+    }
+
     // hooks: onSessionStart (仅首次发送时触发)
     if (_agentMessages.length <= 1) {
       for (final hook in agentContext.hooks) {
@@ -399,6 +446,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     // 监听事件流
     _subscription?.cancel();
+    _currentTokenCount = 0;
+    PetObserver.instance.notifyAiGenerating();
     _subscription = agentLoop
         .chat(input, contentParts: contentParts)
         .listen(
@@ -406,6 +455,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           onError: (e, stackTrace) {
             AppLogger.instance.log('[ChatProvider] Stream error: $e');
             AppLogger.instance.log('[ChatProvider] StackTrace: $stackTrace');
+            PetObserver.instance.notifyAiError(error: e.toString());
             _setError(e.toString());
           },
         );
@@ -414,6 +464,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void _handleEvent(AgentEvent event, int conversationId) {
     switch (event) {
       case AgentToken(text: final text):
+        _currentTokenCount += text.length ~/ 4; // 粗略估算: 4字符≈1 token
         state = state.copyWith(streamingText: state.streamingText + text);
       case AgentToolStart(name: final name, args: final args):
         final toolCall = ToolCallDisplay(
@@ -479,29 +530,77 @@ class ChatNotifier extends StateNotifier<ChatState> {
             body: finalContent.isEmpty ? '助手已完成回复' : finalContent,
           );
         }
+        PetObserver.instance.notifyAiCompleted(
+          summary: finalContent.length > 50
+              ? '${finalContent.substring(0, 50)}...'
+              : finalContent,
+        );
+        // 宠物经济：根据 token 消耗奖励宠物币
+        if (_currentTokenCount > 0) {
+          PetEconomy.instance.rewardForTokens(_currentTokenCount).then((
+            reward,
+          ) {
+            if (reward > 0) {
+              // 通过宠物气泡通知用户
+              PetChatService.instance.showCoinReward(reward);
+            }
+          });
+          _currentTokenCount = 0;
+        }
       case AgentError(message: final message):
         AppLogger.instance.log('[ChatProvider] AgentError: $message');
+        PetObserver.instance.notifyAiError(error: message);
         _setError(message);
     }
   }
 
-  /// 中断当前流式响应
+  /// 中断当前流式响应 — 保留已生成的部分输出并标记为「用户中断」
   void cancelResponse() {
     _subscription?.cancel();
     _subscription = null;
 
     final partial = state.streamingText;
-    if (partial.isNotEmpty && state.currentConversationId != null) {
-      final assistantMsg = ChatMessage.assistant(partial);
+    final convId = state.currentConversationId;
+
+    // 只要有部分文本或正在执行的工具调用，都应保留到消息列表
+    if (partial.isNotEmpty || state.activeToolCalls.isNotEmpty) {
+      // 构建已中断的助手消息
+      final content = partial.isNotEmpty
+          ? partial
+          : state.activeToolCalls.map((tc) => '[工具调用中] ${tc.name}').join('\n');
+      final assistantMsg = ChatMessage.assistant(content, interrupted: true);
+
+      // 把工具调用历史也追加为消息（展示用）
+      final toolMessages = state.activeToolCalls
+          .where((tc) => tc.status == ToolCallStatus.done)
+          .map((tc) => ChatMessage(
+                role: ChatRole.assistant,
+                content: '[工具调用] ${tc.name}',
+                toolCalls: [
+                  ChatToolCall(
+                    id: tc.id,
+                    name: tc.name,
+                    arguments: tc.arguments,
+                  ),
+                ],
+              ))
+          .toList();
+
       state = state.copyWith(
-        messages: [...state.messages, assistantMsg],
+        messages: [...state.messages, ...toolMessages, assistantMsg],
         isLoading: false,
         streamingText: '',
         activeToolCalls: [],
       );
-      _conversationsDao.saveMessage(state.currentConversationId!, assistantMsg);
-      _agentMessages.add({'role': 'assistant', 'content': partial});
+
+      // 持久化
+      if (convId != null) {
+        _conversationsDao.saveMessage(convId, assistantMsg);
+      }
+      // 同步 agentMessages 上下文 (让后续对话知道之前的部分回复)
+      _agentMessages.add({'role': 'assistant', 'content': content});
     } else {
+      // 连思考阶段都没开始输出，直接恢复空闲
       state = state.copyWith(
         isLoading: false,
         streamingText: '',
@@ -628,6 +727,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _subscription?.cancel();
     _fireSessionEnd();
     _agentMessages.clear();
+    _activeSkillSig = null;
     state = const ChatState();
   }
 

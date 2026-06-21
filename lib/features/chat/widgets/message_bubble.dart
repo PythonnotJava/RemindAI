@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +34,8 @@ class MessageBubble extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final hasText = (message.content ?? '').trim().isNotEmpty;
     final hasAttachments = message.attachments.isNotEmpty;
+    final chatFont = ref.watch(chatFontProvider);
+    final chatFontSize = ref.watch(chatFontSizeProvider);
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -72,8 +76,8 @@ class MessageBubble extends ConsumerWidget {
                   ),
                 ),
                 child: isUser
-                    ? _buildUserContent(context)
-                    : _buildAssistantContent(context),
+                    ? _buildUserContent(context, chatFont, chatFontSize)
+                    : _buildAssistantContent(context, chatFont, chatFontSize),
               ),
             // 操作按钮行
             if (hasText)
@@ -83,26 +87,44 @@ class MessageBubble extends ConsumerWidget {
                 onRegenerate: onRegenerate,
                 onEdit: onEdit,
               ),
+            // 中断标记
+            if (message.interrupted)
+              _InterruptedTag(colorScheme: colorScheme),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildUserContent(BuildContext context) {
+  Widget _buildUserContent(
+    BuildContext context,
+    String chatFont,
+    double chatFontSize,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return MarkdownView(
       data: message.content ?? '',
       textColor: colorScheme.onPrimaryContainer,
+      fontFamily: chatFont,
+      fontSize: chatFontSize,
     );
   }
 
-  Widget _buildAssistantContent(BuildContext context) {
+  Widget _buildAssistantContent(
+    BuildContext context,
+    String chatFont,
+    double chatFontSize,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     final content = message.content ?? '';
     if (content.isEmpty) return const SizedBox.shrink();
 
-    return MarkdownView(data: content, textColor: colorScheme.onSurface);
+    return MarkdownView(
+      data: content,
+      textColor: colorScheme.onSurface,
+      fontFamily: chatFont,
+      fontSize: chatFontSize,
+    );
   }
 }
 
@@ -241,11 +263,105 @@ class _MessageActions extends ConsumerWidget {
   }
 }
 
+/// 用户手动中断标记 — 气泡底部的小标签
+class _InterruptedTag extends StatelessWidget {
+  final ColorScheme colorScheme;
+
+  const _InterruptedTag({required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.pause_circle_outline,
+            size: 12,
+            color: colorScheme.outline,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            context.s.msgInterrupted,
+            style: TextStyle(
+              fontSize: 11,
+              color: colorScheme.outline,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 流式输出气泡 (正在生成中的助手消息)
-class StreamingBubble extends StatelessWidget {
+class StreamingBubble extends StatefulWidget {
   final String text;
 
   const StreamingBubble({super.key, required this.text});
+
+  @override
+  State<StreamingBubble> createState() => _StreamingBubbleState();
+}
+
+class _StreamingBubbleState extends State<StreamingBubble>
+    with SingleTickerProviderStateMixin {
+  /// 思考计时器 — 每秒 +1
+  Timer? _thinkingTimer;
+  int _elapsedSeconds = 0;
+
+  /// 呼吸灯动画 — 让等待时的视觉更有节奏感
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+    // 如果初始就没 text，立即开始计时
+    if (widget.text.isEmpty) _startTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant StreamingBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 从空 → 有文本：停止计时
+    if (oldWidget.text.isEmpty && widget.text.isNotEmpty) {
+      _stopTimer();
+    }
+    // 从有文本 → 空（理论上不会，但保险）：重启计时
+    if (oldWidget.text.isNotEmpty && widget.text.isEmpty) {
+      _startTimer();
+    }
+  }
+
+  void _startTimer() {
+    _elapsedSeconds = 0;
+    _thinkingTimer?.cancel();
+    _thinkingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _elapsedSeconds++);
+    });
+  }
+
+  void _stopTimer() {
+    _thinkingTimer?.cancel();
+    _thinkingTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _thinkingTimer?.cancel();
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -268,31 +384,61 @@ class StreamingBubble extends StatelessWidget {
             bottomRight: Radius.circular(16),
           ),
         ),
-        child: text.isEmpty
-            ? _buildTypingIndicator(context, colorScheme)
-            : MarkdownView(data: text, textColor: colorScheme.onSurface),
+        child: widget.text.isEmpty
+            ? _buildThinkingIndicator(context, colorScheme)
+            : MarkdownView(
+                data: widget.text,
+                textColor: colorScheme.onSurface,
+              ),
       ),
     );
   }
 
-  Widget _buildTypingIndicator(BuildContext context, ColorScheme colorScheme) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: colorScheme.primary,
+  Widget _buildThinkingIndicator(
+    BuildContext context,
+    ColorScheme colorScheme,
+  ) {
+    final timeLabel = _formatElapsed(_elapsedSeconds);
+    return FadeTransition(
+      opacity: _pulseAnimation,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colorScheme.primary,
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          context.s.msgThinking,
-          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
-        ),
-      ],
+          const SizedBox(width: 8),
+          Text(
+            context.s.msgThinking,
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            timeLabel,
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+              fontSize: 12,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  /// 格式化秒数 → "3s" / "1:05"
+  static String _formatElapsed(int seconds) {
+    if (seconds < 60) return '${seconds}s';
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 }

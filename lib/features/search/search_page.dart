@@ -141,7 +141,9 @@ class _SearchProviderCardState extends ConsumerState<_SearchProviderCard> {
           // 头部
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(color: widget.color.withValues(alpha: 0.08)),
+            decoration: BoxDecoration(
+              color: widget.color.withValues(alpha: 0.08),
+            ),
             child: Row(
               children: [
                 Icon(widget.icon, color: widget.color, size: 24),
