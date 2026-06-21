@@ -10,9 +10,11 @@
   <p>
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
     <img src="https://img.shields.io/badge/platform-Windows-brightgreen.svg" alt="Platform" />
-    <img src="https://img.shields.io/badge/Flutter-3.12+-02569B.svg?logo=flutter" alt="Flutter" />
+    <img src="https://img.shields.io/badge/Flutter-3.44+-02569B.svg?logo=flutter" alt="Flutter" />
        <img src="https://img.shields.io/badge/MCP Support-purple.svg" alt="MCP" />
     <img src="https://img.shields.io/badge/Skill Support-purple.svg" alt="Skill" />
+    <img src="https://img.shields.io/badge/API Server-green.svg" alt="API Server" />
+    <img src="https://img.shields.io/badge/🐱 Global Pet Agent-orange.svg" alt="Pet Agent" />
 </p>
 </div>
 
@@ -60,6 +62,7 @@ RemindAI 是一个**开源桌面 AI 助手**，核心理念是为大模型提供
 | 领域专家系统 | ✅ | 预设/自定义角色 + 绑定技能 |
 | 对话导出 | ✅ | MD / PDF / Word / HTML |
 | 桌面体验 | ✅ | 托盘 / 通知 / 闪屏 / 主题动画 |
+| 全局宠物 Agent | ✅ | 像素猫 + TTS 语音 + 商店经济 + 成就系统 |
 
 ---
 
@@ -68,6 +71,7 @@ RemindAI 是一个**开源桌面 AI 助手**，核心理念是为大模型提供
 | 特性 | 说明 |
 |---|---|
 | 🐚 ToolShell | 文件沙盒 + Python/Shell 执行 + rg/fd/rtk + RTK 压缩 60-90% token |
+| 🌐 对外 API 服务 | 内置 HTTP 服务器，三种端点：OpenAI 聚合、Claude Agent（运行 RemindAI 自身的 AgentLoop）、Claude 代理（纯透传） |
 | 🔌 MCP 协议 | stdio/SSE/Streamable HTTP 三传输 + 工具自动发现 + 拖拽管理 |
 | 🧠 向量记忆 | Qdrant 语义搜索 + SQLite 持久备份 + 自动运维 + 记忆重建 |
 | 🤝 多 Agent | 指挥部/工作者/审查员角色 + 权限隔离 + 自动路由 |
@@ -81,6 +85,7 @@ RemindAI 是一个**开源桌面 AI 助手**，核心理念是为大模型提供
 | 📤 导出 | Markdown / PDF / Word / HTML |
 | 🌍 国际化 | 完整中英双语 |
 | 🎨 主题 | Material 3 亮/暗 + 涟漪切换动画 |
+| 🐱 全局宠物 Agent | 像素猫陪伴 + 右键智能问答 + 火山TTS语音 + 商店/背包/投喂 + 成就系统 |
 
 ### 📦 内置 CLI 工具
 
@@ -102,7 +107,7 @@ RemindAI 是一个**开源桌面 AI 助手**，核心理念是为大模型提供
 
 | 平台 | 状态 | 说明 |
 |---|---|---|
-| 🪟 Windows | ✅ 正式支持 | 提供安装包 |
+| 💻 Windows | ✅ 正式支持 | 提供安装包 |
 | 🐧 Linux | 🔧 自行编译 | 源码构建即可使用 |
 | 🍎 macOS | 🔧 自行编译 | 源码构建即可使用 |
 

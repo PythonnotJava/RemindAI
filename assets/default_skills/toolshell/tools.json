@@ -68,7 +68,7 @@
     "type": "function",
     "function": {
       "name": "toolshell_exec",
-      "description": "执行Shell命令。支持 git/flutter/npm/pip/cargo 等任意CLI。",
+      "description": "执行Shell命令。支持 git/flutter/npm/pip/cargo 等任意CLI。Windows 上默认用 PowerShell(无则降级 cmd)，Linux/macOS 用 bash(无则降级 sh)。注意 Windows PowerShell 5.1 不支持 && 链式(会自动降级到 cmd 执行)。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -120,6 +120,22 @@
         "type": "object",
         "properties": {
           "code": {"type": "string", "description": "Python代码"},
+          "timeout": {"type": "integer", "default": 60, "description": "超时秒数"}
+        },
+        "required": ["code"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_run_js",
+      "description": "执行JavaScript/TypeScript代码并返回结果。【重要】当用户要求用JS/TS/Node/Bun实现功能、画图、运行脚本时，你必须调用此工具实际执行代码，禁止仅输出代码文本。自动检测可用运行时(优先bun，其次node)。支持ESM语法(import/export)。自动检测echarts等图表库并注入无头渲染，图表会自动输出为PNG图片并返回路径，用![](路径)在回复中展示图片。纯文本结果直接引用stdout。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": {"type": "string", "description": "JavaScript或TypeScript代码"},
+          "runtime": {"type": "string", "enum": ["auto", "bun", "node"], "default": "auto", "description": "指定运行时：auto自动检测(bun优先)、bun、node"},
           "timeout": {"type": "integer", "default": 60, "description": "超时秒数"}
         },
         "required": ["code"]

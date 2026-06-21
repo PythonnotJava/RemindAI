@@ -13,6 +13,9 @@ class ChatMessage {
   final String? toolCallId;
   final DateTime timestamp;
 
+  /// 该消息是否由用户手动中断生成
+  final bool interrupted;
+
   /// 随消息携带的附件（图片/文档等）。仅用于 UI 展示与持久化，
   /// 不参与发给模型的 content parts 构建。
   final List<FileAttachment> attachments;
@@ -24,6 +27,7 @@ class ChatMessage {
     this.toolCallId,
     DateTime? timestamp,
     this.attachments = const [],
+    this.interrupted = false,
   }) : timestamp = timestamp ?? DateTime.now();
 
   /// 创建用户消息
@@ -40,10 +44,12 @@ class ChatMessage {
   factory ChatMessage.assistant(
     String content, {
     List<ChatToolCall>? toolCalls,
+    bool interrupted = false,
   }) => ChatMessage(
     role: ChatRole.assistant,
     content: content,
     toolCalls: toolCalls,
+    interrupted: interrupted,
   );
 
   /// 创建工具结果消息

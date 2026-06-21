@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:fast_gbk/fast_gbk.dart';
 import 'package:path/path.dart' as p;
 
 import '../memory/memory_manager.dart';
@@ -37,6 +38,12 @@ class Executor {
   /// 这些目录下的文件只允许读取，不允许写入/删除
   final List<String> readableExtraPaths;
 
+  /// 是否允许访问 projectRoot 之外的路径 (读/写/删/执行)。
+  /// false (默认): 严格沙箱，越界路径直接拒绝 —— 用于无人值守的服务器会话。
+  /// true: 解除目录边界限制，可操作任意绝对/相对路径 —— 用于交互式桌面会话
+  /// (越界写/删/执行仍由权限中间件逐次确认，受保护文件名仍被拦截)。
+  final bool allowOutsideRoot;
+
   late final ScheduleExecutor _scheduleExecutor;
   late final SystemExecutor _systemExecutor;
 
@@ -51,6 +58,7 @@ class Executor {
     this.memoryManager,
     this.memoryCollection,
     this.readableExtraPaths = const [],
+    this.allowOutsideRoot = false,
   }) {
     _scheduleExecutor = ScheduleExecutor(projectRoot: projectRoot);
     _systemExecutor = SystemExecutor();
@@ -73,6 +81,15 @@ class Executor {
       if (_rgPath == null && File(rg).existsSync()) _rgPath = rg;
       if (_fdPath == null && File(fd).existsSync()) _fdPath = fd;
       if (_rtkPath == null && File(rtk).existsSync()) _rtkPath = rtk;
+    }
+    // 启动探测结果打印到终端，便于诊断 rtk 是否就位
+    if (_rtkPath != null) {
+      print('[RTK] ✓ 已找到 rtk: $_rtkPath');
+    } else {
+      print(
+        '[RTK] ✗ 未找到 rtk.exe，命令输出压缩功能关闭。'
+        '搜索路径: ${_bundledBinCandidates().join(", ")}',
+      );
     }
   }
 
@@ -109,7 +126,8 @@ class Executor {
             toolName == 'toolshell_write' ||
             toolName == 'toolshell_delete' ||
             toolName == 'toolshell_exec' ||
-            toolName == 'toolshell_run_python';
+            toolName == 'toolshell_run_python' ||
+            toolName == 'toolshell_run_js';
         if (needsApproval && onPermissionRequest != null) {
           final approved = await onPermissionRequest!(toolName, args);
           if (!approved) {
@@ -125,6 +143,7 @@ class Executor {
         'toolshell_search' => await _search(args),
         'toolshell_exec' => await _exec(args),
         'toolshell_run_python' => await _runPython(args),
+        'toolshell_run_js' => await _runJs(args),
         'toolshell_memory_store' => await _memStore(args),
         'toolshell_memory_recall' => await _memRecall(args),
         _ => _err('UNKNOWN_TOOL', toolName),
@@ -136,8 +155,16 @@ class Executor {
 
   // ─── 路径安全 ─────────────────────────────────────────────
 
-  /// 解析路径 — 限制在 projectRoot 内
+  /// 解析路径 — 默认限制在 projectRoot 内。
+  /// allowOutsideRoot=true 时解除边界限制：绝对路径原样规范化，
+  /// 相对路径仍以 projectRoot 为基准 join。
   String _resolve(String path) {
+    // 解除边界：绝对路径直接用，相对路径相对 projectRoot 解析
+    if (allowOutsideRoot) {
+      return p.isAbsolute(path)
+          ? p.normalize(path)
+          : p.normalize(p.join(projectRoot, path));
+    }
     final resolved = p.normalize(p.join(projectRoot, path));
     if (!p.isWithin(projectRoot, resolved) && resolved != projectRoot) {
       throw Exception('路径越界: $path');
@@ -147,7 +174,7 @@ class Executor {
 
   /// 解析路径 (只读) — 允许 projectRoot + 额外可读路径
   /// 如果是绝对路径且在可读目录中，直接返回
-  /// 否则回退到 _resolve (projectRoot 内)
+  /// 否则回退到 _resolve (projectRoot 内 / 或解除边界)
   String _resolveReadable(String path) {
     // 绝对路径 → 检查是否在额外可读目录中
     if (p.isAbsolute(path)) {
@@ -157,16 +184,17 @@ class Executor {
           return normalized;
         }
       }
-      // 不在可读范围内 → 仍尝试 projectRoot
+      // 不在可读范围内 → 仍尝试 _resolve (解除边界时直接放行)
     }
     return _resolve(path);
   }
 
+  /// 受保护文件/目录拦截 —— 无论是否解除目录边界都生效。
+  /// 解除边界后路径可能在 projectRoot 之外，故按路径的各段名匹配，
+  /// 不再依赖相对 projectRoot 的前缀判断。
   bool _isProtected(String path) {
-    final rel = p.relative(path, from: projectRoot);
-    return _protected.any(
-      (pat) => rel.startsWith(pat) || rel.contains('/$pat'),
-    );
+    final segments = p.split(p.normalize(path));
+    return segments.any((seg) => _protected.contains(seg));
   }
 
   // ─── 文件操作 ─────────────────────────────────────────────
@@ -294,16 +322,16 @@ class Executor {
       final result = await Process.run(
         _rgPath!,
         args,
-        stdoutEncoding: utf8,
-        stderrEncoding: utf8,
+        stdoutEncoding: null,
+        stderrEncoding: null,
       ).timeout(const Duration(seconds: 15));
 
       // rg exit 1 = no matches, exit 2 = error
       if (result.exitCode == 2) {
-        return _err('RG_ERROR', (result.stderr as String).trim());
+        return _err('RG_ERROR', _decodeBytes(result.stderr).trim());
       }
 
-      final lines = (result.stdout as String)
+      final lines = _decodeBytes(result.stdout)
           .split(RegExp(r'\r?\n'))
           .where((l) => l.isNotEmpty)
           .take(maxResults)
@@ -349,15 +377,16 @@ class Executor {
       final result = await Process.run(
         _fdPath!,
         args,
-        stdoutEncoding: utf8,
-        stderrEncoding: utf8,
+        stdoutEncoding: null,
+        stderrEncoding: null,
       ).timeout(const Duration(seconds: 15));
 
-      if (result.exitCode != 0 && (result.stdout as String).isEmpty) {
+      final fdStdout = _decodeBytes(result.stdout);
+      if (result.exitCode != 0 && fdStdout.isEmpty) {
         return _searchDart(pattern, scope, maxResults, null);
       }
 
-      final lines = (result.stdout as String)
+      final lines = fdStdout
           .split(RegExp(r'\r?\n'))
           .where((l) => l.isNotEmpty)
           .toList();
@@ -417,6 +446,113 @@ class Executor {
 
   // ─── Shell 执行 ───────────────────────────────────────────
 
+  /// 智能解码进程输出字节。
+  /// 优先 UTF-8（严格模式），失败则回退 GBK（中文 Windows 默认编码），
+  /// 再失败则用 UTF-8 宽松模式（非法字节替换为 ）。
+  /// 解决中文 Windows 下命令输出为 GBK 导致 UTF-8 解码抛 FormatException 的问题。
+  String _decodeBytes(dynamic raw) {
+    if (raw is String) return raw;
+    if (raw is! List<int>) return raw.toString();
+    final bytes = raw;
+    try {
+      return utf8.decode(bytes); // 严格 UTF-8
+    } catch (_) {}
+    try {
+      return gbk.decode(bytes); // 回退 GBK
+    } catch (_) {}
+    return utf8.decode(bytes, allowMalformed: true); // 兜底
+  }
+
+  // ─── Shell 解析 ───────────────────────────────────────────
+
+  /// 已解析的 shell 缓存 (进程级一次性探测)。
+  static _ResolvedShell? _shellCache;
+
+  /// 解析当前平台首选 shell。
+  /// Windows: pwsh (PowerShell 7+, 支持 &&) > powershell (5.1) > cmd。
+  /// Unix: bash > sh。
+  Future<_ResolvedShell> _resolveShell() async {
+    final cached = _shellCache;
+    if (cached != null) return cached;
+
+    _ResolvedShell resolved;
+    if (Platform.isWindows) {
+      if (await _existsOnPath('pwsh')) {
+        // PowerShell 7+ 支持 && / || 链式
+        resolved = const _ResolvedShell(
+          _ShellKind.powershell,
+          'pwsh',
+          supportsChaining: true,
+        );
+      } else if (await _existsOnPath('powershell')) {
+        // Windows PowerShell 5.1 不支持 && / ||
+        resolved = const _ResolvedShell(
+          _ShellKind.powershell,
+          'powershell',
+          supportsChaining: false,
+        );
+      } else {
+        resolved = const _ResolvedShell(
+          _ShellKind.cmd,
+          'cmd',
+          supportsChaining: true,
+        );
+      }
+    } else {
+      if (await _existsOnPath('bash')) {
+        resolved = const _ResolvedShell(_ShellKind.bash, 'bash');
+      } else {
+        resolved = const _ResolvedShell(_ShellKind.sh, 'sh');
+      }
+    }
+
+    print(
+      '[Shell] 使用 ${resolved.executable} (chaining=${resolved.supportsChaining})',
+    );
+    _shellCache = resolved;
+    return resolved;
+  }
+
+  /// 用 where/which 检测可执行文件是否在 PATH 中。
+  Future<bool> _existsOnPath(String exe) async {
+    try {
+      final which = Platform.isWindows ? 'where' : 'which';
+      final result = await Process.run(
+        which,
+        [exe],
+        stdoutEncoding: null,
+        stderrEncoding: null,
+      ).timeout(const Duration(seconds: 3));
+      return result.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 命令是否含链式操作符 (&& 或 ||)。
+  bool _hasChaining(String command) =>
+      command.contains('&&') || command.contains('||');
+
+  /// 根据 shell 类型构建 (可执行文件, 参数列表)。
+  (String, List<String>) _buildInvocation(
+    _ResolvedShell shell,
+    String command,
+  ) {
+    switch (shell.kind) {
+      case _ShellKind.powershell:
+        // -NoProfile 跳过用户配置加速启动; -Command 执行命令字符串
+        return (
+          shell.executable,
+          ['-NoProfile', '-NonInteractive', '-Command', command],
+        );
+      case _ShellKind.cmd:
+        return (shell.executable, ['/c', command]);
+      case _ShellKind.bash:
+      case _ShellKind.sh:
+        return (shell.executable, ['-c', command]);
+    }
+  }
+
   Future<String> _exec(Map<String, dynamic> args) async {
     final command = args['command'] as String;
     final cwd = _resolve(args['cwd'] ?? '.');
@@ -427,33 +563,60 @@ class Executor {
     // 构建环境变量：将指定的解释器目录前置到 PATH，优先使用本次对话指定版本
     final environment = _buildEnvironment();
 
+    // 解析使用的 shell (一次性缓存)。
+    // Windows: pwsh > powershell > cmd; Unix: bash > sh。
+    final resolved = await _resolveShell();
+
+    // Windows PowerShell 5.1 不支持 && / ||，遇到链式命令降级到 cmd 以保证兼容。
+    var active = resolved;
+    if (resolved.kind == _ShellKind.powershell &&
+        !resolved.supportsChaining &&
+        _hasChaining(command)) {
+      active = const _ResolvedShell(
+        _ShellKind.cmd,
+        'cmd',
+        supportsChaining: true,
+      );
+      print('[Shell] 链式命令降级 PowerShell → cmd: $command');
+    }
+
     // 通过 rtk 包裹命令以压缩输出 (可用时)，降低 LLM token 消耗
-    final effectiveCommand = _wrapWithRtk(command);
+    final effectiveCommand = _wrapWithRtk(command, active.kind);
+    final invocation = _buildInvocation(active, effectiveCommand);
 
     try {
       final result = await Process.run(
-        Platform.isWindows ? 'cmd' : 'sh',
-        Platform.isWindows
-            ? ['/c', effectiveCommand]
-            : ['-c', effectiveCommand],
+        invocation.$1,
+        invocation.$2,
         workingDirectory: cwd,
         environment: environment,
-        stdoutEncoding: utf8,
-        stderrEncoding: utf8,
+        stdoutEncoding: null, // 原始字节，自行智能解码
+        stderrEncoding: null,
       ).timeout(timeout);
 
-      final stdout = result.stdout.length > 8000
-          ? result.stdout.substring(result.stdout.length - 8000)
-          : result.stdout;
-      final stderr = result.stderr.length > 4000
-          ? result.stderr.substring(result.stderr.length - 4000)
-          : result.stderr;
+      final rawStdout = _decodeBytes(result.stdout);
+      final rawStderr = _decodeBytes(result.stderr);
+
+      // 打印执行完成后的输出规模，便于观察 rtk 压缩效果
+      final wasWrapped = _rtkPath != null && effectiveCommand != command;
+      print(
+        '[RTK] 执行完成 exit=${result.exitCode} '
+        '${wasWrapped ? "(经 rtk)" : "(未经 rtk)"} '
+        'stdout=${rawStdout.length}字符 stderr=${rawStderr.length}字符',
+      );
+
+      final stdout = rawStdout.length > 8000
+          ? rawStdout.substring(rawStdout.length - 8000)
+          : rawStdout;
+      final stderr = rawStderr.length > 4000
+          ? rawStderr.substring(rawStderr.length - 4000)
+          : rawStderr;
 
       return _ok({
         'exit_code': result.exitCode,
         'stdout': stdout,
         'stderr': stderr,
-        'truncated': result.stdout.length > 8000 || result.stderr.length > 4000,
+        'truncated': rawStdout.length > 8000 || rawStderr.length > 4000,
         if (_rtkPath != null && effectiveCommand != command) 'optimized': true,
       });
     } on TimeoutException {
@@ -527,8 +690,8 @@ $code
         [scriptFile.path],
         workingDirectory: projectRoot,
         environment: environment,
-        stdoutEncoding: utf8,
-        stderrEncoding: utf8,
+        stdoutEncoding: null,
+        stderrEncoding: null,
       ).timeout(timeout);
 
       // 收集输出的图片文件
@@ -543,12 +706,15 @@ $code
         images.sort();
       }
 
-      final stdout = result.stdout.length > 8000
-          ? result.stdout.substring(result.stdout.length - 8000)
-          : result.stdout;
-      final stderr = result.stderr.length > 4000
-          ? result.stderr.substring(result.stderr.length - 4000)
-          : result.stderr;
+      final rawStdout = _decodeBytes(result.stdout);
+      final rawStderr = _decodeBytes(result.stderr);
+
+      final stdout = rawStdout.length > 8000
+          ? rawStdout.substring(rawStdout.length - 8000)
+          : rawStdout;
+      final stderr = rawStderr.length > 4000
+          ? rawStderr.substring(rawStderr.length - 4000)
+          : rawStderr;
 
       // 清理脚本文件（保留图片）
       await scriptFile.delete();
@@ -558,7 +724,7 @@ $code
         'stdout': stdout,
         'stderr': stderr,
         'images': images,
-        'truncated': result.stdout.length > 8000 || result.stderr.length > 4000,
+        'truncated': rawStdout.length > 8000 || rawStderr.length > 4000,
       });
     } on TimeoutException {
       await tmpDir.delete(recursive: true);
@@ -592,15 +758,271 @@ $code
         final result = await Process.run(
           which,
           [name],
-          stdoutEncoding: utf8,
-          stderrEncoding: utf8,
+          stdoutEncoding: null,
+          stderrEncoding: null,
         );
         if (result.exitCode == 0) {
-          final path = (result.stdout as String)
-              .trim()
-              .split('\n')
-              .first
-              .trim();
+          final path = _decodeBytes(
+            result.stdout,
+          ).trim().split('\n').first.trim();
+          if (path.isNotEmpty) return path;
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  // ─── JavaScript/TypeScript 代码执行 ──────────────────────────────
+
+  /// 检测代码是否使用了图表库，返回需要注入的依赖列表
+  Map<String, String> _detectJsChartDeps(String code) {
+    final deps = <String, String>{};
+    // ECharts
+    if (code.contains("echarts") ||
+        code.contains("'echarts'") ||
+        code.contains('"echarts"')) {
+      deps['echarts'] = '^5.5.0';
+      deps['@napi-rs/canvas'] = '^0.1.65';
+    }
+    // Chart.js
+    if (code.contains("chart.js") ||
+        code.contains("'chart.js'") ||
+        code.contains('"chart.js"')) {
+      deps['chart.js'] = '^4.4.0';
+      deps['chartjs-node-canvas'] = '^4.1.6';
+    }
+    return deps;
+  }
+
+  /// 为 ECharts 代码注入无头渲染支持（SSR + canvas 输出 PNG）
+  String _patchJsForChartRendering(String code, String outputDir) {
+    // 如果代码中包含 echarts，注入 canvas 环境和自动保存逻辑
+    if (!code.contains('echarts')) return code;
+
+    // 将用户的 echarts.init(dom) 替换为无头 canvas 渲染
+    return '''
+import { createCanvas } from '@napi-rs/canvas';
+import { writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
+
+const _outputDir = ${_jsStringLiteral(outputDir)};
+mkdirSync(_outputDir, { recursive: true });
+let _figCounter = 0;
+
+// Patch: 替换 echarts.init 使其使用 canvas 无头渲染
+const _originalImport = await import('echarts');
+const echarts = { ..._originalImport };
+
+const _origInit = echarts.init;
+const _charts = [];
+
+echarts.init = function(dom, theme, opts) {
+  const width = opts?.width || 800;
+  const height = opts?.height || 600;
+  const canvas = createCanvas(width, height);
+  // ECharts 需要一个 canvas-like 对象
+  const chart = _origInit.call(echarts, canvas, theme, {
+    ...(opts || {}),
+    width,
+    height,
+    renderer: 'canvas',
+  });
+  _charts.push({ chart, canvas, width, height });
+  return chart;
+};
+
+// 用户代码开始 ─────────────────────────────────────
+${code.replaceAll(RegExp(r'''import\s+\*\s+as\s+echarts\s+from\s+['"]echarts['"];?'''), '// [patched: echarts import above]').replaceAll(RegExp(r'''import\s+echarts\s+from\s+['"]echarts['"];?'''), '// [patched: echarts import above]').replaceAll(RegExp(r'''const\s*\{\s*[^}]+\}\s*=\s*require\s*\(\s*['"]echarts['"]\s*\)\s*;?'''), '// [patched: echarts require above]')}
+// 用户代码结束 ─────────────────────────────────────
+
+// 自动保存所有已渲染的图表为 PNG
+for (const { chart, canvas } of _charts) {
+  _figCounter++;
+  const pngBuffer = canvas.toBuffer('image/png');
+  const outPath = join(_outputDir, `fig_\${_figCounter}.png`);
+  writeFileSync(outPath, pngBuffer);
+  chart.dispose();
+}
+
+if (_figCounter > 0) {
+  console.log(`[chart] Saved \${_figCounter} chart(s) to \${_outputDir}`);
+}
+''';
+  }
+
+  /// JS 字符串字面量转义
+  String _jsStringLiteral(String s) {
+    return "'${s.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'";
+  }
+
+  Future<String> _runJs(Map<String, dynamic> args) async {
+    final code = args['code'] as String;
+    final runtimePref = (args['runtime'] ?? 'auto') as String;
+    final timeout = Duration(seconds: (args['timeout'] ?? 60) as int);
+
+    // 查找 JS 运行时
+    final runtime = await _findJsRuntime(runtimePref);
+    if (runtime == null) {
+      return _err(
+        'JS_RUNTIME_NOT_FOUND',
+        '未找到 JavaScript 运行时 (bun/node)。请安装 bun 或 Node.js。',
+      );
+    }
+
+    // 创建临时目录
+    final tmpDir = await Directory.systemTemp.createTemp('remindai_js_');
+    final outputDir = p.join(tmpDir.path, 'output');
+    await Directory(outputDir).create();
+
+    // 检测图表依赖
+    final chartDeps = _detectJsChartDeps(code);
+    final hasChartDeps = chartDeps.isNotEmpty;
+
+    // 如果有图表依赖，创建 package.json 并安装
+    if (hasChartDeps) {
+      final packageJson = {
+        'name': 'remindai-temp',
+        'private': true,
+        'type': 'module',
+        'dependencies': chartDeps,
+      };
+      await File(
+        p.join(tmpDir.path, 'package.json'),
+      ).writeAsString(jsonEncode(packageJson), encoding: utf8);
+
+      // 安装依赖
+      final isBun = runtime.contains('bun');
+      final installCmd = isBun ? 'bun' : 'npm';
+      final installArgs = isBun ? ['install'] : ['install', '--prefer-offline'];
+
+      try {
+        final installResult = await Process.run(
+          installCmd,
+          installArgs,
+          workingDirectory: tmpDir.path,
+          stdoutEncoding: null,
+          stderrEncoding: null,
+        ).timeout(const Duration(seconds: 60));
+
+        if (installResult.exitCode != 0) {
+          await tmpDir.delete(recursive: true);
+          return _err(
+            'INSTALL_FAILED',
+            '依赖安装失败 ($installCmd install):\n${_decodeBytes(installResult.stderr)}',
+          );
+        }
+      } on TimeoutException {
+        await tmpDir.delete(recursive: true);
+        return _err('TIMEOUT', '依赖安装超时');
+      }
+    }
+
+    // 处理代码：如果有图表库，注入渲染补丁
+    String effectiveCode = code;
+    if (chartDeps.containsKey('echarts')) {
+      effectiveCode = _patchJsForChartRendering(code, outputDir);
+    }
+
+    // bun 原生支持 TS，node 用 .mjs (ESM)
+    final ext = runtime.contains('bun') ? '.ts' : '.mjs';
+    final scriptFile = File(p.join(tmpDir.path, 'script$ext'));
+    await scriptFile.writeAsString(effectiveCode, encoding: utf8);
+
+    final environment = _buildEnvironment();
+
+    try {
+      final result = await Process.run(
+        runtime,
+        ['run', scriptFile.path],
+        workingDirectory: tmpDir.path,
+        environment: environment,
+        stdoutEncoding: null,
+        stderrEncoding: null,
+      ).timeout(timeout);
+
+      // 收集输出的图片文件
+      final outDir = Directory(outputDir);
+      final images = <String>[];
+      if (await outDir.exists()) {
+        await for (final entity in outDir.list()) {
+          if (entity is File &&
+              (entity.path.endsWith('.png') || entity.path.endsWith('.svg'))) {
+            images.add(entity.path);
+          }
+        }
+        images.sort();
+      }
+
+      final rawStdout = _decodeBytes(result.stdout);
+      final rawStderr = _decodeBytes(result.stderr);
+
+      final stdout = rawStdout.length > 8000
+          ? rawStdout.substring(rawStdout.length - 8000)
+          : rawStdout;
+      final stderr = rawStderr.length > 4000
+          ? rawStderr.substring(rawStderr.length - 4000)
+          : rawStderr;
+
+      // 清理脚本文件和 node_modules（保留输出图片）
+      await scriptFile.delete();
+      final nodeModules = Directory(p.join(tmpDir.path, 'node_modules'));
+      if (await nodeModules.exists()) {
+        await nodeModules.delete(recursive: true);
+      }
+
+      return _ok({
+        'exit_code': result.exitCode,
+        'stdout': stdout,
+        'stderr': stderr,
+        'runtime': p.basename(runtime),
+        'images': images,
+        'truncated': rawStdout.length > 8000 || rawStderr.length > 4000,
+      });
+    } on TimeoutException {
+      await tmpDir.delete(recursive: true);
+      return _err('TIMEOUT', 'JS 执行超时 (>${timeout.inSeconds}s)');
+    }
+  }
+
+  /// 查找系统中可用的 JS 运行时
+  /// 优先级: bun > node (bun 更快且原生支持 TS)
+  Future<String?> _findJsRuntime(String preference) async {
+    List<String> candidates;
+    switch (preference) {
+      case 'bun':
+        candidates = Platform.isWindows ? ['bun.exe'] : ['bun'];
+      case 'node':
+        candidates = Platform.isWindows ? ['node.exe'] : ['node'];
+      default: // auto
+        candidates = Platform.isWindows
+            ? ['bun.exe', 'node.exe']
+            : ['bun', 'node'];
+    }
+
+    // 优先检查配置的 npmPath 目录
+    if (npmPath.isNotEmpty) {
+      for (final name in candidates) {
+        final candidate = p.join(npmPath, name);
+        if (await File(candidate).exists()) return candidate;
+      }
+      // npmPath 本身可能就是可执行文件
+      if (await File(npmPath).exists()) return npmPath;
+    }
+
+    // 在 PATH 中搜索
+    for (final name in candidates) {
+      try {
+        final which = Platform.isWindows ? 'where' : 'which';
+        final result = await Process.run(
+          which,
+          [name],
+          stdoutEncoding: null,
+          stderrEncoding: null,
+        );
+        if (result.exitCode == 0) {
+          final path = _decodeBytes(
+            result.stdout,
+          ).trim().split('\n').first.trim();
           if (path.isNotEmpty) return path;
         }
       } catch (_) {}
@@ -611,21 +1033,160 @@ $code
   /// 用 rtk 包裹命令以压缩输出。
   /// 仅包裹适合压缩的命令（git/ls/grep/test 等），不包裹交互式或管道复杂命令。
   /// rtk 对不认识的命令会透传执行，所以安全性有保证。
-  String _wrapWithRtk(String command) {
-    if (_rtkPath == null) return command;
+  String _wrapWithRtk(String command, _ShellKind shell) {
+    if (_rtkPath == null) {
+      print('[RTK] skip (rtk 不可用): $command');
+      return command;
+    }
 
-    // 不包裹的场景：
-    // - 已经是 rtk 开头
-    // - 包含重定向/管道到文件 (>)
-    // - cd 命令
-    // - 纯赋值命令
     final trimmed = command.trim().toLowerCase();
-    if (trimmed.startsWith('rtk ')) return command;
-    if (command.contains('>') || command.contains('>>')) return command;
-    if (trimmed.startsWith('cd ') || trimmed.startsWith('set ')) return command;
 
-    // 用 rtk 的绝对路径包裹，保证找到自带的 rtk
-    return '"$_rtkPath" $command';
+    // 已经是 rtk 命令
+    if (trimmed.startsWith('rtk ')) {
+      print('[RTK] skip (已是 rtk 命令): $command');
+      return command;
+    }
+
+    // 含重定向，rtk 可能干扰输出流
+    if (command.contains('>') || command.contains('>>')) {
+      print('[RTK] skip (含重定向): $command');
+      return command;
+    }
+
+    // 纯 set 赋值命令 (cmd 的 set / PowerShell 不适用，但保持保守)
+    if (trimmed.startsWith('set ')) {
+      print('[RTK] skip (set 命令): $command');
+      return command;
+    }
+
+    // ── cd X && Y 链式命令：保留 cd，包裹后续命令 ──
+    if (trimmed.startsWith('cd ') && command.contains('&&')) {
+      final parts = command.split('&&');
+      final result = <String>[];
+      for (var i = 0; i < parts.length; i++) {
+        final part = parts[i].trim();
+        if (i == 0) {
+          // 第一段是 cd，保持原样
+          result.add(part);
+        } else {
+          // 后续命令尝试 rtk 包裹
+          result.add(_wrapSingleCommand(part, shell));
+        }
+      }
+      final joined = result.join(' && ');
+      print('[RTK] ✓ 链式包裹: $command → $joined');
+      return joined;
+    }
+
+    // 纯 cd 命令（不含 &&），无需包裹
+    if (trimmed.startsWith('cd ')) {
+      print('[RTK] skip (纯 cd 命令): $command');
+      return command;
+    }
+
+    return _wrapSingleCommand(command, shell);
+  }
+
+  /// 不应被 rtk 包裹的命令前缀（这些命令的 stderr 输出会被 rtk 误处理）
+  static const _rtkSkipPrefixes = ['git clone', 'git init'];
+
+  /// rtk 有专门压缩过滤器的命令首词白名单。
+  /// 只有这些命令才包裹 rtk —— 因为 rtk 通过启动子进程执行命令，
+  /// 无法运行 shell 内建命令(exit/cd/set)或 PowerShell cmdlet(Get-*/Write-*)，
+  /// 对它们包裹会导致执行失败。白名单全是真实可执行文件。
+  static const _rtkWrapCommands = {
+    'git',
+    'cargo',
+    'npm',
+    'pnpm',
+    'yarn',
+    'npx',
+    'node',
+    'bun',
+    'tsc',
+    'next',
+    'vitest',
+    'playwright',
+    'prettier',
+    'eslint',
+    'prisma',
+    'docker',
+    'kubectl',
+    'curl',
+    'wget',
+    'rg',
+    'fd',
+    'grep',
+    'find',
+    'ls',
+    'flutter',
+    'dart',
+    'pytest',
+    'pip',
+    'pip3',
+    'python',
+    'python3',
+    'go',
+    'gh',
+    'make',
+  };
+
+  /// 提取命令首词 (去掉路径/扩展名)，用于白名单匹配。
+  String _firstWord(String command) {
+    final trimmed = command.trim();
+    if (trimmed.isEmpty) return '';
+    final first = trimmed.split(RegExp(r'\s+')).first;
+    // 去掉路径前缀和 .exe 扩展
+    var word = first.split(RegExp(r'[/\\]')).last.toLowerCase();
+    if (word.endsWith('.exe')) word = word.substring(0, word.length - 4);
+    return word;
+  }
+
+  /// 包裹单条命令（不含 cd/链式逻辑）
+  String _wrapSingleCommand(String command, _ShellKind shell) {
+    final trimmed = command.trim().toLowerCase();
+
+    // 跳过已知不兼容命令
+    for (final prefix in _rtkSkipPrefixes) {
+      if (trimmed.startsWith(prefix)) {
+        print('[RTK] skip (不兼容命令): $command');
+        return command;
+      }
+    }
+
+    // 已经被 rtk 包裹
+    if (trimmed.startsWith('rtk ')) return command;
+
+    // 仅包裹白名单内、rtk 确有压缩过滤器的真实可执行命令。
+    // 其它命令(shell 内建/PowerShell cmdlet/未知命令)原样执行，
+    // 避免 rtk 子进程模型无法运行它们导致失败。
+    final head = _firstWord(command);
+    if (!_rtkWrapCommands.contains(head)) {
+      print('[RTK] skip (非白名单命令: $head): $command');
+      return command;
+    }
+
+    final String wrapped;
+    final hasSpace = _rtkPath!.contains(' ');
+    switch (shell) {
+      case _ShellKind.powershell:
+        // PowerShell: 含空格路径需用 & 调用操作符 + 引号
+        //   & "C:\path with space\rtk.exe" args
+        // 无空格可直接拼接 (但用 & 更稳妥)
+        wrapped = hasSpace ? '& "$_rtkPath" $command' : '$_rtkPath $command';
+      case _ShellKind.cmd:
+        // Windows cmd /c 对引号的解析很特殊：
+        //   cmd /c "C:\path\rtk.exe" arg  ← 引号被 cmd 吃掉导致路径断裂
+        //   cmd /c C:\path\rtk.exe arg    ← 无空格路径直接用效果最好
+        // 所以：无空格路径不加引号；含空格时整条命令外层再包一对引号
+        wrapped = hasSpace ? '""$_rtkPath" $command"' : '$_rtkPath $command';
+      case _ShellKind.bash:
+      case _ShellKind.sh:
+        // POSIX shell: 含空格路径用单引号
+        wrapped = hasSpace ? "'$_rtkPath' $command" : '$_rtkPath $command';
+    }
+    print('[RTK] ✓ 包裹命令: $command');
+    return wrapped;
   }
 
   /// 构建执行环境变量。
@@ -739,4 +1300,24 @@ $code
 
   String _err(String code, String detail) =>
       jsonEncode({'status': 'error', 'code': code, 'detail': detail});
+}
+
+/// shell 类型
+enum _ShellKind { powershell, cmd, bash, sh }
+
+/// 已解析的 shell 信息
+class _ResolvedShell {
+  final _ShellKind kind;
+
+  /// 调用用的可执行文件名 (pwsh / powershell / cmd / bash / sh)
+  final String executable;
+
+  /// 是否支持 && / || 链式 (PowerShell 5.1 不支持)
+  final bool supportsChaining;
+
+  const _ResolvedShell(
+    this.kind,
+    this.executable, {
+    this.supportsChaining = true,
+  });
 }

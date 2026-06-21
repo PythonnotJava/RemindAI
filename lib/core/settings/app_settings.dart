@@ -84,11 +84,17 @@ class AppSettings {
   final String pandocPath;
   final String workingDirectory; // 工作目录
   final String themeMode; // 主题模式: system / light / dark
+  final String accentColor; // 主题色: 'purple' / 'green' / 'blue' / 'cyan'
   final List<EmbeddingConfig> embeddings; // 多个嵌入式模型配置
   final String selectedEmbeddingId; // 当前选中(默认)的嵌入模型 id
   final String qdrantPath; // 手动指定的 Qdrant 可执行文件路径 (空=自动检测)
   final bool notifyOnBlur; // 失焦时是否发送系统通知 (默认开启)
   final String locale; // 语言: 'system' / 'zh' / 'en'
+  final String uiFont; // 界面字体
+  final double uiFontSize; // 界面字体大小
+  final String chatFont; // 交互字体（对话+多Agent）
+  final double chatFontSize; // 交互字体大小
+  final String enterAction; // 回车行为: 'send' / 'newline'
 
   const AppSettings({
     required this.databasePath,
@@ -98,11 +104,17 @@ class AppSettings {
     required this.pandocPath,
     this.workingDirectory = '',
     this.themeMode = 'dark',
+    this.accentColor = 'purple',
     this.embeddings = const [],
     this.selectedEmbeddingId = '',
     this.qdrantPath = '',
     this.notifyOnBlur = true,
     this.locale = 'system',
+    this.uiFont = 'Noto Sans SC',
+    this.uiFontSize = 14.0,
+    this.chatFont = 'Noto Sans SC',
+    this.chatFontSize = 14.0,
+    this.enterAction = 'send',
   });
 
   /// 向后兼容: 返回当前选中的嵌入模型配置。
@@ -124,11 +136,17 @@ class AppSettings {
     String? pandocPath,
     String? workingDirectory,
     String? themeMode,
+    String? accentColor,
     List<EmbeddingConfig>? embeddings,
     String? selectedEmbeddingId,
     String? qdrantPath,
     bool? notifyOnBlur,
     String? locale,
+    String? uiFont,
+    double? uiFontSize,
+    String? chatFont,
+    double? chatFontSize,
+    String? enterAction,
   }) {
     return AppSettings(
       databasePath: databasePath ?? this.databasePath,
@@ -138,11 +156,17 @@ class AppSettings {
       pandocPath: pandocPath ?? this.pandocPath,
       workingDirectory: workingDirectory ?? this.workingDirectory,
       themeMode: themeMode ?? this.themeMode,
+      accentColor: accentColor ?? this.accentColor,
       embeddings: embeddings ?? this.embeddings,
       selectedEmbeddingId: selectedEmbeddingId ?? this.selectedEmbeddingId,
       qdrantPath: qdrantPath ?? this.qdrantPath,
       notifyOnBlur: notifyOnBlur ?? this.notifyOnBlur,
       locale: locale ?? this.locale,
+      uiFont: uiFont ?? this.uiFont,
+      uiFontSize: uiFontSize ?? this.uiFontSize,
+      chatFont: chatFont ?? this.chatFont,
+      chatFontSize: chatFontSize ?? this.chatFontSize,
+      enterAction: enterAction ?? this.enterAction,
     );
   }
 
@@ -154,11 +178,17 @@ class AppSettings {
     'pandocPath': pandocPath,
     'workingDirectory': workingDirectory,
     'themeMode': themeMode,
+    'accentColor': accentColor,
     'embeddings': embeddings.map((e) => e.toJson()).toList(),
     'selectedEmbeddingId': selectedEmbeddingId,
     'qdrantPath': qdrantPath,
     'notifyOnBlur': notifyOnBlur,
     'locale': locale,
+    'uiFont': uiFont,
+    'uiFontSize': uiFontSize,
+    'chatFont': chatFont,
+    'chatFontSize': chatFontSize,
+    'enterAction': enterAction,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -197,11 +227,17 @@ class AppSettings {
       pandocPath: json['pandocPath'] as String? ?? '',
       workingDirectory: json['workingDirectory'] as String? ?? '',
       themeMode: json['themeMode'] as String? ?? 'dark',
+      accentColor: json['accentColor'] as String? ?? 'purple',
       embeddings: embeddings,
       selectedEmbeddingId: selectedId,
       qdrantPath: json['qdrantPath'] as String? ?? '',
       notifyOnBlur: json['notifyOnBlur'] as bool? ?? true,
       locale: json['locale'] as String? ?? 'system',
+      uiFont: json['uiFont'] as String? ?? 'Noto Sans SC',
+      uiFontSize: (json['uiFontSize'] as num?)?.toDouble() ?? 14.0,
+      chatFont: json['chatFont'] as String? ?? 'Noto Sans SC',
+      chatFontSize: (json['chatFontSize'] as num?)?.toDouble() ?? 14.0,
+      enterAction: json['enterAction'] as String? ?? 'send',
     );
   }
 
@@ -243,11 +279,17 @@ class AppSettings {
             : settings.pandocPath,
         workingDirectory: settings.workingDirectory,
         themeMode: settings.themeMode,
+        accentColor: settings.accentColor,
         embeddings: settings.embeddings,
         selectedEmbeddingId: settings.selectedEmbeddingId,
         qdrantPath: settings.qdrantPath,
         notifyOnBlur: settings.notifyOnBlur,
         locale: settings.locale,
+        uiFont: settings.uiFont,
+        uiFontSize: settings.uiFontSize,
+        chatFont: settings.chatFont,
+        chatFontSize: settings.chatFontSize,
+        enterAction: settings.enterAction,
       );
     } catch (_) {
       return defaults;

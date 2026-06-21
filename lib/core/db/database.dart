@@ -127,6 +127,13 @@ class DatabaseHelper {
       'attachments',
       "TEXT NOT NULL DEFAULT '[]'",
     );
+    // Migration: add interrupted flag for chat messages (用户手动中断标记)
+    _migrateAddColumn(
+      db,
+      'chat_messages',
+      'interrupted',
+      "INTEGER NOT NULL DEFAULT 0",
+    );
     // Migration: MCP 多传输类型支持
     _migrateAddColumn(
       db,

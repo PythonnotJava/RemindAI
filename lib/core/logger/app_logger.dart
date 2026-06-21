@@ -32,9 +32,7 @@ class AppLogger {
   /// 运行时更新日志目录（设置页面修改后调用）
   Future<void> updateLogDir(String newDir) async {
     if (newDir.isEmpty || newDir == _logDir) return;
-    _sink?.flush();
-    _sink?.close();
-    _sink = null;
+    _closeSinkSafely();
     _currentDate = '';
     _logDir = newDir;
     await Directory(_logDir).create(recursive: true);
@@ -61,11 +59,23 @@ class AppLogger {
     final today = _todayStr();
     if (today == _currentDate && _sink != null) return;
 
-    _sink?.flush();
-    _sink?.close();
+    _closeSinkSafely();
     _currentDate = today;
     final file = File(p.join(_logDir, '$today.log'));
     _sink = file.openWrite(mode: FileMode.append);
+  }
+
+  /// 安全关闭当前 sink。
+  /// close() 已隐含 flush，无需单独调用 flush()。
+  /// 未 await 的 flush() 会让 sink 进入 "bound" 状态导致 close 抛异常。
+  void _closeSinkSafely() {
+    final s = _sink;
+    _sink = null;
+    try {
+      s?.close();
+    } catch (_) {
+      // sink 可能已关闭或处于 bound 状态，忽略
+    }
   }
 
   /// 读取今天的日志内容
@@ -99,10 +109,7 @@ class AppLogger {
   /// 清空所有日志
   Future<int> clearAll() async {
     if (!_initialized) return 0;
-    // 先关闭当前 sink
-    _sink?.flush();
-    _sink?.close();
-    _sink = null;
+    _closeSinkSafely();
     _currentDate = '';
 
     final dir = Directory(_logDir);
@@ -133,9 +140,7 @@ class AppLogger {
 
   /// 关闭日志 (应用退出时调用)
   void dispose() {
-    _sink?.flush();
-    _sink?.close();
-    _sink = null;
+    _closeSinkSafely();
   }
 
   static String _todayStr() {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +21,23 @@ ThemeMode _parseThemeMode(String mode) => switch (mode) {
   _ => ThemeMode.system,
 };
 
+/// 主题色 Provider — 'purple' / 'green' / 'blue' / 'cyan'
+final accentColorProvider = StateProvider<String>((ref) {
+  final settings = ref.watch(settingsProvider).valueOrNull;
+  return settings?.accentColor ?? 'purple';
+});
+
+/// 主题色 seed 映射
+const _accentColorSeeds = {
+  'purple': 0xFF6750A4,
+  'green': 0xFF00897B, // Teal 600 - 护眼
+  'blue': 0xFF1976D2,
+  'cyan': 0xFF00ACC1,
+};
+
+Color getAccentColor(String accentColor) =>
+    Color(_accentColorSeeds[accentColor] ?? 0xFF6750A4);
+
 /// 语言 Locale Provider — 由 settingsProvider 初始化，MaterialApp 可直接 watch
 final localeProvider = StateProvider<Locale?>((ref) {
   final settings = ref.watch(settingsProvider).valueOrNull;
@@ -32,11 +50,57 @@ Locale? _parseLocale(String locale) => switch (locale) {
   _ => null, // null = 跟随系统
 };
 
+/// 界面字体 Provider
+final uiFontProvider = StateProvider<String>((ref) {
+  final settings = ref.watch(settingsProvider).valueOrNull;
+  return settings?.uiFont ?? 'Noto Sans SC';
+});
+
+/// 界面字体大小 Provider
+final uiFontSizeProvider = StateProvider<double>((ref) {
+  final settings = ref.watch(settingsProvider).valueOrNull;
+  return settings?.uiFontSize ?? 14.0;
+});
+
+/// 交互字体 Provider
+final chatFontProvider = StateProvider<String>((ref) {
+  final settings = ref.watch(settingsProvider).valueOrNull;
+  return settings?.chatFont ?? 'Noto Sans SC';
+});
+
+/// 交互字体大小 Provider
+final chatFontSizeProvider = StateProvider<double>((ref) {
+  final settings = ref.watch(settingsProvider).valueOrNull;
+  return settings?.chatFontSize ?? 14.0;
+});
+
 final settingsProvider = AsyncNotifierProvider<SettingsNotifier, AppSettings>(
   SettingsNotifier.new,
 );
 
 class SettingsNotifier extends AsyncNotifier<AppSettings> {
+  /// 写入序列化锁 — 所有 update* 方法经此串行化，
+  /// 防止并发 read-modify-save 导致文件写冲突或状态覆盖。
+  Future<void> _writeLock = Future.value();
+
+  /// 将 [action] 追加到写入队列末尾，保证串行执行。
+  Future<void> _serialized(Future<void> Function() action) {
+    final prev = _writeLock;
+    final completer = Completer<void>();
+    _writeLock = completer.future;
+    () async {
+      // 等待上一个操作完成（即使它失败了也继续）
+      await prev.catchError((_) {});
+      try {
+        await action();
+        completer.complete();
+      } catch (e, st) {
+        completer.completeError(e, st);
+      }
+    }();
+    return completer.future;
+  }
+
   @override
   Future<AppSettings> build() async {
     final settings = await AppSettings.load();
@@ -73,7 +137,7 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     }
   }
 
-  Future<void> updateDatabasePath(String newPath) async {
+  Future<void> updateDatabasePath(String newPath) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
@@ -90,9 +154,9 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     final updated = current.copyWith(databasePath: newPath);
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
-  Future<void> updateHistoryPath(String newPath) async {
+  Future<void> updateHistoryPath(String newPath) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
@@ -105,19 +169,19 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     final updated = current.copyWith(historyPath: newPath);
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
-  Future<void> updatePandocPath(String newPath) async {
+  Future<void> updatePandocPath(String newPath) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
     final updated = current.copyWith(pandocPath: newPath);
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
   /// 更新技能存放目录 (迁移已安装技能到新路径)
-  Future<void> updateSkillsPath(String newPath) async {
+  Future<void> updateSkillsPath(String newPath) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
@@ -130,20 +194,20 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     final updated = current.copyWith(skillsPath: newPath);
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
   /// 更新工作目录
-  Future<void> updateWorkingDirectory(String newPath) async {
+  Future<void> updateWorkingDirectory(String newPath) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
     final updated = current.copyWith(workingDirectory: newPath);
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
   /// 更新 Qdrant 可执行文件路径 (空字符串表示恢复自动检测)
-  Future<void> updateQdrantPath(String newPath) async {
+  Future<void> updateQdrantPath(String newPath) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
@@ -152,10 +216,10 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     state = AsyncData(updated);
     // 通知 QdrantService 使用新路径 (下次启动生效)
     QdrantService.instance.setManualPath(newPath);
-  }
+  });
 
   /// 更新日志存放目录 (迁移已有日志文件到新路径)
-  Future<void> updateLogsPath(String newPath) async {
+  Future<void> updateLogsPath(String newPath) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
@@ -171,10 +235,10 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     final updated = current.copyWith(logsPath: newPath);
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
   /// 更新主题模式 ('system' / 'light' / 'dark')
-  Future<void> updateThemeMode(String mode) async {
+  Future<void> updateThemeMode(String mode) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
@@ -183,20 +247,32 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     state = AsyncData(updated);
     // 同步更新 themeModeProvider
     ref.read(themeModeProvider.notifier).state = _parseThemeMode(mode);
-  }
+  });
+
+  /// 更新主题色 ('purple' / 'green' / 'blue' / 'cyan')
+  Future<void> updateAccentColor(String color) => _serialized(() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    final updated = current.copyWith(accentColor: color);
+    await updated.save();
+    state = AsyncData(updated);
+    // 同步更新 accentColorProvider
+    ref.read(accentColorProvider.notifier).state = color;
+  });
 
   /// 更新失焦通知开关
-  Future<void> updateNotifyOnBlur(bool enabled) async {
+  Future<void> updateNotifyOnBlur(bool enabled) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
     final updated = current.copyWith(notifyOnBlur: enabled);
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
   /// 更新语言设置 ('system' / 'zh' / 'en')
-  Future<void> updateLocale(String locale) async {
+  Future<void> updateLocale(String locale) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
@@ -205,12 +281,61 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     state = AsyncData(updated);
     // 同步更新 localeProvider
     ref.read(localeProvider.notifier).state = _parseLocale(locale);
-  }
+  });
+
+  /// 更新界面字体
+  Future<void> updateUiFont(String font) => _serialized(() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(uiFont: font);
+    await updated.save();
+    state = AsyncData(updated);
+    ref.read(uiFontProvider.notifier).state = font;
+  });
+
+  /// 更新界面字体大小
+  Future<void> updateUiFontSize(double size) => _serialized(() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(uiFontSize: size);
+    await updated.save();
+    state = AsyncData(updated);
+    ref.read(uiFontSizeProvider.notifier).state = size;
+  });
+
+  /// 更新交互字体
+  Future<void> updateChatFont(String font) => _serialized(() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(chatFont: font);
+    await updated.save();
+    state = AsyncData(updated);
+    ref.read(chatFontProvider.notifier).state = font;
+  });
+
+  /// 更新交互字体大小
+  Future<void> updateChatFontSize(double size) => _serialized(() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(chatFontSize: size);
+    await updated.save();
+    state = AsyncData(updated);
+    ref.read(chatFontSizeProvider.notifier).state = size;
+  });
+
+  /// 更新回车行为 ('send' / 'newline')
+  Future<void> updateEnterAction(String action) => _serialized(() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final updated = current.copyWith(enterAction: action);
+    await updated.save();
+    state = AsyncData(updated);
+  });
 
   /// 新增或更新一个嵌入式模型配置。
   /// 若 [config].id 已存在则更新，否则追加。
   /// 列表中首个加入的配置会自动设为选中。
-  Future<void> upsertEmbedding(EmbeddingConfig config) async {
+  Future<void> upsertEmbedding(EmbeddingConfig config) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
@@ -233,10 +358,10 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     );
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
   /// 删除指定 id 的嵌入式模型配置。
-  Future<void> deleteEmbedding(String id) async {
+  Future<void> deleteEmbedding(String id) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
 
@@ -254,10 +379,10 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     );
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
   /// 设置当前选中(默认)的嵌入式模型。
-  Future<void> selectEmbedding(String id) async {
+  Future<void> selectEmbedding(String id) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
     if (!current.embeddings.any((e) => e.id == id)) return;
@@ -265,7 +390,7 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     final updated = current.copyWith(selectedEmbeddingId: id);
     await updated.save();
     state = AsyncData(updated);
-  }
+  });
 
   Future<void> _migrateFile(String oldPath, String newPath) async {
     final oldFile = File(oldPath);

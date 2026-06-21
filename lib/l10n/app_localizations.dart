@@ -169,6 +169,12 @@ abstract class S {
   /// **'日志'**
   String get navLogs;
 
+  /// No description provided for @navPet.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物'**
+  String get navPet;
+
   /// No description provided for @settingsTitle.
   ///
   /// In zh, this message translates to:
@@ -187,6 +193,36 @@ abstract class S {
   /// **'主题'**
   String get settingsTheme;
 
+  /// No description provided for @settingsAccentColorTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'主题色'**
+  String get settingsAccentColorTitle;
+
+  /// No description provided for @settingsAccentColorPurple.
+  ///
+  /// In zh, this message translates to:
+  /// **'紫色'**
+  String get settingsAccentColorPurple;
+
+  /// No description provided for @settingsAccentColorGreen.
+  ///
+  /// In zh, this message translates to:
+  /// **'护眼'**
+  String get settingsAccentColorGreen;
+
+  /// No description provided for @settingsAccentColorBlue.
+  ///
+  /// In zh, this message translates to:
+  /// **'蓝色'**
+  String get settingsAccentColorBlue;
+
+  /// No description provided for @settingsAccentColorCyan.
+  ///
+  /// In zh, this message translates to:
+  /// **'青色'**
+  String get settingsAccentColorCyan;
+
   /// No description provided for @settingsNotifyOnBlur.
   ///
   /// In zh, this message translates to:
@@ -198,6 +234,36 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'窗口不在前台时，对话完成后弹出系统通知'**
   String get settingsNotifyOnBlurDesc;
+
+  /// No description provided for @settingsEnterAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'回车行为'**
+  String get settingsEnterAction;
+
+  /// No description provided for @settingsEnterSend.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送'**
+  String get settingsEnterSend;
+
+  /// No description provided for @settingsEnterNewline.
+  ///
+  /// In zh, this message translates to:
+  /// **'换行'**
+  String get settingsEnterNewline;
+
+  /// No description provided for @settingsEnterSendHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Enter 直接发送'**
+  String get settingsEnterSendHint;
+
+  /// No description provided for @settingsEnterNewlineHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Enter 换行，按钮发送'**
+  String get settingsEnterNewlineHint;
 
   /// No description provided for @settingsStorage.
   ///
@@ -270,6 +336,90 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'语言'**
   String get settingsLanguage;
+
+  /// No description provided for @settingsFont.
+  ///
+  /// In zh, this message translates to:
+  /// **'字体设置'**
+  String get settingsFont;
+
+  /// No description provided for @settingsUiFont.
+  ///
+  /// In zh, this message translates to:
+  /// **'界面字体'**
+  String get settingsUiFont;
+
+  /// No description provided for @settingsUiFontDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'控制导航、设置等非对话区域的字体'**
+  String get settingsUiFontDesc;
+
+  /// No description provided for @settingsUiFontSize.
+  ///
+  /// In zh, this message translates to:
+  /// **'界面字号'**
+  String get settingsUiFontSize;
+
+  /// No description provided for @settingsChatFont.
+  ///
+  /// In zh, this message translates to:
+  /// **'交互字体'**
+  String get settingsChatFont;
+
+  /// No description provided for @settingsChatFontDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'控制对话和多Agent协作区域的字体'**
+  String get settingsChatFontDesc;
+
+  /// No description provided for @settingsChatFontSize.
+  ///
+  /// In zh, this message translates to:
+  /// **'交互字号'**
+  String get settingsChatFontSize;
+
+  /// No description provided for @settingsFontDefault.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认'**
+  String get settingsFontDefault;
+
+  /// No description provided for @settingsFontPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'字体预览 AaBbCc 你好世界 123'**
+  String get settingsFontPreview;
+
+  /// No description provided for @settingsCustomFont.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义字体'**
+  String get settingsCustomFont;
+
+  /// No description provided for @settingsCustomFontDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'导入本地 .ttf/.otf 字体文件，存放于 .RemindAI/fonts/ 目录'**
+  String get settingsCustomFontDesc;
+
+  /// No description provided for @settingsCustomFontImport.
+  ///
+  /// In zh, this message translates to:
+  /// **'导入字体'**
+  String get settingsCustomFontImport;
+
+  /// No description provided for @settingsCustomFontPick.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择字体文件 (.ttf / .otf)'**
+  String get settingsCustomFontPick;
+
+  /// No description provided for @settingsCustomFontImported.
+  ///
+  /// In zh, this message translates to:
+  /// **'字体导入成功'**
+  String get settingsCustomFontImported;
 
   /// No description provided for @settingsChange.
   ///
@@ -829,6 +979,12 @@ abstract class S {
   /// **'思考中...'**
   String get msgThinking;
 
+  /// No description provided for @msgInterrupted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已中断'**
+  String get msgInterrupted;
+
   /// No description provided for @toolCardArgs.
   ///
   /// In zh, this message translates to:
@@ -1081,6 +1237,12 @@ abstract class S {
   /// **'点击卡片设为默认，长按拖动可调整顺序'**
   String get modelsReorderHint;
 
+  /// No description provided for @modelsSearchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入关键词搜索模型...'**
+  String get modelsSearchHint;
+
   /// No description provided for @skillsTitle.
   ///
   /// In zh, this message translates to:
@@ -1314,6 +1476,78 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'{name} 设置'**
   String toolsSettingsOf(String name);
+
+  /// No description provided for @toolShortcutsName.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图'**
+  String get toolShortcutsName;
+
+  /// No description provided for @toolShortcutsDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看和自定义应用快捷键'**
+  String get toolShortcutsDesc;
+
+  /// No description provided for @toolShortcutsCategory.
+  ///
+  /// In zh, this message translates to:
+  /// **'快捷键'**
+  String get toolShortcutsCategory;
+
+  /// No description provided for @shortcutReset.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复默认'**
+  String get shortcutReset;
+
+  /// No description provided for @shortcutResetDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'快捷键已恢复默认'**
+  String get shortcutResetDone;
+
+  /// No description provided for @shortcutHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击编辑按钮修改快捷键，需至少包含一个修饰键（Ctrl/Shift/Alt）'**
+  String get shortcutHint;
+
+  /// No description provided for @shortcutEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑'**
+  String get shortcutEdit;
+
+  /// No description provided for @shortcutEditTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改「{name}」快捷键'**
+  String shortcutEditTitle(String name);
+
+  /// No description provided for @shortcutEditHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'按下新的组合键'**
+  String get shortcutEditHint;
+
+  /// No description provided for @shortcutEditWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待按键...'**
+  String get shortcutEditWaiting;
+
+  /// No description provided for @shortcutCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消'**
+  String get shortcutCancel;
+
+  /// No description provided for @shortcutConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认'**
+  String get shortcutConfirm;
 
   /// No description provided for @multiAgentTitle.
   ///
@@ -2281,6 +2515,48 @@ abstract class S {
   /// **'文件不存在：{path}'**
   String attachFileNotExist(String path);
 
+  /// No description provided for @imgSaveAs.
+  ///
+  /// In zh, this message translates to:
+  /// **'另存为…'**
+  String get imgSaveAs;
+
+  /// No description provided for @imgCopyPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制路径'**
+  String get imgCopyPath;
+
+  /// No description provided for @imgOpenExternal.
+  ///
+  /// In zh, this message translates to:
+  /// **'在文件夹中显示'**
+  String get imgOpenExternal;
+
+  /// No description provided for @imgSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'图片已保存'**
+  String get imgSaved;
+
+  /// No description provided for @imgPathCopied.
+  ///
+  /// In zh, this message translates to:
+  /// **'路径已复制'**
+  String get imgPathCopied;
+
+  /// No description provided for @codeSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'源代码'**
+  String get codeSource;
+
+  /// No description provided for @codePreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'预览'**
+  String get codePreview;
+
   /// No description provided for @scrollUp.
   ///
   /// In zh, this message translates to:
@@ -2479,6 +2755,42 @@ abstract class S {
   /// **'开关控制启用状态，长按拖动可调整顺序'**
   String get skillsReorderHint;
 
+  /// No description provided for @skillsMarketTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'推荐技能市场'**
+  String get skillsMarketTitle;
+
+  /// No description provided for @skillsMarketHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'从以下第三方市场发现并下载技能包（ZIP），再用下方导入功能加载到本应用。'**
+  String get skillsMarketHint;
+
+  /// No description provided for @skillsMarketSkillsMp.
+  ///
+  /// In zh, this message translates to:
+  /// **'聚合多来源的技能市场'**
+  String get skillsMarketSkillsMp;
+
+  /// No description provided for @skillsMarketClaudSkills.
+  ///
+  /// In zh, this message translates to:
+  /// **'Claude 技能分享社区'**
+  String get skillsMarketClaudSkills;
+
+  /// No description provided for @skillsMarketSkillsSh.
+  ///
+  /// In zh, this message translates to:
+  /// **'开源技能索引与命令行工具'**
+  String get skillsMarketSkillsSh;
+
+  /// No description provided for @skillsMarketOpenFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开链接：{url}'**
+  String skillsMarketOpenFailed(String url);
+
   /// No description provided for @skillsBuiltin.
   ///
   /// In zh, this message translates to:
@@ -2491,6 +2803,36 @@ abstract class S {
   /// **'{count} 个工具'**
   String skillsToolCount(int count);
 
+  /// No description provided for @skillsNoDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'无描述'**
+  String get skillsNoDesc;
+
+  /// No description provided for @skillsViewMd.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看 SKILL.md'**
+  String get skillsViewMd;
+
+  /// No description provided for @skillsEditDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑描述'**
+  String get skillsEditDesc;
+
+  /// No description provided for @skillsEditDescTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑技能描述'**
+  String get skillsEditDescTitle;
+
+  /// No description provided for @skillsEditDescHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'为该技能填写一段描述（仅用于展示）'**
+  String get skillsEditDescHint;
+
   /// No description provided for @servicesTitle.
   ///
   /// In zh, this message translates to:
@@ -2502,6 +2844,192 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'技能'**
   String get servicesSkillsTab;
+
+  /// No description provided for @servicesToolchainTab.
+  ///
+  /// In zh, this message translates to:
+  /// **'工具链'**
+  String get servicesToolchainTab;
+
+  /// No description provided for @toolchainDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'以下是推荐的命令行工具。检测以系统环境变量 PATH 可寻为准 —— 只要工具已加入 PATH，模型即可在工具外壳中调用。为避免无谓的性能开销，默认不自动检测，点击下方按钮手动探测。'**
+  String get toolchainDescription;
+
+  /// No description provided for @toolchainDetect.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测工具'**
+  String get toolchainDetect;
+
+  /// No description provided for @toolchainDetecting.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测中'**
+  String get toolchainDetecting;
+
+  /// No description provided for @toolchainSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'已找到 {found} / {total} 个'**
+  String toolchainSummary(int found, int total);
+
+  /// No description provided for @toolchainInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'获取'**
+  String get toolchainInstall;
+
+  /// No description provided for @toolchainOpenFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开链接：{url}'**
+  String toolchainOpenFailed(String url);
+
+  /// No description provided for @toolchainGroupRuntime.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行时'**
+  String get toolchainGroupRuntime;
+
+  /// No description provided for @toolchainGroupPkg.
+  ///
+  /// In zh, this message translates to:
+  /// **'包管理器'**
+  String get toolchainGroupPkg;
+
+  /// No description provided for @toolchainGroupVcs.
+  ///
+  /// In zh, this message translates to:
+  /// **'版本控制'**
+  String get toolchainGroupVcs;
+
+  /// No description provided for @toolchainGroupDoc.
+  ///
+  /// In zh, this message translates to:
+  /// **'文档排版'**
+  String get toolchainGroupDoc;
+
+  /// No description provided for @toolchainGroupMedia.
+  ///
+  /// In zh, this message translates to:
+  /// **'多媒体'**
+  String get toolchainGroupMedia;
+
+  /// No description provided for @toolchainGroupNet.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络'**
+  String get toolchainGroupNet;
+
+  /// No description provided for @toolchainDescNode.
+  ///
+  /// In zh, this message translates to:
+  /// **'JavaScript / TypeScript 运行时，执行 JS 脚本与构建工具'**
+  String get toolchainDescNode;
+
+  /// No description provided for @toolchainDescBun.
+  ///
+  /// In zh, this message translates to:
+  /// **'高性能 JS/TS 运行时，自带打包与包管理，启动极快'**
+  String get toolchainDescBun;
+
+  /// No description provided for @toolchainDescPython.
+  ///
+  /// In zh, this message translates to:
+  /// **'Python 解释器，运行数据处理、绘图与自动化脚本'**
+  String get toolchainDescPython;
+
+  /// No description provided for @toolchainDescDeno.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全的 JS/TS 运行时，原生支持 TypeScript'**
+  String get toolchainDescDeno;
+
+  /// No description provided for @toolchainDescNpm.
+  ///
+  /// In zh, this message translates to:
+  /// **'Node 默认包管理器'**
+  String get toolchainDescNpm;
+
+  /// No description provided for @toolchainDescPnpm.
+  ///
+  /// In zh, this message translates to:
+  /// **'快速、节省磁盘的 Node 包管理器'**
+  String get toolchainDescPnpm;
+
+  /// No description provided for @toolchainDescYarn.
+  ///
+  /// In zh, this message translates to:
+  /// **'另一款流行的 Node 包管理器'**
+  String get toolchainDescYarn;
+
+  /// No description provided for @toolchainDescPip.
+  ///
+  /// In zh, this message translates to:
+  /// **'Python 包安装器，安装第三方库'**
+  String get toolchainDescPip;
+
+  /// No description provided for @toolchainDescUv.
+  ///
+  /// In zh, this message translates to:
+  /// **'极速 Python 包与项目管理器（Rust 实现）'**
+  String get toolchainDescUv;
+
+  /// No description provided for @toolchainDescGit.
+  ///
+  /// In zh, this message translates to:
+  /// **'分布式版本控制，克隆与管理代码仓库'**
+  String get toolchainDescGit;
+
+  /// No description provided for @toolchainDescPandoc.
+  ///
+  /// In zh, this message translates to:
+  /// **'万能文档转换器，Markdown / Word / PDF 互转'**
+  String get toolchainDescPandoc;
+
+  /// No description provided for @toolchainDescPdftotext.
+  ///
+  /// In zh, this message translates to:
+  /// **'Poppler 工具集，从 PDF 提取文本（附件 PDF 解析依赖它）'**
+  String get toolchainDescPdftotext;
+
+  /// No description provided for @toolchainDescXelatex.
+  ///
+  /// In zh, this message translates to:
+  /// **'LaTeX 排版引擎，生成高质量 PDF'**
+  String get toolchainDescXelatex;
+
+  /// No description provided for @toolchainDescTypst.
+  ///
+  /// In zh, this message translates to:
+  /// **'现代排版系统，编译速度快，语法简洁'**
+  String get toolchainDescTypst;
+
+  /// No description provided for @toolchainDescFfmpeg.
+  ///
+  /// In zh, this message translates to:
+  /// **'音视频处理，转码、剪辑与格式转换'**
+  String get toolchainDescFfmpeg;
+
+  /// No description provided for @toolchainDescMagick.
+  ///
+  /// In zh, this message translates to:
+  /// **'ImageMagick，图片格式转换与批量处理'**
+  String get toolchainDescMagick;
+
+  /// No description provided for @toolchainDescCurl.
+  ///
+  /// In zh, this message translates to:
+  /// **'命令行 HTTP 客户端，请求接口与下载文件'**
+  String get toolchainDescCurl;
+
+  /// No description provided for @toolchainDescWget.
+  ///
+  /// In zh, this message translates to:
+  /// **'命令行下载工具，递归抓取网络资源'**
+  String get toolchainDescWget;
 
   /// No description provided for @expertEditorEdit.
   ///
@@ -3108,288 +3636,6 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'开发'**
   String get fcToolCategory;
-
-  /// No description provided for @fcShapeRect.
-  ///
-  /// In zh, this message translates to:
-  /// **'矩形'**
-  String get fcShapeRect;
-
-  /// No description provided for @fcShapeRoundRect.
-  ///
-  /// In zh, this message translates to:
-  /// **'圆角矩形'**
-  String get fcShapeRoundRect;
-
-  /// No description provided for @fcShapeDiamond.
-  ///
-  /// In zh, this message translates to:
-  /// **'菱形'**
-  String get fcShapeDiamond;
-
-  /// No description provided for @fcShapeCircle.
-  ///
-  /// In zh, this message translates to:
-  /// **'圆形'**
-  String get fcShapeCircle;
-
-  /// No description provided for @fcShapeParallelogram.
-  ///
-  /// In zh, this message translates to:
-  /// **'平行四边形'**
-  String get fcShapeParallelogram;
-
-  /// No description provided for @fcShapeHexagon.
-  ///
-  /// In zh, this message translates to:
-  /// **'六边形'**
-  String get fcShapeHexagon;
-
-  /// No description provided for @fcShapeDatabase.
-  ///
-  /// In zh, this message translates to:
-  /// **'数据库'**
-  String get fcShapeDatabase;
-
-  /// No description provided for @fcShapeCapsule.
-  ///
-  /// In zh, this message translates to:
-  /// **'胶囊形'**
-  String get fcShapeCapsule;
-
-  /// No description provided for @fcArrowSingle.
-  ///
-  /// In zh, this message translates to:
-  /// **'单向箭头'**
-  String get fcArrowSingle;
-
-  /// No description provided for @fcArrowDouble.
-  ///
-  /// In zh, this message translates to:
-  /// **'双向箭头'**
-  String get fcArrowDouble;
-
-  /// No description provided for @fcArrowNone.
-  ///
-  /// In zh, this message translates to:
-  /// **'无箭头'**
-  String get fcArrowNone;
-
-  /// No description provided for @fcLineSolid.
-  ///
-  /// In zh, this message translates to:
-  /// **'实线'**
-  String get fcLineSolid;
-
-  /// No description provided for @fcLineDashed.
-  ///
-  /// In zh, this message translates to:
-  /// **'虚线'**
-  String get fcLineDashed;
-
-  /// No description provided for @fcLineDotted.
-  ///
-  /// In zh, this message translates to:
-  /// **'点线'**
-  String get fcLineDotted;
-
-  /// No description provided for @fcUnsavedTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'未保存的更改'**
-  String get fcUnsavedTitle;
-
-  /// No description provided for @fcUnsavedContent.
-  ///
-  /// In zh, this message translates to:
-  /// **'当前流程图有未保存的修改，是否保存？'**
-  String get fcUnsavedContent;
-
-  /// No description provided for @fcDontSave.
-  ///
-  /// In zh, this message translates to:
-  /// **'不保存'**
-  String get fcDontSave;
-
-  /// No description provided for @fcSaveTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'保存流程图'**
-  String get fcSaveTitle;
-
-  /// No description provided for @fcDefaultFilename.
-  ///
-  /// In zh, this message translates to:
-  /// **'未命名.fc.json'**
-  String get fcDefaultFilename;
-
-  /// No description provided for @fcSaved.
-  ///
-  /// In zh, this message translates to:
-  /// **'已保存: {path}'**
-  String fcSaved(String path);
-
-  /// No description provided for @fcSaveFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'保存失败: {error}'**
-  String fcSaveFailed(String error);
-
-  /// No description provided for @fcOpenTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'打开流程图'**
-  String get fcOpenTitle;
-
-  /// No description provided for @fcOpened.
-  ///
-  /// In zh, this message translates to:
-  /// **'已打开: {path}'**
-  String fcOpened(String path);
-
-  /// No description provided for @fcOpenFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'打开失败: {error}'**
-  String fcOpenFailed(String error);
-
-  /// No description provided for @fcNewChart.
-  ///
-  /// In zh, this message translates to:
-  /// **'新建流程图'**
-  String get fcNewChart;
-
-  /// No description provided for @fcCanvasNotReady.
-  ///
-  /// In zh, this message translates to:
-  /// **'画布未就绪'**
-  String get fcCanvasNotReady;
-
-  /// No description provided for @fcImageFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'图片生成失败'**
-  String get fcImageFailed;
-
-  /// No description provided for @fcExportPng.
-  ///
-  /// In zh, this message translates to:
-  /// **'导出流程图为 PNG'**
-  String get fcExportPng;
-
-  /// No description provided for @fcExported.
-  ///
-  /// In zh, this message translates to:
-  /// **'已导出: {path}'**
-  String fcExported(String path);
-
-  /// No description provided for @fcExportFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'导出失败: {error}'**
-  String fcExportFailed(String error);
-
-  /// No description provided for @fcBtnNew.
-  ///
-  /// In zh, this message translates to:
-  /// **'新建'**
-  String get fcBtnNew;
-
-  /// No description provided for @fcBtnOpen.
-  ///
-  /// In zh, this message translates to:
-  /// **'打开'**
-  String get fcBtnOpen;
-
-  /// No description provided for @fcBtnSave.
-  ///
-  /// In zh, this message translates to:
-  /// **'保存'**
-  String get fcBtnSave;
-
-  /// No description provided for @fcBtnExportImage.
-  ///
-  /// In zh, this message translates to:
-  /// **'导出图片'**
-  String get fcBtnExportImage;
-
-  /// No description provided for @fcBtnShowGrid.
-  ///
-  /// In zh, this message translates to:
-  /// **'显示网格'**
-  String get fcBtnShowGrid;
-
-  /// No description provided for @fcBtnHideGrid.
-  ///
-  /// In zh, this message translates to:
-  /// **'隐藏网格'**
-  String get fcBtnHideGrid;
-
-  /// No description provided for @fcBtnFitCanvas.
-  ///
-  /// In zh, this message translates to:
-  /// **'适应画布'**
-  String get fcBtnFitCanvas;
-
-  /// No description provided for @fcBtnSelectAll.
-  ///
-  /// In zh, this message translates to:
-  /// **'全选'**
-  String get fcBtnSelectAll;
-
-  /// No description provided for @fcBtnDeleteSelected.
-  ///
-  /// In zh, this message translates to:
-  /// **'删除选中'**
-  String get fcBtnDeleteSelected;
-
-  /// No description provided for @fcStatusReady.
-  ///
-  /// In zh, this message translates to:
-  /// **'就绪 · 点击左侧形状添加节点，从端口拖线连接'**
-  String get fcStatusReady;
-
-  /// No description provided for @fcStatusNodes.
-  ///
-  /// In zh, this message translates to:
-  /// **'节点: {count}'**
-  String fcStatusNodes(int count, int edges);
-
-  /// No description provided for @fcCustomColor.
-  ///
-  /// In zh, this message translates to:
-  /// **'自定义颜色'**
-  String get fcCustomColor;
-
-  /// No description provided for @fcClickToAdd.
-  ///
-  /// In zh, this message translates to:
-  /// **'点击添加到画布'**
-  String get fcClickToAdd;
-
-  /// No description provided for @fcNodeColor.
-  ///
-  /// In zh, this message translates to:
-  /// **'节点颜色'**
-  String get fcNodeColor;
-
-  /// No description provided for @fcHelpText.
-  ///
-  /// In zh, this message translates to:
-  /// **'操作提示:\n• 点击形状直接添加节点\n• 双击节点编辑文字/样式\n• 从节点边缘拖线连接\n• 滚轮缩放，拖拽画布'**
-  String get fcHelpText;
-
-  /// No description provided for @fcEditNode.
-  ///
-  /// In zh, this message translates to:
-  /// **'编辑节点'**
-  String get fcEditNode;
-
-  /// No description provided for @fcTextContent.
-  ///
-  /// In zh, this message translates to:
-  /// **'文本内容'**
-  String get fcTextContent;
 
   /// No description provided for @siyuToolName.
   ///
@@ -4117,6 +4363,288 @@ abstract class S {
   /// **'未命名模型'**
   String get modelNameFallback;
 
+  /// No description provided for @fcShapeRect.
+  ///
+  /// In zh, this message translates to:
+  /// **'矩形'**
+  String get fcShapeRect;
+
+  /// No description provided for @fcShapeRoundRect.
+  ///
+  /// In zh, this message translates to:
+  /// **'圆角矩形'**
+  String get fcShapeRoundRect;
+
+  /// No description provided for @fcShapeDiamond.
+  ///
+  /// In zh, this message translates to:
+  /// **'菱形'**
+  String get fcShapeDiamond;
+
+  /// No description provided for @fcShapeCircle.
+  ///
+  /// In zh, this message translates to:
+  /// **'圆形'**
+  String get fcShapeCircle;
+
+  /// No description provided for @fcShapeParallelogram.
+  ///
+  /// In zh, this message translates to:
+  /// **'平行四边形'**
+  String get fcShapeParallelogram;
+
+  /// No description provided for @fcShapeHexagon.
+  ///
+  /// In zh, this message translates to:
+  /// **'六边形'**
+  String get fcShapeHexagon;
+
+  /// No description provided for @fcShapeDatabase.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据库'**
+  String get fcShapeDatabase;
+
+  /// No description provided for @fcShapeCapsule.
+  ///
+  /// In zh, this message translates to:
+  /// **'胶囊形'**
+  String get fcShapeCapsule;
+
+  /// No description provided for @fcArrowSingle.
+  ///
+  /// In zh, this message translates to:
+  /// **'单向箭头'**
+  String get fcArrowSingle;
+
+  /// No description provided for @fcArrowDouble.
+  ///
+  /// In zh, this message translates to:
+  /// **'双向箭头'**
+  String get fcArrowDouble;
+
+  /// No description provided for @fcArrowNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'无箭头'**
+  String get fcArrowNone;
+
+  /// No description provided for @fcLineSolid.
+  ///
+  /// In zh, this message translates to:
+  /// **'实线'**
+  String get fcLineSolid;
+
+  /// No description provided for @fcLineDashed.
+  ///
+  /// In zh, this message translates to:
+  /// **'虚线'**
+  String get fcLineDashed;
+
+  /// No description provided for @fcLineDotted.
+  ///
+  /// In zh, this message translates to:
+  /// **'点线'**
+  String get fcLineDotted;
+
+  /// No description provided for @fcUnsavedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'未保存的更改'**
+  String get fcUnsavedTitle;
+
+  /// No description provided for @fcUnsavedContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前流程图有未保存的修改，是否保存？'**
+  String get fcUnsavedContent;
+
+  /// No description provided for @fcDontSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'不保存'**
+  String get fcDontSave;
+
+  /// No description provided for @fcSaveTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存流程图'**
+  String get fcSaveTitle;
+
+  /// No description provided for @fcDefaultFilename.
+  ///
+  /// In zh, this message translates to:
+  /// **'未命名.fc.json'**
+  String get fcDefaultFilename;
+
+  /// No description provided for @fcSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存: {path}'**
+  String fcSaved(String path);
+
+  /// No description provided for @fcSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存失败: {error}'**
+  String fcSaveFailed(String error);
+
+  /// No description provided for @fcOpenTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开流程图'**
+  String get fcOpenTitle;
+
+  /// No description provided for @fcOpened.
+  ///
+  /// In zh, this message translates to:
+  /// **'已打开: {path}'**
+  String fcOpened(String path);
+
+  /// No description provided for @fcOpenFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开失败: {error}'**
+  String fcOpenFailed(String error);
+
+  /// No description provided for @fcNewChart.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建流程图'**
+  String get fcNewChart;
+
+  /// No description provided for @fcCanvasNotReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'画布未就绪'**
+  String get fcCanvasNotReady;
+
+  /// No description provided for @fcImageFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'图片生成失败'**
+  String get fcImageFailed;
+
+  /// No description provided for @fcExportPng.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出流程图为 PNG'**
+  String get fcExportPng;
+
+  /// No description provided for @fcExported.
+  ///
+  /// In zh, this message translates to:
+  /// **'已导出: {path}'**
+  String fcExported(String path);
+
+  /// No description provided for @fcExportFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出失败: {error}'**
+  String fcExportFailed(String error);
+
+  /// No description provided for @fcBtnNew.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建'**
+  String get fcBtnNew;
+
+  /// No description provided for @fcBtnOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开'**
+  String get fcBtnOpen;
+
+  /// No description provided for @fcBtnSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存'**
+  String get fcBtnSave;
+
+  /// No description provided for @fcBtnExportImage.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出图片'**
+  String get fcBtnExportImage;
+
+  /// No description provided for @fcBtnHideGrid.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐藏网格'**
+  String get fcBtnHideGrid;
+
+  /// No description provided for @fcBtnShowGrid.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示网格'**
+  String get fcBtnShowGrid;
+
+  /// No description provided for @fcBtnFitCanvas.
+  ///
+  /// In zh, this message translates to:
+  /// **'适应画布'**
+  String get fcBtnFitCanvas;
+
+  /// No description provided for @fcBtnSelectAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全选'**
+  String get fcBtnSelectAll;
+
+  /// No description provided for @fcBtnDeleteSelected.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除选中'**
+  String get fcBtnDeleteSelected;
+
+  /// No description provided for @fcStatusReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'就绪 · 点击左侧形状添加节点，从端口拖线连接'**
+  String get fcStatusReady;
+
+  /// No description provided for @fcStatusNodes.
+  ///
+  /// In zh, this message translates to:
+  /// **'节点: {count}'**
+  String fcStatusNodes(int count, int edges);
+
+  /// No description provided for @fcCustomColor.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义颜色'**
+  String get fcCustomColor;
+
+  /// No description provided for @fcClickToAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击添加到画布'**
+  String get fcClickToAdd;
+
+  /// No description provided for @fcNodeColor.
+  ///
+  /// In zh, this message translates to:
+  /// **'节点颜色'**
+  String get fcNodeColor;
+
+  /// No description provided for @fcHelpText.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作提示:\n• 点击形状直接添加节点\n• 双击节点编辑文字/样式\n• 从节点边缘拖线连接\n• 滚轮缩放，拖拽画布'**
+  String get fcHelpText;
+
+  /// No description provided for @fcEditNode.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑节点'**
+  String get fcEditNode;
+
+  /// No description provided for @fcTextContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'文本内容'**
+  String get fcTextContent;
+
   /// No description provided for @servicesSearchTab.
   ///
   /// In zh, this message translates to:
@@ -4236,6 +4764,1254 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'连接成功，API Key 有效'**
   String get searchTestSuccess;
+
+  /// No description provided for @petCatGray.
+  ///
+  /// In zh, this message translates to:
+  /// **'灰色小猫'**
+  String get petCatGray;
+
+  /// No description provided for @petCatOrange.
+  ///
+  /// In zh, this message translates to:
+  /// **'橘色小猫'**
+  String get petCatOrange;
+
+  /// No description provided for @petCatWhite.
+  ///
+  /// In zh, this message translates to:
+  /// **'白色小猫'**
+  String get petCatWhite;
+
+  /// No description provided for @petTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物设置'**
+  String get petTitle;
+
+  /// No description provided for @petShow.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示'**
+  String get petShow;
+
+  /// No description provided for @petSkinSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'精灵皮肤'**
+  String get petSkinSection;
+
+  /// No description provided for @petModelSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物模型 (AI)'**
+  String get petModelSection;
+
+  /// No description provided for @petModelHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择宠物使用的 AI 模型'**
+  String get petModelHint;
+
+  /// No description provided for @petModelLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载模型失败: {error}'**
+  String petModelLoadFailed(String error);
+
+  /// No description provided for @petTtsSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'语音合成'**
+  String get petTtsSection;
+
+  /// No description provided for @petTtsSystem.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统'**
+  String get petTtsSystem;
+
+  /// No description provided for @petTtsVolcano.
+  ///
+  /// In zh, this message translates to:
+  /// **'火山'**
+  String get petTtsVolcano;
+
+  /// No description provided for @petTtsAppId.
+  ///
+  /// In zh, this message translates to:
+  /// **'AppID'**
+  String get petTtsAppId;
+
+  /// No description provided for @petTtsAppIdHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'App ID'**
+  String get petTtsAppIdHint;
+
+  /// No description provided for @petTtsToken.
+  ///
+  /// In zh, this message translates to:
+  /// **'Token'**
+  String get petTtsToken;
+
+  /// No description provided for @petTtsTokenHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Access Token'**
+  String get petTtsTokenHint;
+
+  /// No description provided for @petTtsVoiceType.
+  ///
+  /// In zh, this message translates to:
+  /// **'音色'**
+  String get petTtsVoiceType;
+
+  /// No description provided for @petTtsVoiceTypeHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'voice_type (克隆音色 ID)'**
+  String get petTtsVoiceTypeHint;
+
+  /// No description provided for @petTtsSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存配置'**
+  String get petTtsSave;
+
+  /// No description provided for @petTtsSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'火山 TTS 配置已保存'**
+  String get petTtsSaved;
+
+  /// No description provided for @petTtsReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'✅ 配置完整'**
+  String get petTtsReady;
+
+  /// No description provided for @petTtsIncomplete.
+  ///
+  /// In zh, this message translates to:
+  /// **'⚠️ 请填写三项必填'**
+  String get petTtsIncomplete;
+
+  /// No description provided for @petTtsSpeedLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'语速({value})'**
+  String petTtsSpeedLabel(int value);
+
+  /// No description provided for @petTtsLoudnessLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'音量({value})'**
+  String petTtsLoudnessLabel(int value);
+
+  /// No description provided for @petTtsCredentialHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'凭证获取: 火山引擎控制台 → 语音合成 → 音色克隆\n参考: github.com/Radiant303/astrbot_plugin_clonetts'**
+  String get petTtsCredentialHint;
+
+  /// No description provided for @petBehaviorSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'回复行为'**
+  String get petBehaviorSection;
+
+  /// No description provided for @petTtsThresholdLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'语音阈值({value}字)'**
+  String petTtsThresholdLabel(int value);
+
+  /// No description provided for @petTtsThresholdHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'≤{value}字语音，超出文本气泡'**
+  String petTtsThresholdHint(int value);
+
+  /// No description provided for @petBubbleDismissLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'气泡倒计时({value}s)'**
+  String petBubbleDismissLabel(int value);
+
+  /// No description provided for @petBubbleDismissManual.
+  ///
+  /// In zh, this message translates to:
+  /// **'手动关闭气泡'**
+  String get petBubbleDismissManual;
+
+  /// No description provided for @petBubbleDismissAuto.
+  ///
+  /// In zh, this message translates to:
+  /// **'{value}秒后自动关闭气泡'**
+  String petBubbleDismissAuto(int value);
+
+  /// No description provided for @petCommandSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义右键指令'**
+  String get petCommandSection;
+
+  /// No description provided for @petCommandHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加自定义指令后会出现在右键菜单中'**
+  String get petCommandHint;
+
+  /// No description provided for @petCommandAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加指令'**
+  String get petCommandAdd;
+
+  /// No description provided for @petCommandAddTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加自定义指令'**
+  String get petCommandAddTitle;
+
+  /// No description provided for @petCommandEditTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑指令'**
+  String get petCommandEditTitle;
+
+  /// No description provided for @petCommandNameLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'指令名称'**
+  String get petCommandNameLabel;
+
+  /// No description provided for @petCommandNameHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：帮我优化'**
+  String get petCommandNameHint;
+
+  /// No description provided for @petCommandPromptLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统提示词'**
+  String get petCommandPromptLabel;
+
+  /// No description provided for @petCommandPromptHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：请帮我优化以下代码，提升性能和可读性：'**
+  String get petCommandPromptHint;
+
+  /// No description provided for @petTestSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试'**
+  String get petTestSection;
+
+  /// No description provided for @petTestShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'短语音'**
+  String get petTestShort;
+
+  /// No description provided for @petTestLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'长文本'**
+  String get petTestLong;
+
+  /// No description provided for @petDebugEvents.
+  ///
+  /// In zh, this message translates to:
+  /// **'事件'**
+  String get petDebugEvents;
+
+  /// No description provided for @petDebugAnimations.
+  ///
+  /// In zh, this message translates to:
+  /// **'动画'**
+  String get petDebugAnimations;
+
+  /// No description provided for @petDebugState.
+  ///
+  /// In zh, this message translates to:
+  /// **'状态'**
+  String get petDebugState;
+
+  /// No description provided for @petBubbleThinking.
+  ///
+  /// In zh, this message translates to:
+  /// **'小猫思考中...'**
+  String get petBubbleThinking;
+
+  /// No description provided for @petBubbleTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'小猫说'**
+  String get petBubbleTitle;
+
+  /// No description provided for @petBubbleGenerating.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在生成回答...'**
+  String get petBubbleGenerating;
+
+  /// No description provided for @petBubbleClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭'**
+  String get petBubbleClose;
+
+  /// No description provided for @petBubbleFeedAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂全文给小猫'**
+  String get petBubbleFeedAll;
+
+  /// No description provided for @petBubbleFeedFollow.
+  ///
+  /// In zh, this message translates to:
+  /// **'追问: {label}'**
+  String petBubbleFeedFollow(String label);
+
+  /// No description provided for @petBubbleFeedSelected.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂小猫: {label}'**
+  String petBubbleFeedSelected(String label);
+
+  /// No description provided for @petNoModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'喵~ 我还没有绑定模型，请在宠物设置中选择一个模型。'**
+  String get petNoModel;
+
+  /// No description provided for @petError.
+  ///
+  /// In zh, this message translates to:
+  /// **'喵呜...出错了: {error}'**
+  String petError(String error);
+
+  /// No description provided for @petContextHide.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐藏宠物'**
+  String get petContextHide;
+
+  /// No description provided for @petTestShortText.
+  ///
+  /// In zh, this message translates to:
+  /// **'你好呀主人！'**
+  String get petTestShortText;
+
+  /// No description provided for @petTestLongText.
+  ///
+  /// In zh, this message translates to:
+  /// **'主人你好，Flutter中Widget是不可变的，每次状态变化都会创建新的Widget树，这就是setState触发rebuild的原因。'**
+  String get petTestLongText;
+
+  /// No description provided for @petPageTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物'**
+  String get petPageTitle;
+
+  /// No description provided for @petTabSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置'**
+  String get petTabSettings;
+
+  /// No description provided for @petTabShop.
+  ///
+  /// In zh, this message translates to:
+  /// **'商店'**
+  String get petTabShop;
+
+  /// No description provided for @petTabAchievements.
+  ///
+  /// In zh, this message translates to:
+  /// **'成就'**
+  String get petTabAchievements;
+
+  /// No description provided for @petShopTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'商品'**
+  String get petShopTitle;
+
+  /// No description provided for @petInventoryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'背包'**
+  String get petInventoryTitle;
+
+  /// No description provided for @petInventoryEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'空空如也~'**
+  String get petInventoryEmpty;
+
+  /// No description provided for @petStatusTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'状态'**
+  String get petStatusTitle;
+
+  /// No description provided for @petStatusSatiety.
+  ///
+  /// In zh, this message translates to:
+  /// **'饱腹度'**
+  String get petStatusSatiety;
+
+  /// No description provided for @petStatusHappiness.
+  ///
+  /// In zh, this message translates to:
+  /// **'心情值'**
+  String get petStatusHappiness;
+
+  /// No description provided for @petStatusDecayHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'每小时饱腹 -5、心情 -3\n投喂食物可恢复'**
+  String get petStatusDecayHint;
+
+  /// No description provided for @petShopBuy.
+  ///
+  /// In zh, this message translates to:
+  /// **'购买'**
+  String get petShopBuy;
+
+  /// No description provided for @petShopBought.
+  ///
+  /// In zh, this message translates to:
+  /// **'购买了 {name}！'**
+  String petShopBought(String name);
+
+  /// No description provided for @petShopNoCoins.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物币不足~'**
+  String get petShopNoCoins;
+
+  /// No description provided for @petShopSatiety.
+  ///
+  /// In zh, this message translates to:
+  /// **'饱腹+{value}'**
+  String petShopSatiety(int value);
+
+  /// No description provided for @petShopHappiness.
+  ///
+  /// In zh, this message translates to:
+  /// **'心情+{value}'**
+  String petShopHappiness(int value);
+
+  /// No description provided for @petShopEffect.
+  ///
+  /// In zh, this message translates to:
+  /// **'特效: {effect}'**
+  String petShopEffect(String effect);
+
+  /// No description provided for @petAchievementsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'成就'**
+  String get petAchievementsTitle;
+
+  /// No description provided for @petAchievementsProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'{unlocked} / {total}'**
+  String petAchievementsProgress(int unlocked, int total);
+
+  /// No description provided for @petFeedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂小猫'**
+  String get petFeedTitle;
+
+  /// No description provided for @petFeedButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂'**
+  String get petFeedButton;
+
+  /// No description provided for @petFeedButtonEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'投喂 (背包空)'**
+  String get petFeedButtonEmpty;
+
+  /// No description provided for @petFeedEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'背包空空如也~ 去商店买点食物吧！'**
+  String get petFeedEmpty;
+
+  /// No description provided for @petFeedStat.
+  ///
+  /// In zh, this message translates to:
+  /// **'x{quantity}  饱腹+{satiety} 心情+{happiness}'**
+  String petFeedStat(int quantity, int satiety, int happiness);
+
+  /// No description provided for @petFeedClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭'**
+  String get petFeedClose;
+
+  /// No description provided for @petCoinReward.
+  ///
+  /// In zh, this message translates to:
+  /// **'+{amount} 宠物币~'**
+  String petCoinReward(int amount);
+
+  /// No description provided for @petFoodBanana.
+  ///
+  /// In zh, this message translates to:
+  /// **'香蕉'**
+  String get petFoodBanana;
+
+  /// No description provided for @petFoodBananaDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'软糯香甜，猫猫也爱'**
+  String get petFoodBananaDesc;
+
+  /// No description provided for @petFoodApple.
+  ///
+  /// In zh, this message translates to:
+  /// **'苹果'**
+  String get petFoodApple;
+
+  /// No description provided for @petFoodAppleDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'一天一苹果，猫猫不找我'**
+  String get petFoodAppleDesc;
+
+  /// No description provided for @petFoodPurpleGrape.
+  ///
+  /// In zh, this message translates to:
+  /// **'紫葡萄'**
+  String get petFoodPurpleGrape;
+
+  /// No description provided for @petFoodPurpleGrapeDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'颗颗饱满的甜蜜'**
+  String get petFoodPurpleGrapeDesc;
+
+  /// No description provided for @petFoodGreenGrape.
+  ///
+  /// In zh, this message translates to:
+  /// **'绿葡萄'**
+  String get petFoodGreenGrape;
+
+  /// No description provided for @petFoodGreenGrapeDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'清爽酸甜，开胃小食'**
+  String get petFoodGreenGrapeDesc;
+
+  /// No description provided for @petFoodPineapple.
+  ///
+  /// In zh, this message translates to:
+  /// **'菠萝'**
+  String get petFoodPineapple;
+
+  /// No description provided for @petFoodPineappleDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'热带风味，酸甜爆汁'**
+  String get petFoodPineappleDesc;
+
+  /// No description provided for @petFoodKiwi.
+  ///
+  /// In zh, this message translates to:
+  /// **'猕猴桃'**
+  String get petFoodKiwi;
+
+  /// No description provided for @petFoodKiwiDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'维C满满的小绿球'**
+  String get petFoodKiwiDesc;
+
+  /// No description provided for @petFoodCherry.
+  ///
+  /// In zh, this message translates to:
+  /// **'樱桃'**
+  String get petFoodCherry;
+
+  /// No description provided for @petFoodCherryDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'小巧精致，猫猫当玩具拍'**
+  String get petFoodCherryDesc;
+
+  /// No description provided for @petFoodStrawberry.
+  ///
+  /// In zh, this message translates to:
+  /// **'草莓'**
+  String get petFoodStrawberry;
+
+  /// No description provided for @petFoodStrawberryDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'红彤彤的快乐果实'**
+  String get petFoodStrawberryDesc;
+
+  /// No description provided for @petFoodCarrot.
+  ///
+  /// In zh, this message translates to:
+  /// **'胡萝卜'**
+  String get petFoodCarrot;
+
+  /// No description provided for @petFoodCarrotDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'对眼睛好，虽然猫不在乎'**
+  String get petFoodCarrotDesc;
+
+  /// No description provided for @petFoodTomato.
+  ///
+  /// In zh, this message translates to:
+  /// **'番茄'**
+  String get petFoodTomato;
+
+  /// No description provided for @petFoodTomatoDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'水灵灵的新鲜番茄'**
+  String get petFoodTomatoDesc;
+
+  /// No description provided for @petFoodEggplant.
+  ///
+  /// In zh, this message translates to:
+  /// **'茄子'**
+  String get petFoodEggplant;
+
+  /// No description provided for @petFoodEggplantDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'紫色的健康蔬菜'**
+  String get petFoodEggplantDesc;
+
+  /// No description provided for @petFoodPumpkin.
+  ///
+  /// In zh, this message translates to:
+  /// **'南瓜'**
+  String get petFoodPumpkin;
+
+  /// No description provided for @petFoodPumpkinDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'大大的南瓜，够吃好久'**
+  String get petFoodPumpkinDesc;
+
+  /// No description provided for @petFoodBroccoli.
+  ///
+  /// In zh, this message translates to:
+  /// **'花菜'**
+  String get petFoodBroccoli;
+
+  /// No description provided for @petFoodBroccoliDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'像一棵小树，营养丰富'**
+  String get petFoodBroccoliDesc;
+
+  /// No description provided for @petFoodGarlic.
+  ///
+  /// In zh, this message translates to:
+  /// **'洋蒜'**
+  String get petFoodGarlic;
+
+  /// No description provided for @petFoodGarlicDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'猫猫闻了打喷嚏'**
+  String get petFoodGarlicDesc;
+
+  /// No description provided for @petFoodPepper.
+  ///
+  /// In zh, this message translates to:
+  /// **'辣椒'**
+  String get petFoodPepper;
+
+  /// No description provided for @petFoodPepperDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'呼~辣到跳起来！'**
+  String get petFoodPepperDesc;
+
+  /// No description provided for @petFoodMushroom.
+  ///
+  /// In zh, this message translates to:
+  /// **'蘑菇'**
+  String get petFoodMushroom;
+
+  /// No description provided for @petFoodMushroomDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'鲜美的菌菇，猫猫意外喜欢'**
+  String get petFoodMushroomDesc;
+
+  /// No description provided for @petFoodHam.
+  ///
+  /// In zh, this message translates to:
+  /// **'火腿'**
+  String get petFoodHam;
+
+  /// No description provided for @petFoodHamDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'浓郁肉香，猫猫口水直流'**
+  String get petFoodHamDesc;
+
+  /// No description provided for @petFoodChicken.
+  ///
+  /// In zh, this message translates to:
+  /// **'鸡腿'**
+  String get petFoodChicken;
+
+  /// No description provided for @petFoodChickenDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'外焦里嫩的大鸡腿'**
+  String get petFoodChickenDesc;
+
+  /// No description provided for @petFoodFish.
+  ///
+  /// In zh, this message translates to:
+  /// **'鱼'**
+  String get petFoodFish;
+
+  /// No description provided for @petFoodFishDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'猫猫的最爱！没有之一'**
+  String get petFoodFishDesc;
+
+  /// No description provided for @petFoodLobster.
+  ///
+  /// In zh, this message translates to:
+  /// **'大龙虾'**
+  String get petFoodLobster;
+
+  /// No description provided for @petFoodLobsterDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'顶级海鲜盛宴，猫猫疯狂'**
+  String get petFoodLobsterDesc;
+
+  /// No description provided for @petAchieveFirstCoin.
+  ///
+  /// In zh, this message translates to:
+  /// **'第一桶金'**
+  String get petAchieveFirstCoin;
+
+  /// No description provided for @petAchieveFirstCoinDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'获得第一枚宠物币'**
+  String get petAchieveFirstCoinDesc;
+
+  /// No description provided for @petAchieveRich100.
+  ///
+  /// In zh, this message translates to:
+  /// **'小有积蓄'**
+  String get petAchieveRich100;
+
+  /// No description provided for @petAchieveRich100Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计获得 100 宠物币'**
+  String get petAchieveRich100Desc;
+
+  /// No description provided for @petAchieveRich500.
+  ///
+  /// In zh, this message translates to:
+  /// **'小富翁'**
+  String get petAchieveRich500;
+
+  /// No description provided for @petAchieveRich500Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计获得 500 宠物币'**
+  String get petAchieveRich500Desc;
+
+  /// No description provided for @petAchieveRich2000.
+  ///
+  /// In zh, this message translates to:
+  /// **'宠物大亨'**
+  String get petAchieveRich2000;
+
+  /// No description provided for @petAchieveRich2000Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计获得 2000 宠物币'**
+  String get petAchieveRich2000Desc;
+
+  /// No description provided for @petAchieveFirstFeed.
+  ///
+  /// In zh, this message translates to:
+  /// **'初次投喂'**
+  String get petAchieveFirstFeed;
+
+  /// No description provided for @petAchieveFirstFeedDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'第一次喂食小猫'**
+  String get petAchieveFirstFeedDesc;
+
+  /// No description provided for @petAchieveFeed10.
+  ///
+  /// In zh, this message translates to:
+  /// **'尽职铲屎官'**
+  String get petAchieveFeed10;
+
+  /// No description provided for @petAchieveFeed10Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计投喂 10 次'**
+  String get petAchieveFeed10Desc;
+
+  /// No description provided for @petAchieveFeed50.
+  ///
+  /// In zh, this message translates to:
+  /// **'猫奴认证'**
+  String get petAchieveFeed50;
+
+  /// No description provided for @petAchieveFeed50Desc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计投喂 50 次'**
+  String get petAchieveFeed50Desc;
+
+  /// No description provided for @petAchieveFullBelly.
+  ///
+  /// In zh, this message translates to:
+  /// **'吃撑了'**
+  String get petAchieveFullBelly;
+
+  /// No description provided for @petAchieveFullBellyDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'饱腹度达到 100'**
+  String get petAchieveFullBellyDesc;
+
+  /// No description provided for @petAchieveHappyMax.
+  ///
+  /// In zh, this message translates to:
+  /// **'快乐猫猫'**
+  String get petAchieveHappyMax;
+
+  /// No description provided for @petAchieveHappyMaxDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'心情值达到 100'**
+  String get petAchieveHappyMaxDesc;
+
+  /// No description provided for @petAchieveShopper.
+  ///
+  /// In zh, this message translates to:
+  /// **'购物达人'**
+  String get petAchieveShopper;
+
+  /// No description provided for @petAchieveShopperDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'在商店购买 20 次'**
+  String get petAchieveShopperDesc;
+
+  /// No description provided for @petAchieveChat1m.
+  ///
+  /// In zh, this message translates to:
+  /// **'话痨'**
+  String get petAchieveChat1m;
+
+  /// No description provided for @petAchieveChat1mDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计消耗 100万 tokens'**
+  String get petAchieveChat1mDesc;
+
+  /// No description provided for @petAchieveChat50m.
+  ///
+  /// In zh, this message translates to:
+  /// **'深度用户'**
+  String get petAchieveChat50m;
+
+  /// No description provided for @petAchieveChat50mDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计消耗 5000万 tokens'**
+  String get petAchieveChat50mDesc;
+
+  /// No description provided for @petAchieveChat100m.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 重度依赖'**
+  String get petAchieveChat100m;
+
+  /// No description provided for @petAchieveChat100mDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'累计消耗 1亿 tokens'**
+  String get petAchieveChat100mDesc;
+
+  /// No description provided for @servicesServerTab.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器'**
+  String get servicesServerTab;
+
+  /// No description provided for @serverTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器'**
+  String get serverTitle;
+
+  /// No description provided for @serverApiServiceTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'对外 API 服务'**
+  String get serverApiServiceTitle;
+
+  /// No description provided for @serverApiServiceDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'把本机配置的模型、技能、MCP、记忆与搜索能力以标准协议对外提供。默认仅本机可访问，必须配置访问令牌；开放到局域网前请确认安全设置。'**
+  String get serverApiServiceDesc;
+
+  /// No description provided for @apiServerTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'对外 API 服务'**
+  String get apiServerTitle;
+
+  /// No description provided for @apiServerRunningPort.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行中 · 端口 {port}'**
+  String apiServerRunningPort(Object port);
+
+  /// No description provided for @apiServerStopped.
+  ///
+  /// In zh, this message translates to:
+  /// **'已停止'**
+  String get apiServerStopped;
+
+  /// No description provided for @apiServerIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'以 OpenAI / Anthropic 兼容接口对外提供聚合能力 (模型/技能/MCP/记忆/搜索)。默认仅本机可访问 (127.0.0.1)，必须配置访问令牌。'**
+  String get apiServerIntro;
+
+  /// No description provided for @apiServerPort.
+  ///
+  /// In zh, this message translates to:
+  /// **'端口'**
+  String get apiServerPort;
+
+  /// No description provided for @apiServerToken.
+  ///
+  /// In zh, this message translates to:
+  /// **'访问令牌 (Bearer Token)'**
+  String get apiServerToken;
+
+  /// No description provided for @apiServerTokenRandom.
+  ///
+  /// In zh, this message translates to:
+  /// **'随机生成'**
+  String get apiServerTokenRandom;
+
+  /// No description provided for @apiServerTokenShow.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示令牌'**
+  String get apiServerTokenShow;
+
+  /// No description provided for @apiServerTokenHide.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐藏令牌'**
+  String get apiServerTokenHide;
+
+  /// No description provided for @apiServerTestInBrowser.
+  ///
+  /// In zh, this message translates to:
+  /// **'浏览器测试'**
+  String get apiServerTestInBrowser;
+
+  /// No description provided for @apiServerTestInBrowserFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开浏览器: {url}'**
+  String apiServerTestInBrowserFailed(Object url);
+
+  /// No description provided for @apiServerSaveRestart.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存端口/令牌并重启服务'**
+  String get apiServerSaveRestart;
+
+  /// No description provided for @apiServerProtocolTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'协议端点'**
+  String get apiServerProtocolTitle;
+
+  /// No description provided for @apiServerProtocolHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'按需开放三种对外端点，互不影响。令牌同时支持 Bearer 与 x-api-key 头。'**
+  String get apiServerProtocolHint;
+
+  /// No description provided for @apiServerOpenAiAggTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'OpenAI 聚合'**
+  String get apiServerOpenAiAggTitle;
+
+  /// No description provided for @apiServerOpenAiAggDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'跑 RemindAI 自己的 Agent (技能/MCP/记忆/搜索)，以 OpenAI 兼容格式输出。适合通用 OpenAI 客户端接入。'**
+  String get apiServerOpenAiAggDesc;
+
+  /// No description provided for @apiServerClaudeAggTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Claude 聚合'**
+  String get apiServerClaudeAggTitle;
+
+  /// No description provided for @apiServerClaudeAggDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'同样跑 RemindAI 聚合 Agent，但以 Anthropic 协议输出。让仅认 Claude 协议的客户端也能调用本服务的完整聚合能力，工具在服务端内部执行。'**
+  String get apiServerClaudeAggDesc;
+
+  /// No description provided for @apiServerClaudeProxyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Claude 纯代理'**
+  String get apiServerClaudeProxyTitle;
+
+  /// No description provided for @apiServerClaudeProxyDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'纯协议转换：透传客户端 (如 CherryStudio Agent) 携带的工具与任务给所选模型，由客户端自己执行工具 (不挂载本服务的技能/MCP/记忆)。适合用 Kimi/GPT/Gemini 驱动 CherryStudio 的 Agent 能力。'**
+  String get apiServerClaudeProxyDesc;
+
+  /// No description provided for @apiServerModelsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'可用模型'**
+  String get apiServerModelsTitle;
+
+  /// No description provided for @apiServerModelsHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'勾选对外开放的模型卡；全部不选 = 开放所有模型卡，客户端可任选'**
+  String get apiServerModelsHint;
+
+  /// No description provided for @apiServerModelsEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未配置任何模型卡'**
+  String get apiServerModelsEmpty;
+
+  /// No description provided for @apiServerModelsAllOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'未限制：当前开放全部模型卡'**
+  String get apiServerModelsAllOpen;
+
+  /// No description provided for @apiServerMemoryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'记忆'**
+  String get apiServerMemoryTitle;
+
+  /// No description provided for @apiServerMemoryHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'独立 = 与主程序记忆物理隔离；共享 = 读写主程序记忆 (谨慎)'**
+  String get apiServerMemoryHint;
+
+  /// No description provided for @apiServerMemoryNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'不挂载'**
+  String get apiServerMemoryNone;
+
+  /// No description provided for @apiServerMemoryIsolated.
+  ///
+  /// In zh, this message translates to:
+  /// **'独立记忆'**
+  String get apiServerMemoryIsolated;
+
+  /// No description provided for @apiServerMemoryShared.
+  ///
+  /// In zh, this message translates to:
+  /// **'共享主记忆'**
+  String get apiServerMemoryShared;
+
+  /// No description provided for @apiServerSearchTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'联网搜索'**
+  String get apiServerSearchTitle;
+
+  /// No description provided for @apiServerSearchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'需在搜索设置中配置对应引擎的 API Key'**
+  String get apiServerSearchHint;
+
+  /// No description provided for @apiServerSearchOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭'**
+  String get apiServerSearchOff;
+
+  /// No description provided for @apiServerSkillsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'技能'**
+  String get apiServerSkillsTitle;
+
+  /// No description provided for @apiServerSkillsHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'勾选后对外提供该技能的工具与提示词'**
+  String get apiServerSkillsHint;
+
+  /// No description provided for @apiServerSkillsEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无可用技能'**
+  String get apiServerSkillsEmpty;
+
+  /// No description provided for @apiServerMcpTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'MCP 服务'**
+  String get apiServerMcpTitle;
+
+  /// No description provided for @apiServerMcpHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅已连接的 MCP 才会对外生效 (灰色表示未连接)'**
+  String get apiServerMcpHint;
+
+  /// No description provided for @apiServerMcpEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无 MCP 服务'**
+  String get apiServerMcpEmpty;
+
+  /// No description provided for @apiServerBindAllTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许局域网访问 (0.0.0.0)'**
+  String get apiServerBindAllTitle;
+
+  /// No description provided for @apiServerBindAllDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'开启后同网络的其他设备可调用本服务，等于把你的模型/记忆/工具暴露到局域网。请确保令牌足够强。'**
+  String get apiServerBindAllDesc;
+
+  /// No description provided for @apiServerBindAllConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认暴露到局域网?'**
+  String get apiServerBindAllConfirmTitle;
+
+  /// No description provided for @apiServerBindAllConfirmBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'开启后，与本机处于同一网络的任何设备都能通过令牌访问该服务，调用你配置的模型、记忆与工具。仅在受信任的网络中开启。'**
+  String get apiServerBindAllConfirmBody;
+
+  /// No description provided for @apiServerBindAllConfirmCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消'**
+  String get apiServerBindAllConfirmCancel;
+
+  /// No description provided for @apiServerBindAllConfirmOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'我已了解风险'**
+  String get apiServerBindAllConfirmOk;
+
+  /// No description provided for @apiServerIpWhitelistTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'IP 白名单'**
+  String get apiServerIpWhitelistTitle;
+
+  /// No description provided for @apiServerIpWhitelistHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'留空 = 不限制 (同网络任意设备可访问)；填写后仅列表内地址可访问 (本机始终放行)'**
+  String get apiServerIpWhitelistHint;
+
+  /// No description provided for @apiServerIpWhitelistEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'未配置任何 IP，当前对局域网全部开放'**
+  String get apiServerIpWhitelistEmpty;
+
+  /// No description provided for @apiServerIpWhitelistInputHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'192.168.1.5 或 192.168.1.0/24'**
+  String get apiServerIpWhitelistInputHint;
+
+  /// No description provided for @apiServerIpWhitelistAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加'**
+  String get apiServerIpWhitelistAdd;
+
+  /// No description provided for @apiServerIpWhitelistInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'格式无效，请输入 IPv4 或 CIDR (如 192.168.1.0/24)'**
+  String get apiServerIpWhitelistInvalid;
+
+  /// No description provided for @apiServerLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载失败: {error}'**
+  String apiServerLoadFailed(Object error);
+
+  /// No description provided for @trayServerOn.
+  ///
+  /// In zh, this message translates to:
+  /// **'对外服务器 · 运行中 (端口 {port})'**
+  String trayServerOn(Object port);
+
+  /// No description provided for @trayServerOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'对外服务器 · 已停止'**
+  String get trayServerOff;
+
+  /// No description provided for @trayServerNeedConfig.
+  ///
+  /// In zh, this message translates to:
+  /// **'对外服务器 (需先配置令牌)'**
+  String get trayServerNeedConfig;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

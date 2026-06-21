@@ -17,9 +17,11 @@ import '../../features/tools/tools_page.dart';
 import '../../features/memory/memory_page.dart';
 import '../../features/multi_agent/multi_agent_page.dart';
 import '../../features/logs/logs_page.dart';
+import '../../features/pet/pet_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../providers/experts_provider.dart';
 import '../../core/l10n/l10n_ext.dart';
+import '../../core/pet/pet_observer.dart';
 
 /// 导航项定义
 class _NavItem {
@@ -117,6 +119,13 @@ class _AppScaffoldState extends State<AppScaffold> {
       icon: Icons.groups_outlined,
       selectedIcon: Icons.groups,
       pageBuilder: () => const MultiAgentPage(),
+    ),
+    _NavItem(
+      id: 'pet',
+      label: (context) => context.s.navPet,
+      icon: Icons.pets_outlined,
+      selectedIcon: Icons.pets,
+      pageBuilder: () => const PetPage(),
     ),
     _NavItem(
       id: 'settings',
@@ -243,7 +252,10 @@ class _AppScaffoldState extends State<AppScaffold> {
               _DraggableNavRail(
                 items: items,
                 selectedIndex: _selectedIndex,
-                onSelected: (i) => setState(() => _selectedIndex = i),
+                onSelected: (i) {
+                  setState(() => _selectedIndex = i);
+                  PetObserver.instance.notifyPageChanged(items[i].id);
+                },
                 onReorder: _onReorder,
               ),
               const VerticalDivider(thickness: 1, width: 1),

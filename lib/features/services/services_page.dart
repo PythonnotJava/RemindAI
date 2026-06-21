@@ -5,8 +5,10 @@ import '../../core/l10n/l10n_ext.dart';
 import '../skills/skills_page.dart';
 import '../mcp/mcp_page.dart';
 import '../search/search_page.dart';
+import '../server/server_page.dart';
+import '../toolchain/toolchain_page.dart';
 
-/// 合并的"服务"页 — 包含技能管理、MCP 服务和搜索服务三个子页面
+/// 合并的"服务"页 — 包含技能管理、MCP 服务、搜索服务和工具链四个子页面
 class ServicesPage extends ConsumerStatefulWidget {
   const ServicesPage({super.key});
 
@@ -21,7 +23,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -49,6 +51,14 @@ class _ServicesPageState extends ConsumerState<ServicesPage>
               icon: const Icon(Icons.travel_explore, size: 18),
               text: context.s.servicesSearchTab,
             ),
+            Tab(
+              icon: const Icon(Icons.build_outlined, size: 18),
+              text: context.s.servicesToolchainTab,
+            ),
+            Tab(
+              icon: const Icon(Icons.dns_outlined, size: 18),
+              text: context.s.servicesServerTab,
+            ),
           ],
           labelStyle: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w600,
@@ -58,7 +68,13 @@ class _ServicesPageState extends ConsumerState<ServicesPage>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [SkillsPageBody(), McpPageBody(), SearchPageBody()],
+        children: const [
+          SkillsPageBody(),
+          McpPageBody(),
+          SearchPageBody(),
+          ToolchainPageBody(),
+          ServerPageBody(),
+        ],
       ),
     );
   }

@@ -83,53 +83,97 @@ class MemoryDao {
 
   /// 关键词搜索记忆 (SQLite 降级召回，无 Qdrant 时使用)
   ///
-  /// 对 query 按空格分词，只要 text 包含任一关键词就匹配。
-  /// 返回格式与 Qdrant recall 一致: [{text, score, timestamp, ...}]
+  /// 中文友好分词: 对连续 CJK 串生成 bigram (相邻两字)，对 ASCII 串按单词
+  /// (长度≥2) 提取。只要 text 命中任一关键词即匹配，命中越多 score 越高。
+  /// 返回格式与 Qdrant recall 一致: [{text, score, source, timestamp, ...}]
   Future<List<Map<String, dynamic>>> search(
     String collection,
     String query, {
     int limit = 5,
   }) async {
     final db = await _dbHelper.database;
-    // 分词
-    final keywords = query
-        .split(RegExp(r'\s+'))
-        .where((k) => k.length >= 2)
-        .toList();
+    final keywords = _tokenize(query);
+
     if (keywords.isEmpty) {
       // 无有效关键词，返回最近的几条
       final result = db.select(
         'SELECT * FROM memory_entries WHERE collection = ? ORDER BY created_at DESC LIMIT ?',
         [collection, limit],
       );
-      return _rowsToResults(result);
+      return _rowsToResults(result, const []);
     }
 
-    // 构建 LIKE 条件 (OR 连接)
+    // 构建 LIKE 条件 (OR 连接)。多取一些候选 (limit*4)，
+    // 以便在 Dart 侧按命中数 (score) 重排后再截断，避免高相关的老记忆被丢。
     final conditions = keywords.map((_) => 'text LIKE ?').join(' OR ');
     final params = <dynamic>[collection];
     for (final k in keywords) {
       params.add('%$k%');
     }
-    params.add(limit);
+    params.add(limit * 4);
 
     final result = db.select(
       'SELECT * FROM memory_entries WHERE collection = ? AND ($conditions) ORDER BY created_at DESC LIMIT ?',
       params,
     );
-    return _rowsToResults(result);
+
+    final rows = _rowsToResults(result, keywords);
+    // 按 score 降序 (命中关键词比例)，分数相同保持时间倒序
+    rows.sort((a, b) => (b['score'] as double).compareTo(a['score'] as double));
+    return rows.take(limit).toList();
   }
 
-  List<Map<String, dynamic>> _rowsToResults(List<dynamic> rows) {
+  /// 中文友好分词:
+  /// - 连续 CJK 块 → bigram (长度=1 时取单字)
+  /// - ASCII 字母数字串 → 整词 (长度≥2)
+  List<String> _tokenize(String query) {
+    final tokens = <String>{};
+
+    // CJK 块 (中日韩统一表意文字)
+    for (final m in RegExp(r'[\u4e00-\u9fff]+').allMatches(query)) {
+      final block = m.group(0)!;
+      if (block.length == 1) {
+        tokens.add(block);
+      } else {
+        for (var i = 0; i < block.length - 1; i++) {
+          tokens.add(block.substring(i, i + 2));
+        }
+      }
+    }
+
+    // ASCII 字母数字词 (长度≥2)
+    for (final m in RegExp(r'[A-Za-z0-9]{2,}').allMatches(query)) {
+      tokens.add(m.group(0)!.toLowerCase());
+    }
+
+    return tokens.toList();
+  }
+
+  /// 行 → 结果。当传入 [keywords] 时按命中比例计算 score；否则 score=1.0。
+  List<Map<String, dynamic>> _rowsToResults(
+    List<dynamic> rows,
+    List<String> keywords,
+  ) {
     return rows.map((row) {
       Map<String, dynamic> metadata = {};
       try {
         metadata =
             jsonDecode(row['metadata'] as String) as Map<String, dynamic>;
       } catch (_) {}
+
+      final text = row['text'] as String;
+      double score = 1.0;
+      if (keywords.isNotEmpty) {
+        final lower = text.toLowerCase();
+        final hits = keywords.where((k) => lower.contains(k)).length;
+        // 归一化到 (0,1]，命中越多越高
+        score = hits / keywords.length;
+      }
+
       return <String, dynamic>{
-        'text': row['text'] as String,
-        'score': 1.0, // SQLite 无分数概念，固定为 1.0
+        'text': text,
+        'score': score,
+        'source': 'sqlite', // 标注来源，便于上层区分语义检索/关键词降级
         'timestamp': metadata['timestamp'] ?? row['created_at'] as String,
         ...metadata,
       };

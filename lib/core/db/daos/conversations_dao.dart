@@ -122,6 +122,7 @@ class ConversationsDao {
         toolCallId: row['tool_call_id'] as String?,
         timestamp: DateTime.parse(row['created_at'] as String),
         attachments: attachments,
+        interrupted: (_safeColumnInt(row, 'interrupted') ?? 0) == 1,
       );
     }).toList();
   }
@@ -130,6 +131,15 @@ class ConversationsDao {
   String? _safeColumn(dynamic row, String column) {
     try {
       return row[column] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 安全读取 int 列值。
+  int? _safeColumnInt(dynamic row, String column) {
+    try {
+      return row[column] as int?;
     } catch (_) {
       return null;
     }
@@ -166,8 +176,8 @@ class ConversationsDao {
         : jsonEncode(message.attachments.map((a) => a.toJson()).toList());
 
     db.execute(
-      '''INSERT INTO chat_messages (conversation_id, role, content, tool_calls, tool_call_id, attachments, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)''',
+      '''INSERT INTO chat_messages (conversation_id, role, content, tool_calls, tool_call_id, attachments, interrupted, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
       [
         conversationId,
         message.role.name,
@@ -175,6 +185,7 @@ class ConversationsDao {
         toolCallsJson,
         message.toolCallId,
         attachmentsJson,
+        message.interrupted ? 1 : 0,
         now,
       ],
     );

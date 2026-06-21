@@ -20,6 +20,7 @@ class CombinedExecutor extends Executor {
     super.memoryManager,
     super.memoryCollection,
     super.readableExtraPaths,
+    super.allowOutsideRoot,
     required Map<String, McpClient> mcpClients,
     required Map<String, List<Map<String, dynamic>>> mcpToolsCache,
     this._toolSourceMapping = const {},

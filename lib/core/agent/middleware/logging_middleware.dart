@@ -16,6 +16,10 @@ class LoggingMiddleware extends ToolMiddleware {
   ) async {
     final source = sourceMapping[toolName] ?? '未知';
     AppLogger.instance.log('[ToolCall] $toolName \u2190 $source');
+    // 技能/MCP 来源的调用额外 print 到终端，便于诊断"技能是否真被调用"
+    if (source.startsWith('技能:') || source.startsWith('MCP:')) {
+      print('[ToolCall] ▶ 调用 $toolName ← $source');
+    }
 
     final stopwatch = Stopwatch()..start();
     final result = await next(toolName, args);
@@ -26,6 +30,11 @@ class LoggingMiddleware extends ToolMiddleware {
     AppLogger.instance.log(
       '[ToolCall] $toolName ${isError ? "✗" : "✓"} (${stopwatch.elapsedMilliseconds}ms)',
     );
+    if (source.startsWith('技能:') || source.startsWith('MCP:')) {
+      print(
+        '[ToolCall] ${isError ? "✗ 失败" : "✓ 完成"} $toolName ($source, ${stopwatch.elapsedMilliseconds}ms)',
+      );
+    }
 
     return result;
   }

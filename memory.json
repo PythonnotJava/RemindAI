@@ -1,0 +1,6 @@
+{
+  "embeddings": false,
+  "long_term_store": false,
+  "long_term_recall": false,
+  "mode": "auto"
+}

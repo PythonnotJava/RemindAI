@@ -4,13 +4,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import 'core/font/custom_font_loader.dart';
+import 'core/shortcuts/shortcut_config.dart';
 import 'l10n/app_localizations.dart';
 import 'core/l10n/l10n_ext.dart';
 import 'providers/settings_provider.dart';
+import 'providers/api_server_provider.dart';
 import 'shared/layout/app_scaffold.dart';
+import 'shared/widgets/region_screenshot.dart';
+import 'shared/widgets/screenshot_editor.dart';
 import 'shared/widgets/theme_transition.dart';
+import 'features/pet/widgets/floating_pet.dart';
+import 'features/pet/widgets/pet_bubble.dart';
+import 'core/pet/pet_observer.dart';
+import 'core/tts/tts_service.dart';
 
 class RemindAIApp extends ConsumerWidget {
   const RemindAIApp({super.key});
@@ -19,6 +29,13 @@ class RemindAIApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
+    final uiFont = ref.watch(uiFontProvider);
+    final accentColor = ref.watch(accentColorProvider);
+
+    // 首帧后按需拉起对外 API 服务 (进程级一次性, 不阻塞 UI)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      bootstrapApiServer(ref);
+    });
 
     return MaterialApp(
       title: 'RemindAI',
@@ -33,44 +50,71 @@ class RemindAIApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
         FlutterQuillLocalizations.delegate,
       ],
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: _buildTheme(Brightness.light, uiFont, accentColor),
+      darkTheme: _buildTheme(Brightness.dark, uiFont, accentColor),
       themeMode: themeMode,
       home: const ThemeTransition(child: _WindowWrapper()),
     );
   }
+
+  ThemeData _buildTheme(
+    Brightness brightness,
+    String fontFamily,
+    String accentColor,
+  ) {
+    final baseTheme = ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: getAccentColor(accentColor),
+        brightness: brightness,
+      ),
+      useMaterial3: true,
+    );
+
+    // 应用字体族：自定义字体直接用 fontFamily，Google Fonts 用 getTextTheme
+    TextTheme textTheme;
+    final isCustom = CustomFontLoader.instance.loadedFonts.contains(fontFamily);
+    if (isCustom) {
+      // 自定义字体通过 FontLoader 注册，直接用 fontFamily 名
+      textTheme = baseTheme.textTheme.apply(fontFamily: fontFamily);
+    } else {
+      try {
+        textTheme = GoogleFonts.getTextTheme(fontFamily, baseTheme.textTheme);
+      } catch (_) {
+        textTheme = baseTheme.textTheme;
+      }
+    }
+
+    return baseTheme.copyWith(textTheme: textTheme);
+  }
 }
 
 /// 包装层：监听窗口关闭事件 + 系统托盘管理
-class _WindowWrapper extends StatefulWidget {
+class _WindowWrapper extends ConsumerStatefulWidget {
   const _WindowWrapper();
 
   @override
-  State<_WindowWrapper> createState() => _WindowWrapperState();
+  ConsumerState<_WindowWrapper> createState() => _WindowWrapperState();
 }
 
-class _WindowWrapperState extends State<_WindowWrapper>
+class _WindowWrapperState extends ConsumerState<_WindowWrapper>
     with WindowListener, TrayListener {
   /// 启动阶段: splash → ready (主界面可见)
   bool _ready = false;
+
   /// 控制淡入动画
   bool _fadeIn = false;
+
+  /// Splash 动画结束后从 tree 移除
+  bool _splashRemoved = false;
+
+  /// 截图用的 RepaintBoundary key
+  final _screenshotKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
+    PetObserver.instance.initialize();
+    _loadTtsConfig();
     windowManager.addListener(this);
     windowManager.setPreventClose(true);
     trayManager.addListener(this);
@@ -79,12 +123,6 @@ class _WindowWrapperState extends State<_WindowWrapper>
   }
 
   /// 等待窗口布局完全稳定后再切换到主界面
-  ///
-  /// 策略：
-  /// 1. 先让 splash 立即渲染（简单居中布局，不依赖复杂约束）
-  /// 2. 等待 5 帧确保 window metrics / MediaQuery 完全传播
-  /// 3. 额外延迟 100ms 等 GPU 光栅化跟上
-  /// 4. 创建 AppScaffold 并用交叉淡入替换 splash
   Future<void> _waitForWindowReady() async {
     // 等待 5 帧: 窗口尺寸传播 + Flutter layout 管线稳定
     for (int i = 0; i < 5; i++) {
@@ -106,6 +144,11 @@ class _WindowWrapperState extends State<_WindowWrapper>
 
     // 开始淡入
     setState(() => _fadeIn = true);
+
+    // 等待淡出动画完成 (300ms) 后彻底移除 Splash
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    setState(() => _splashRemoved = true);
   }
 
   @override
@@ -115,17 +158,76 @@ class _WindowWrapperState extends State<_WindowWrapper>
     super.dispose();
   }
 
+  /// 从本地文件加载 TTS 配置（用户自行填写密钥）
+  Future<void> _loadTtsConfig() async {
+    await TtsService.instance.loadPersistedConfig();
+  }
+
   Future<void> _initTray() async {
     await trayManager.setIcon('assets/icons/logo.ico');
     await trayManager.setToolTip('RemindAI');
+    // 首帧后再构建菜单, 确保 S.of(context) 可用
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshTrayMenu();
+    });
+  }
+
+  /// 根据当前服务器运行状态重建托盘菜单 (右键弹出前 / 切换后调用)
+  Future<void> _refreshTrayMenu() async {
+    if (!mounted) return;
+    final s = context.s;
+    final server = ref.read(apiServerProvider);
+    final config = ref.read(apiServerConfigProvider).valueOrNull;
+    final running = server.isRunning;
+    final hasToken = (config?.token.trim().isNotEmpty) ?? false;
+
+    final String serverLabel;
+    if (running) {
+      serverLabel = s.trayServerOn(server.boundPort ?? config?.port ?? 0);
+    } else if (hasToken) {
+      serverLabel = s.trayServerOff;
+    } else {
+      serverLabel = s.trayServerNeedConfig;
+    }
+
     final menu = Menu(
       items: [
-        MenuItem(key: 'show', label: '显示窗口 (Show)'),
+        MenuItem(key: 'show', label: s.trayShow),
         MenuItem.separator(),
-        MenuItem(key: 'exit', label: '退出 (Exit)'),
+        MenuItem.checkbox(
+          key: 'toggle_server',
+          label: serverLabel,
+          checked: running,
+          // 未配置令牌时禁用勾选 (点击会引导用户打开窗口配置)
+          disabled: !running && !hasToken,
+        ),
+        MenuItem.separator(),
+        MenuItem(key: 'exit', label: s.trayExit),
       ],
     );
     await trayManager.setContextMenu(menu);
+  }
+
+  /// 切换对外 API 服务器的启停
+  Future<void> _toggleServer() async {
+    final server = ref.read(apiServerProvider);
+    final notifier = ref.read(apiServerConfigProvider.notifier);
+    final config = ref.read(apiServerConfigProvider).valueOrNull;
+    if (config == null) return;
+
+    if (server.isRunning) {
+      // 运行中 → 停止
+      await notifier.save(config.copyWith(enabled: false));
+    } else {
+      // 已停止 → 启动; 若缺少令牌则无法启动, 引导用户打开窗口配置
+      if (config.token.trim().isEmpty) {
+        await windowManager.show();
+        await windowManager.focus();
+      } else {
+        await notifier.save(config.copyWith(enabled: true));
+      }
+    }
+    await _refreshTrayMenu();
   }
 
   // ─── TrayListener ───
@@ -137,8 +239,10 @@ class _WindowWrapperState extends State<_WindowWrapper>
   }
 
   @override
-  void onTrayIconRightMouseDown() {
-    trayManager.popUpContextMenu();
+  void onTrayIconRightMouseDown() async {
+    // 弹出前刷新, 确保勾选状态与端口号实时反映当前运行状态
+    await _refreshTrayMenu();
+    await trayManager.popUpContextMenu();
   }
 
   @override
@@ -147,6 +251,9 @@ class _WindowWrapperState extends State<_WindowWrapper>
       case 'show':
         windowManager.show();
         windowManager.focus();
+        break;
+      case 'toggle_server':
+        _toggleServer();
         break;
       case 'exit':
         windowManager.setPreventClose(false);
@@ -194,62 +301,88 @@ class _WindowWrapperState extends State<_WindowWrapper>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final screenshotBinding = ShortcutConfig.instance.bindings['screenshot'];
 
-    return Stack(
-      children: [
-        // 底层: 主界面 (ready 后创建，fadeIn 后可见)
-        if (_ready)
-          AnimatedOpacity(
-            opacity: _fadeIn ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            child: const AppScaffold(),
-          ),
-        // 顶层: Splash 闪屏 (fadeIn 后淡出消失)
-        IgnorePointer(
-          ignoring: _fadeIn,
-          child: AnimatedOpacity(
-            opacity: _fadeIn ? 0.0 : 1.0,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            child: Container(
-              color: colorScheme.surface,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Logo
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.asset(
-                        'assets/icons/logo.png',
-                        width: 72,
-                        height: 72,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Loading 指示器
-                    SpinKitFadingCircle(
-                      color: colorScheme.primary.withValues(alpha: 0.7),
-                      size: 32,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'RemindAI',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: colorScheme.onSurface.withValues(alpha: 0.5),
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
+    return CallbackShortcuts(
+      bindings: {
+        if (screenshotBinding != null)
+          screenshotBinding.activator: _triggerScreenshot,
+      },
+      child: Focus(
+        autofocus: true,
+        child: RepaintBoundary(
+          key: _screenshotKey,
+          child: Stack(
+            children: [
+              // 底层: 主界面 (ready 后创建，fadeIn 后可见)
+              if (_ready)
+                AnimatedOpacity(
+                  opacity: _fadeIn ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  child: const AppScaffold(),
                 ),
-              ),
-            ),
+              // 全局浮动宠物 (主界面可见后显示)
+              if (_ready && _fadeIn) const FloatingPet(),
+              if (_ready && _fadeIn) const PetBubble(),
+              // 顶层: Splash 闪屏 (淡出动画完成后从树中彻底移除)
+              if (!_splashRemoved)
+                IgnorePointer(
+                  ignoring: _fadeIn,
+                  child: AnimatedOpacity(
+                    opacity: _fadeIn ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                    child: Container(
+                      color: colorScheme.surface,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.asset(
+                                'assets/icons/logo_egg.png',
+                                width: 72,
+                                height: 72,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            SpinKitFadingCircle(
+                              color: colorScheme.primary.withValues(alpha: 0.7),
+                              size: 32,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'RemindAI',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.5,
+                                ),
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
-      ],
+      ),
     );
+  }
+
+  /// 触发区域截图
+  void _triggerScreenshot() async {
+    final image = await RegionScreenshot.capture(context, _screenshotKey);
+    if (image == null || !mounted) return;
+
+    // 打开截图编辑器对话框
+    await ScreenshotEditor.show(context, image);
   }
 }

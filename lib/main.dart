@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'core/db/database.dart';
+import 'core/font/custom_font_loader.dart';
 import 'core/logger/app_logger.dart';
 import 'core/settings/app_settings.dart';
+import 'core/shortcuts/shortcut_config.dart';
 import 'core/memory/qdrant_service.dart';
 import 'core/notification/notification_service.dart';
+import 'core/pet/pet_economy.dart';
 import 'core/tools/tool_bootstrap.dart';
 import 'core/tools/tool_registry.dart';
 
@@ -73,11 +76,15 @@ Future<void> main() async {
         FlutterError.presentError(details);
       };
 
-      // 初始化工具注册表
-      final toolRegistry = await createToolRegistry();
-
-      // 初始化系统通知服务 (窗口焦点监听)
-      await NotificationService.instance.init();
+      // 初始化工具注册表 + 通知服务 + 字体 + 快捷键 + 宠物经济（互相独立，并行执行）
+      final results = await Future.wait([
+        createToolRegistry(),
+        NotificationService.instance.init(),
+        CustomFontLoader.instance.loadAll(),
+        ShortcutConfig.instance.load(),
+        PetEconomy.instance.load(),
+      ]);
+      final toolRegistry = results[0] as ToolRegistry;
 
       runApp(
         ProviderScope(

@@ -45,6 +45,9 @@ class SZh extends S {
   String get navLogs => '日志';
 
   @override
+  String get navPet => '宠物';
+
+  @override
   String get settingsTitle => '设置';
 
   @override
@@ -54,10 +57,40 @@ class SZh extends S {
   String get settingsTheme => '主题';
 
   @override
+  String get settingsAccentColorTitle => '主题色';
+
+  @override
+  String get settingsAccentColorPurple => '紫色';
+
+  @override
+  String get settingsAccentColorGreen => '护眼';
+
+  @override
+  String get settingsAccentColorBlue => '蓝色';
+
+  @override
+  String get settingsAccentColorCyan => '青色';
+
+  @override
   String get settingsNotifyOnBlur => '失焦时系统通知';
 
   @override
   String get settingsNotifyOnBlurDesc => '窗口不在前台时，对话完成后弹出系统通知';
+
+  @override
+  String get settingsEnterAction => '回车行为';
+
+  @override
+  String get settingsEnterSend => '发送';
+
+  @override
+  String get settingsEnterNewline => '换行';
+
+  @override
+  String get settingsEnterSendHint => 'Enter 直接发送';
+
+  @override
+  String get settingsEnterNewlineHint => 'Enter 换行，按钮发送';
 
   @override
   String get settingsStorage => '存储设置';
@@ -94,6 +127,49 @@ class SZh extends S {
 
   @override
   String get settingsLanguage => '语言';
+
+  @override
+  String get settingsFont => '字体设置';
+
+  @override
+  String get settingsUiFont => '界面字体';
+
+  @override
+  String get settingsUiFontDesc => '控制导航、设置等非对话区域的字体';
+
+  @override
+  String get settingsUiFontSize => '界面字号';
+
+  @override
+  String get settingsChatFont => '交互字体';
+
+  @override
+  String get settingsChatFontDesc => '控制对话和多Agent协作区域的字体';
+
+  @override
+  String get settingsChatFontSize => '交互字号';
+
+  @override
+  String get settingsFontDefault => '默认';
+
+  @override
+  String get settingsFontPreview => '字体预览 AaBbCc 你好世界 123';
+
+  @override
+  String get settingsCustomFont => '自定义字体';
+
+  @override
+  String get settingsCustomFontDesc =>
+      '导入本地 .ttf/.otf 字体文件，存放于 .RemindAI/fonts/ 目录';
+
+  @override
+  String get settingsCustomFontImport => '导入字体';
+
+  @override
+  String get settingsCustomFontPick => '选择字体文件 (.ttf / .otf)';
+
+  @override
+  String get settingsCustomFontImported => '字体导入成功';
 
   @override
   String get settingsChange => '修改';
@@ -384,6 +460,9 @@ class SZh extends S {
   String get msgThinking => '思考中...';
 
   @override
+  String get msgInterrupted => '已中断';
+
+  @override
   String get toolCardArgs => '参数';
 
   @override
@@ -514,6 +593,9 @@ class SZh extends S {
 
   @override
   String get modelsReorderHint => '点击卡片设为默认，长按拖动可调整顺序';
+
+  @override
+  String get modelsSearchHint => '输入关键词搜索模型...';
 
   @override
   String get skillsTitle => '技能管理';
@@ -650,6 +732,44 @@ class SZh extends S {
   String toolsSettingsOf(String name) {
     return '$name 设置';
   }
+
+  @override
+  String get toolShortcutsName => '截图';
+
+  @override
+  String get toolShortcutsDesc => '查看和自定义应用快捷键';
+
+  @override
+  String get toolShortcutsCategory => '快捷键';
+
+  @override
+  String get shortcutReset => '恢复默认';
+
+  @override
+  String get shortcutResetDone => '快捷键已恢复默认';
+
+  @override
+  String get shortcutHint => '点击编辑按钮修改快捷键，需至少包含一个修饰键（Ctrl/Shift/Alt）';
+
+  @override
+  String get shortcutEdit => '编辑';
+
+  @override
+  String shortcutEditTitle(String name) {
+    return '修改「$name」快捷键';
+  }
+
+  @override
+  String get shortcutEditHint => '按下新的组合键';
+
+  @override
+  String get shortcutEditWaiting => '等待按键...';
+
+  @override
+  String get shortcutCancel => '取消';
+
+  @override
+  String get shortcutConfirm => '确认';
 
   @override
   String get multiAgentTitle => '多Agent协作';
@@ -1162,6 +1282,27 @@ class SZh extends S {
   }
 
   @override
+  String get imgSaveAs => '另存为…';
+
+  @override
+  String get imgCopyPath => '复制路径';
+
+  @override
+  String get imgOpenExternal => '在文件夹中显示';
+
+  @override
+  String get imgSaved => '图片已保存';
+
+  @override
+  String get imgPathCopied => '路径已复制';
+
+  @override
+  String get codeSource => '源代码';
+
+  @override
+  String get codePreview => '预览';
+
+  @override
   String get scrollUp => '向上滚动（长按持续）';
 
   @override
@@ -1273,6 +1414,26 @@ class SZh extends S {
   String get skillsReorderHint => '开关控制启用状态，长按拖动可调整顺序';
 
   @override
+  String get skillsMarketTitle => '推荐技能市场';
+
+  @override
+  String get skillsMarketHint => '从以下第三方市场发现并下载技能包（ZIP），再用下方导入功能加载到本应用。';
+
+  @override
+  String get skillsMarketSkillsMp => '聚合多来源的技能市场';
+
+  @override
+  String get skillsMarketClaudSkills => 'Claude 技能分享社区';
+
+  @override
+  String get skillsMarketSkillsSh => '开源技能索引与命令行工具';
+
+  @override
+  String skillsMarketOpenFailed(String url) {
+    return '无法打开链接：$url';
+  }
+
+  @override
   String get skillsBuiltin => '内置';
 
   @override
@@ -1281,10 +1442,123 @@ class SZh extends S {
   }
 
   @override
+  String get skillsNoDesc => '无描述';
+
+  @override
+  String get skillsViewMd => '查看 SKILL.md';
+
+  @override
+  String get skillsEditDesc => '编辑描述';
+
+  @override
+  String get skillsEditDescTitle => '编辑技能描述';
+
+  @override
+  String get skillsEditDescHint => '为该技能填写一段描述（仅用于展示）';
+
+  @override
   String get servicesTitle => '服务';
 
   @override
   String get servicesSkillsTab => '技能';
+
+  @override
+  String get servicesToolchainTab => '工具链';
+
+  @override
+  String get toolchainDescription =>
+      '以下是推荐的命令行工具。检测以系统环境变量 PATH 可寻为准 —— 只要工具已加入 PATH，模型即可在工具外壳中调用。为避免无谓的性能开销，默认不自动检测，点击下方按钮手动探测。';
+
+  @override
+  String get toolchainDetect => '检测工具';
+
+  @override
+  String get toolchainDetecting => '检测中';
+
+  @override
+  String toolchainSummary(int found, int total) {
+    return '已找到 $found / $total 个';
+  }
+
+  @override
+  String get toolchainInstall => '获取';
+
+  @override
+  String toolchainOpenFailed(String url) {
+    return '无法打开链接：$url';
+  }
+
+  @override
+  String get toolchainGroupRuntime => '运行时';
+
+  @override
+  String get toolchainGroupPkg => '包管理器';
+
+  @override
+  String get toolchainGroupVcs => '版本控制';
+
+  @override
+  String get toolchainGroupDoc => '文档排版';
+
+  @override
+  String get toolchainGroupMedia => '多媒体';
+
+  @override
+  String get toolchainGroupNet => '网络';
+
+  @override
+  String get toolchainDescNode => 'JavaScript / TypeScript 运行时，执行 JS 脚本与构建工具';
+
+  @override
+  String get toolchainDescBun => '高性能 JS/TS 运行时，自带打包与包管理，启动极快';
+
+  @override
+  String get toolchainDescPython => 'Python 解释器，运行数据处理、绘图与自动化脚本';
+
+  @override
+  String get toolchainDescDeno => '安全的 JS/TS 运行时，原生支持 TypeScript';
+
+  @override
+  String get toolchainDescNpm => 'Node 默认包管理器';
+
+  @override
+  String get toolchainDescPnpm => '快速、节省磁盘的 Node 包管理器';
+
+  @override
+  String get toolchainDescYarn => '另一款流行的 Node 包管理器';
+
+  @override
+  String get toolchainDescPip => 'Python 包安装器，安装第三方库';
+
+  @override
+  String get toolchainDescUv => '极速 Python 包与项目管理器（Rust 实现）';
+
+  @override
+  String get toolchainDescGit => '分布式版本控制，克隆与管理代码仓库';
+
+  @override
+  String get toolchainDescPandoc => '万能文档转换器，Markdown / Word / PDF 互转';
+
+  @override
+  String get toolchainDescPdftotext => 'Poppler 工具集，从 PDF 提取文本（附件 PDF 解析依赖它）';
+
+  @override
+  String get toolchainDescXelatex => 'LaTeX 排版引擎，生成高质量 PDF';
+
+  @override
+  String get toolchainDescTypst => '现代排版系统，编译速度快，语法简洁';
+
+  @override
+  String get toolchainDescFfmpeg => '音视频处理，转码、剪辑与格式转换';
+
+  @override
+  String get toolchainDescMagick => 'ImageMagick，图片格式转换与批量处理';
+
+  @override
+  String get toolchainDescCurl => '命令行 HTTP 客户端，请求接口与下载文件';
+
+  @override
+  String get toolchainDescWget => '命令行下载工具，递归抓取网络资源';
 
   @override
   String get expertEditorEdit => '编辑专家';
@@ -1604,162 +1878,6 @@ class SZh extends S {
 
   @override
   String get fcToolCategory => '开发';
-
-  @override
-  String get fcShapeRect => '矩形';
-
-  @override
-  String get fcShapeRoundRect => '圆角矩形';
-
-  @override
-  String get fcShapeDiamond => '菱形';
-
-  @override
-  String get fcShapeCircle => '圆形';
-
-  @override
-  String get fcShapeParallelogram => '平行四边形';
-
-  @override
-  String get fcShapeHexagon => '六边形';
-
-  @override
-  String get fcShapeDatabase => '数据库';
-
-  @override
-  String get fcShapeCapsule => '胶囊形';
-
-  @override
-  String get fcArrowSingle => '单向箭头';
-
-  @override
-  String get fcArrowDouble => '双向箭头';
-
-  @override
-  String get fcArrowNone => '无箭头';
-
-  @override
-  String get fcLineSolid => '实线';
-
-  @override
-  String get fcLineDashed => '虚线';
-
-  @override
-  String get fcLineDotted => '点线';
-
-  @override
-  String get fcUnsavedTitle => '未保存的更改';
-
-  @override
-  String get fcUnsavedContent => '当前流程图有未保存的修改，是否保存？';
-
-  @override
-  String get fcDontSave => '不保存';
-
-  @override
-  String get fcSaveTitle => '保存流程图';
-
-  @override
-  String get fcDefaultFilename => '未命名.fc.json';
-
-  @override
-  String fcSaved(String path) {
-    return '已保存: $path';
-  }
-
-  @override
-  String fcSaveFailed(String error) {
-    return '保存失败: $error';
-  }
-
-  @override
-  String get fcOpenTitle => '打开流程图';
-
-  @override
-  String fcOpened(String path) {
-    return '已打开: $path';
-  }
-
-  @override
-  String fcOpenFailed(String error) {
-    return '打开失败: $error';
-  }
-
-  @override
-  String get fcNewChart => '新建流程图';
-
-  @override
-  String get fcCanvasNotReady => '画布未就绪';
-
-  @override
-  String get fcImageFailed => '图片生成失败';
-
-  @override
-  String get fcExportPng => '导出流程图为 PNG';
-
-  @override
-  String fcExported(String path) {
-    return '已导出: $path';
-  }
-
-  @override
-  String fcExportFailed(String error) {
-    return '导出失败: $error';
-  }
-
-  @override
-  String get fcBtnNew => '新建';
-
-  @override
-  String get fcBtnOpen => '打开';
-
-  @override
-  String get fcBtnSave => '保存';
-
-  @override
-  String get fcBtnExportImage => '导出图片';
-
-  @override
-  String get fcBtnShowGrid => '显示网格';
-
-  @override
-  String get fcBtnHideGrid => '隐藏网格';
-
-  @override
-  String get fcBtnFitCanvas => '适应画布';
-
-  @override
-  String get fcBtnSelectAll => '全选';
-
-  @override
-  String get fcBtnDeleteSelected => '删除选中';
-
-  @override
-  String get fcStatusReady => '就绪 · 点击左侧形状添加节点，从端口拖线连接';
-
-  @override
-  String fcStatusNodes(int count, int edges) {
-    return '节点: $count';
-  }
-
-  @override
-  String get fcCustomColor => '自定义颜色';
-
-  @override
-  String get fcClickToAdd => '点击添加到画布';
-
-  @override
-  String get fcNodeColor => '节点颜色';
-
-  @override
-  String get fcHelpText =>
-      '操作提示:\n• 点击形状直接添加节点\n• 双击节点编辑文字/样式\n• 从节点边缘拖线连接\n• 滚轮缩放，拖拽画布';
-
-  @override
-  String get fcEditNode => '编辑节点';
-
-  @override
-  String get fcTextContent => '文本内容';
 
   @override
   String get siyuToolName => '思宇';
@@ -2152,6 +2270,162 @@ class SZh extends S {
   String get modelNameFallback => '未命名模型';
 
   @override
+  String get fcShapeRect => '矩形';
+
+  @override
+  String get fcShapeRoundRect => '圆角矩形';
+
+  @override
+  String get fcShapeDiamond => '菱形';
+
+  @override
+  String get fcShapeCircle => '圆形';
+
+  @override
+  String get fcShapeParallelogram => '平行四边形';
+
+  @override
+  String get fcShapeHexagon => '六边形';
+
+  @override
+  String get fcShapeDatabase => '数据库';
+
+  @override
+  String get fcShapeCapsule => '胶囊形';
+
+  @override
+  String get fcArrowSingle => '单向箭头';
+
+  @override
+  String get fcArrowDouble => '双向箭头';
+
+  @override
+  String get fcArrowNone => '无箭头';
+
+  @override
+  String get fcLineSolid => '实线';
+
+  @override
+  String get fcLineDashed => '虚线';
+
+  @override
+  String get fcLineDotted => '点线';
+
+  @override
+  String get fcUnsavedTitle => '未保存的更改';
+
+  @override
+  String get fcUnsavedContent => '当前流程图有未保存的修改，是否保存？';
+
+  @override
+  String get fcDontSave => '不保存';
+
+  @override
+  String get fcSaveTitle => '保存流程图';
+
+  @override
+  String get fcDefaultFilename => '未命名.fc.json';
+
+  @override
+  String fcSaved(String path) {
+    return '已保存: $path';
+  }
+
+  @override
+  String fcSaveFailed(String error) {
+    return '保存失败: $error';
+  }
+
+  @override
+  String get fcOpenTitle => '打开流程图';
+
+  @override
+  String fcOpened(String path) {
+    return '已打开: $path';
+  }
+
+  @override
+  String fcOpenFailed(String error) {
+    return '打开失败: $error';
+  }
+
+  @override
+  String get fcNewChart => '新建流程图';
+
+  @override
+  String get fcCanvasNotReady => '画布未就绪';
+
+  @override
+  String get fcImageFailed => '图片生成失败';
+
+  @override
+  String get fcExportPng => '导出流程图为 PNG';
+
+  @override
+  String fcExported(String path) {
+    return '已导出: $path';
+  }
+
+  @override
+  String fcExportFailed(String error) {
+    return '导出失败: $error';
+  }
+
+  @override
+  String get fcBtnNew => '新建';
+
+  @override
+  String get fcBtnOpen => '打开';
+
+  @override
+  String get fcBtnSave => '保存';
+
+  @override
+  String get fcBtnExportImage => '导出图片';
+
+  @override
+  String get fcBtnHideGrid => '隐藏网格';
+
+  @override
+  String get fcBtnShowGrid => '显示网格';
+
+  @override
+  String get fcBtnFitCanvas => '适应画布';
+
+  @override
+  String get fcBtnSelectAll => '全选';
+
+  @override
+  String get fcBtnDeleteSelected => '删除选中';
+
+  @override
+  String get fcStatusReady => '就绪 · 点击左侧形状添加节点，从端口拖线连接';
+
+  @override
+  String fcStatusNodes(int count, int edges) {
+    return '节点: $count';
+  }
+
+  @override
+  String get fcCustomColor => '自定义颜色';
+
+  @override
+  String get fcClickToAdd => '点击添加到画布';
+
+  @override
+  String get fcNodeColor => '节点颜色';
+
+  @override
+  String get fcHelpText =>
+      '操作提示:\n• 点击形状直接添加节点\n• 双击节点编辑文字/样式\n• 从节点边缘拖线连接\n• 滚轮缩放，拖拽画布';
+
+  @override
+  String get fcEditNode => '编辑节点';
+
+  @override
+  String get fcTextContent => '文本内容';
+
+  @override
   String get servicesSearchTab => '搜索';
 
   @override
@@ -2211,4 +2485,682 @@ class SZh extends S {
 
   @override
   String get searchTestSuccess => '连接成功，API Key 有效';
+
+  @override
+  String get petCatGray => '灰色小猫';
+
+  @override
+  String get petCatOrange => '橘色小猫';
+
+  @override
+  String get petCatWhite => '白色小猫';
+
+  @override
+  String get petTitle => '宠物设置';
+
+  @override
+  String get petShow => '显示';
+
+  @override
+  String get petSkinSection => '精灵皮肤';
+
+  @override
+  String get petModelSection => '宠物模型 (AI)';
+
+  @override
+  String get petModelHint => '选择宠物使用的 AI 模型';
+
+  @override
+  String petModelLoadFailed(String error) {
+    return '加载模型失败: $error';
+  }
+
+  @override
+  String get petTtsSection => '语音合成';
+
+  @override
+  String get petTtsSystem => '系统';
+
+  @override
+  String get petTtsVolcano => '火山';
+
+  @override
+  String get petTtsAppId => 'AppID';
+
+  @override
+  String get petTtsAppIdHint => 'App ID';
+
+  @override
+  String get petTtsToken => 'Token';
+
+  @override
+  String get petTtsTokenHint => 'Access Token';
+
+  @override
+  String get petTtsVoiceType => '音色';
+
+  @override
+  String get petTtsVoiceTypeHint => 'voice_type (克隆音色 ID)';
+
+  @override
+  String get petTtsSave => '保存配置';
+
+  @override
+  String get petTtsSaved => '火山 TTS 配置已保存';
+
+  @override
+  String get petTtsReady => '✅ 配置完整';
+
+  @override
+  String get petTtsIncomplete => '⚠️ 请填写三项必填';
+
+  @override
+  String petTtsSpeedLabel(int value) {
+    return '语速($value)';
+  }
+
+  @override
+  String petTtsLoudnessLabel(int value) {
+    return '音量($value)';
+  }
+
+  @override
+  String get petTtsCredentialHint =>
+      '凭证获取: 火山引擎控制台 → 语音合成 → 音色克隆\n参考: github.com/Radiant303/astrbot_plugin_clonetts';
+
+  @override
+  String get petBehaviorSection => '回复行为';
+
+  @override
+  String petTtsThresholdLabel(int value) {
+    return '语音阈值($value字)';
+  }
+
+  @override
+  String petTtsThresholdHint(int value) {
+    return '≤$value字语音，超出文本气泡';
+  }
+
+  @override
+  String petBubbleDismissLabel(int value) {
+    return '气泡倒计时(${value}s)';
+  }
+
+  @override
+  String get petBubbleDismissManual => '手动关闭气泡';
+
+  @override
+  String petBubbleDismissAuto(int value) {
+    return '$value秒后自动关闭气泡';
+  }
+
+  @override
+  String get petCommandSection => '自定义右键指令';
+
+  @override
+  String get petCommandHint => '添加自定义指令后会出现在右键菜单中';
+
+  @override
+  String get petCommandAdd => '添加指令';
+
+  @override
+  String get petCommandAddTitle => '添加自定义指令';
+
+  @override
+  String get petCommandEditTitle => '编辑指令';
+
+  @override
+  String get petCommandNameLabel => '指令名称';
+
+  @override
+  String get petCommandNameHint => '例如：帮我优化';
+
+  @override
+  String get petCommandPromptLabel => '系统提示词';
+
+  @override
+  String get petCommandPromptHint => '例如：请帮我优化以下代码，提升性能和可读性：';
+
+  @override
+  String get petTestSection => '测试';
+
+  @override
+  String get petTestShort => '短语音';
+
+  @override
+  String get petTestLong => '长文本';
+
+  @override
+  String get petDebugEvents => '事件';
+
+  @override
+  String get petDebugAnimations => '动画';
+
+  @override
+  String get petDebugState => '状态';
+
+  @override
+  String get petBubbleThinking => '小猫思考中...';
+
+  @override
+  String get petBubbleTitle => '小猫说';
+
+  @override
+  String get petBubbleGenerating => '正在生成回答...';
+
+  @override
+  String get petBubbleClose => '关闭';
+
+  @override
+  String get petBubbleFeedAll => '投喂全文给小猫';
+
+  @override
+  String petBubbleFeedFollow(String label) {
+    return '追问: $label';
+  }
+
+  @override
+  String petBubbleFeedSelected(String label) {
+    return '投喂小猫: $label';
+  }
+
+  @override
+  String get petNoModel => '喵~ 我还没有绑定模型，请在宠物设置中选择一个模型。';
+
+  @override
+  String petError(String error) {
+    return '喵呜...出错了: $error';
+  }
+
+  @override
+  String get petContextHide => '隐藏宠物';
+
+  @override
+  String get petTestShortText => '你好呀主人！';
+
+  @override
+  String get petTestLongText =>
+      '主人你好，Flutter中Widget是不可变的，每次状态变化都会创建新的Widget树，这就是setState触发rebuild的原因。';
+
+  @override
+  String get petPageTitle => '宠物';
+
+  @override
+  String get petTabSettings => '设置';
+
+  @override
+  String get petTabShop => '商店';
+
+  @override
+  String get petTabAchievements => '成就';
+
+  @override
+  String get petShopTitle => '商品';
+
+  @override
+  String get petInventoryTitle => '背包';
+
+  @override
+  String get petInventoryEmpty => '空空如也~';
+
+  @override
+  String get petStatusTitle => '状态';
+
+  @override
+  String get petStatusSatiety => '饱腹度';
+
+  @override
+  String get petStatusHappiness => '心情值';
+
+  @override
+  String get petStatusDecayHint => '每小时饱腹 -5、心情 -3\n投喂食物可恢复';
+
+  @override
+  String get petShopBuy => '购买';
+
+  @override
+  String petShopBought(String name) {
+    return '购买了 $name！';
+  }
+
+  @override
+  String get petShopNoCoins => '宠物币不足~';
+
+  @override
+  String petShopSatiety(int value) {
+    return '饱腹+$value';
+  }
+
+  @override
+  String petShopHappiness(int value) {
+    return '心情+$value';
+  }
+
+  @override
+  String petShopEffect(String effect) {
+    return '特效: $effect';
+  }
+
+  @override
+  String get petAchievementsTitle => '成就';
+
+  @override
+  String petAchievementsProgress(int unlocked, int total) {
+    return '$unlocked / $total';
+  }
+
+  @override
+  String get petFeedTitle => '投喂小猫';
+
+  @override
+  String get petFeedButton => '投喂';
+
+  @override
+  String get petFeedButtonEmpty => '投喂 (背包空)';
+
+  @override
+  String get petFeedEmpty => '背包空空如也~ 去商店买点食物吧！';
+
+  @override
+  String petFeedStat(int quantity, int satiety, int happiness) {
+    return 'x$quantity  饱腹+$satiety 心情+$happiness';
+  }
+
+  @override
+  String get petFeedClose => '关闭';
+
+  @override
+  String petCoinReward(int amount) {
+    return '+$amount 宠物币~';
+  }
+
+  @override
+  String get petFoodBanana => '香蕉';
+
+  @override
+  String get petFoodBananaDesc => '软糯香甜，猫猫也爱';
+
+  @override
+  String get petFoodApple => '苹果';
+
+  @override
+  String get petFoodAppleDesc => '一天一苹果，猫猫不找我';
+
+  @override
+  String get petFoodPurpleGrape => '紫葡萄';
+
+  @override
+  String get petFoodPurpleGrapeDesc => '颗颗饱满的甜蜜';
+
+  @override
+  String get petFoodGreenGrape => '绿葡萄';
+
+  @override
+  String get petFoodGreenGrapeDesc => '清爽酸甜，开胃小食';
+
+  @override
+  String get petFoodPineapple => '菠萝';
+
+  @override
+  String get petFoodPineappleDesc => '热带风味，酸甜爆汁';
+
+  @override
+  String get petFoodKiwi => '猕猴桃';
+
+  @override
+  String get petFoodKiwiDesc => '维C满满的小绿球';
+
+  @override
+  String get petFoodCherry => '樱桃';
+
+  @override
+  String get petFoodCherryDesc => '小巧精致，猫猫当玩具拍';
+
+  @override
+  String get petFoodStrawberry => '草莓';
+
+  @override
+  String get petFoodStrawberryDesc => '红彤彤的快乐果实';
+
+  @override
+  String get petFoodCarrot => '胡萝卜';
+
+  @override
+  String get petFoodCarrotDesc => '对眼睛好，虽然猫不在乎';
+
+  @override
+  String get petFoodTomato => '番茄';
+
+  @override
+  String get petFoodTomatoDesc => '水灵灵的新鲜番茄';
+
+  @override
+  String get petFoodEggplant => '茄子';
+
+  @override
+  String get petFoodEggplantDesc => '紫色的健康蔬菜';
+
+  @override
+  String get petFoodPumpkin => '南瓜';
+
+  @override
+  String get petFoodPumpkinDesc => '大大的南瓜，够吃好久';
+
+  @override
+  String get petFoodBroccoli => '花菜';
+
+  @override
+  String get petFoodBroccoliDesc => '像一棵小树，营养丰富';
+
+  @override
+  String get petFoodGarlic => '洋蒜';
+
+  @override
+  String get petFoodGarlicDesc => '猫猫闻了打喷嚏';
+
+  @override
+  String get petFoodPepper => '辣椒';
+
+  @override
+  String get petFoodPepperDesc => '呼~辣到跳起来！';
+
+  @override
+  String get petFoodMushroom => '蘑菇';
+
+  @override
+  String get petFoodMushroomDesc => '鲜美的菌菇，猫猫意外喜欢';
+
+  @override
+  String get petFoodHam => '火腿';
+
+  @override
+  String get petFoodHamDesc => '浓郁肉香，猫猫口水直流';
+
+  @override
+  String get petFoodChicken => '鸡腿';
+
+  @override
+  String get petFoodChickenDesc => '外焦里嫩的大鸡腿';
+
+  @override
+  String get petFoodFish => '鱼';
+
+  @override
+  String get petFoodFishDesc => '猫猫的最爱！没有之一';
+
+  @override
+  String get petFoodLobster => '大龙虾';
+
+  @override
+  String get petFoodLobsterDesc => '顶级海鲜盛宴，猫猫疯狂';
+
+  @override
+  String get petAchieveFirstCoin => '第一桶金';
+
+  @override
+  String get petAchieveFirstCoinDesc => '获得第一枚宠物币';
+
+  @override
+  String get petAchieveRich100 => '小有积蓄';
+
+  @override
+  String get petAchieveRich100Desc => '累计获得 100 宠物币';
+
+  @override
+  String get petAchieveRich500 => '小富翁';
+
+  @override
+  String get petAchieveRich500Desc => '累计获得 500 宠物币';
+
+  @override
+  String get petAchieveRich2000 => '宠物大亨';
+
+  @override
+  String get petAchieveRich2000Desc => '累计获得 2000 宠物币';
+
+  @override
+  String get petAchieveFirstFeed => '初次投喂';
+
+  @override
+  String get petAchieveFirstFeedDesc => '第一次喂食小猫';
+
+  @override
+  String get petAchieveFeed10 => '尽职铲屎官';
+
+  @override
+  String get petAchieveFeed10Desc => '累计投喂 10 次';
+
+  @override
+  String get petAchieveFeed50 => '猫奴认证';
+
+  @override
+  String get petAchieveFeed50Desc => '累计投喂 50 次';
+
+  @override
+  String get petAchieveFullBelly => '吃撑了';
+
+  @override
+  String get petAchieveFullBellyDesc => '饱腹度达到 100';
+
+  @override
+  String get petAchieveHappyMax => '快乐猫猫';
+
+  @override
+  String get petAchieveHappyMaxDesc => '心情值达到 100';
+
+  @override
+  String get petAchieveShopper => '购物达人';
+
+  @override
+  String get petAchieveShopperDesc => '在商店购买 20 次';
+
+  @override
+  String get petAchieveChat1m => '话痨';
+
+  @override
+  String get petAchieveChat1mDesc => '累计消耗 100万 tokens';
+
+  @override
+  String get petAchieveChat50m => '深度用户';
+
+  @override
+  String get petAchieveChat50mDesc => '累计消耗 5000万 tokens';
+
+  @override
+  String get petAchieveChat100m => 'AI 重度依赖';
+
+  @override
+  String get petAchieveChat100mDesc => '累计消耗 1亿 tokens';
+
+  @override
+  String get servicesServerTab => '服务器';
+
+  @override
+  String get serverTitle => '服务器';
+
+  @override
+  String get serverApiServiceTitle => '对外 API 服务';
+
+  @override
+  String get serverApiServiceDesc =>
+      '把本机配置的模型、技能、MCP、记忆与搜索能力以标准协议对外提供。默认仅本机可访问，必须配置访问令牌；开放到局域网前请确认安全设置。';
+
+  @override
+  String get apiServerTitle => '对外 API 服务';
+
+  @override
+  String apiServerRunningPort(Object port) {
+    return '运行中 · 端口 $port';
+  }
+
+  @override
+  String get apiServerStopped => '已停止';
+
+  @override
+  String get apiServerIntro =>
+      '以 OpenAI / Anthropic 兼容接口对外提供聚合能力 (模型/技能/MCP/记忆/搜索)。默认仅本机可访问 (127.0.0.1)，必须配置访问令牌。';
+
+  @override
+  String get apiServerPort => '端口';
+
+  @override
+  String get apiServerToken => '访问令牌 (Bearer Token)';
+
+  @override
+  String get apiServerTokenRandom => '随机生成';
+
+  @override
+  String get apiServerTokenShow => '显示令牌';
+
+  @override
+  String get apiServerTokenHide => '隐藏令牌';
+
+  @override
+  String get apiServerTestInBrowser => '浏览器测试';
+
+  @override
+  String apiServerTestInBrowserFailed(Object url) {
+    return '无法打开浏览器: $url';
+  }
+
+  @override
+  String get apiServerSaveRestart => '保存端口/令牌并重启服务';
+
+  @override
+  String get apiServerProtocolTitle => '协议端点';
+
+  @override
+  String get apiServerProtocolHint =>
+      '按需开放三种对外端点，互不影响。令牌同时支持 Bearer 与 x-api-key 头。';
+
+  @override
+  String get apiServerOpenAiAggTitle => 'OpenAI 聚合';
+
+  @override
+  String get apiServerOpenAiAggDesc =>
+      '跑 RemindAI 自己的 Agent (技能/MCP/记忆/搜索)，以 OpenAI 兼容格式输出。适合通用 OpenAI 客户端接入。';
+
+  @override
+  String get apiServerClaudeAggTitle => 'Claude 聚合';
+
+  @override
+  String get apiServerClaudeAggDesc =>
+      '同样跑 RemindAI 聚合 Agent，但以 Anthropic 协议输出。让仅认 Claude 协议的客户端也能调用本服务的完整聚合能力，工具在服务端内部执行。';
+
+  @override
+  String get apiServerClaudeProxyTitle => 'Claude 纯代理';
+
+  @override
+  String get apiServerClaudeProxyDesc =>
+      '纯协议转换：透传客户端 (如 CherryStudio Agent) 携带的工具与任务给所选模型，由客户端自己执行工具 (不挂载本服务的技能/MCP/记忆)。适合用 Kimi/GPT/Gemini 驱动 CherryStudio 的 Agent 能力。';
+
+  @override
+  String get apiServerModelsTitle => '可用模型';
+
+  @override
+  String get apiServerModelsHint => '勾选对外开放的模型卡；全部不选 = 开放所有模型卡，客户端可任选';
+
+  @override
+  String get apiServerModelsEmpty => '尚未配置任何模型卡';
+
+  @override
+  String get apiServerModelsAllOpen => '未限制：当前开放全部模型卡';
+
+  @override
+  String get apiServerMemoryTitle => '记忆';
+
+  @override
+  String get apiServerMemoryHint => '独立 = 与主程序记忆物理隔离；共享 = 读写主程序记忆 (谨慎)';
+
+  @override
+  String get apiServerMemoryNone => '不挂载';
+
+  @override
+  String get apiServerMemoryIsolated => '独立记忆';
+
+  @override
+  String get apiServerMemoryShared => '共享主记忆';
+
+  @override
+  String get apiServerSearchTitle => '联网搜索';
+
+  @override
+  String get apiServerSearchHint => '需在搜索设置中配置对应引擎的 API Key';
+
+  @override
+  String get apiServerSearchOff => '关闭';
+
+  @override
+  String get apiServerSkillsTitle => '技能';
+
+  @override
+  String get apiServerSkillsHint => '勾选后对外提供该技能的工具与提示词';
+
+  @override
+  String get apiServerSkillsEmpty => '暂无可用技能';
+
+  @override
+  String get apiServerMcpTitle => 'MCP 服务';
+
+  @override
+  String get apiServerMcpHint => '仅已连接的 MCP 才会对外生效 (灰色表示未连接)';
+
+  @override
+  String get apiServerMcpEmpty => '暂无 MCP 服务';
+
+  @override
+  String get apiServerBindAllTitle => '允许局域网访问 (0.0.0.0)';
+
+  @override
+  String get apiServerBindAllDesc =>
+      '开启后同网络的其他设备可调用本服务，等于把你的模型/记忆/工具暴露到局域网。请确保令牌足够强。';
+
+  @override
+  String get apiServerBindAllConfirmTitle => '确认暴露到局域网?';
+
+  @override
+  String get apiServerBindAllConfirmBody =>
+      '开启后，与本机处于同一网络的任何设备都能通过令牌访问该服务，调用你配置的模型、记忆与工具。仅在受信任的网络中开启。';
+
+  @override
+  String get apiServerBindAllConfirmCancel => '取消';
+
+  @override
+  String get apiServerBindAllConfirmOk => '我已了解风险';
+
+  @override
+  String get apiServerIpWhitelistTitle => 'IP 白名单';
+
+  @override
+  String get apiServerIpWhitelistHint =>
+      '留空 = 不限制 (同网络任意设备可访问)；填写后仅列表内地址可访问 (本机始终放行)';
+
+  @override
+  String get apiServerIpWhitelistEmpty => '未配置任何 IP，当前对局域网全部开放';
+
+  @override
+  String get apiServerIpWhitelistInputHint => '192.168.1.5 或 192.168.1.0/24';
+
+  @override
+  String get apiServerIpWhitelistAdd => '添加';
+
+  @override
+  String get apiServerIpWhitelistInvalid =>
+      '格式无效，请输入 IPv4 或 CIDR (如 192.168.1.0/24)';
+
+  @override
+  String apiServerLoadFailed(Object error) {
+    return '加载失败: $error';
+  }
+
+  @override
+  String trayServerOn(Object port) {
+    return '对外服务器 · 运行中 (端口 $port)';
+  }
+
+  @override
+  String get trayServerOff => '对外服务器 · 已停止';
+
+  @override
+  String get trayServerNeedConfig => '对外服务器 (需先配置令牌)';
 }

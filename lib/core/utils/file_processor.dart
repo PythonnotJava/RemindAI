@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../models/file_attachment.dart';
+import 'document_extractor.dart';
 
 /// 文件处理工具：将附件转换为 LLM 多模态内容格式
 class FileProcessor {
@@ -59,7 +60,7 @@ class FileProcessor {
         case FileAttachmentType.code:
           return await _processTextFile(file, attachment);
         case FileAttachmentType.document:
-          return _processDocument(attachment);
+          return await _processDocument(attachment);
         case FileAttachmentType.archive:
           return _processArchive(attachment);
       }
@@ -113,29 +114,34 @@ class FileProcessor {
     return {'type': 'text', 'text': '--- 文件: ${attachment.name} ---\n$content'};
   }
 
-  /// 处理文档类文件 (PDF/DOCX/XLSX)：仅包含元数据
-  static Map<String, dynamic> _processDocument(FileAttachment attachment) {
-    final ext = attachment.name.split('.').last.toLowerCase();
-    String note;
+  /// 处理文档类文件 (PDF/DOCX/XLSX/PPTX)：
+  /// 借助系统命令行工具 (pandoc/pdftotext) 提取真实内容并内联。
+  /// 提取失败时降级为带原因说明的占位符，引导用户安装相应工具。
+  static Future<Map<String, dynamic>> _processDocument(
+    FileAttachment attachment,
+  ) async {
+    final ext = attachment.name.contains('.')
+        ? attachment.name.split('.').last.toLowerCase()
+        : '';
 
-    switch (ext) {
-      case 'pdf':
-        note = '[PDF 文档，大小: ${attachment.formattedSize}，内容提取由服务端处理]';
-      case 'doc':
-      case 'docx':
-        note =
-            '[Word 文档，大小: ${attachment.formattedSize}，'
-            '二进制格式，内容提取为尽力模式]';
-      case 'xls':
-      case 'xlsx':
-        note =
-            '[Excel 表格，大小: ${attachment.formattedSize}，'
-            '二进制格式，内容提取为尽力模式]';
-      default:
-        note = '[文档文件，大小: ${attachment.formattedSize}]';
+    final result = await DocumentExtractor.extract(attachment.path, ext);
+
+    if (result.ok && result.text != null) {
+      return {
+        'type': 'text',
+        'text':
+            '--- 文件: ${attachment.name} (${attachment.formattedSize}) ---\n'
+            '${result.text}',
+      };
     }
 
-    return {'type': 'text', 'text': '--- 文件: ${attachment.name} ---\n$note'};
+    // 提取失败：降级为占位符，附带原因/引导
+    return {
+      'type': 'text',
+      'text':
+          '--- 文件: ${attachment.name} (${attachment.formattedSize}) ---\n'
+          '${result.note ?? '[无法提取文档内容]'}',
+    };
   }
 
   /// 处理压缩包文件
