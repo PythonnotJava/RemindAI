@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -450,12 +451,20 @@ class _NewWorkspaceDialogState extends ConsumerState<NewWorkspaceDialog> {
   // ─── 操作逻辑 ─────────────────────────────────────────────
 
   Future<void> _pickParentDir() async {
-    final dir = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: context.s.wsDialogSelectParentTitle,
-    );
-    if (dir != null) {
-      setState(() => _parentDir = dir);
+    // 如果已选目录被删除，清空以避免系统对话框卡死
+    if (_parentDir.isNotEmpty && !Directory(_parentDir).existsSync()) {
+      setState(() => _parentDir = '');
     }
+    try {
+      final dir = await FilePicker.platform
+          .getDirectoryPath(dialogTitle: context.s.wsDialogSelectParentTitle)
+          .timeout(const Duration(seconds: 60));
+      if (dir != null) {
+        setState(() => _parentDir = dir);
+      }
+    } on TimeoutException {
+      // 系统文件对话框超时
+    } catch (_) {}
   }
 
   Future<void> _runTest(EmbeddingConfig? cfg) async {

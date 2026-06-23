@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -260,10 +261,16 @@ class _WorkspaceSetup extends StatelessWidget {
             const SizedBox(height: 28),
             FilledButton.icon(
               onPressed: () async {
-                final dir = await FilePicker.platform.getDirectoryPath(
-                  dialogTitle: context.s.multiAgentSelectDirTitle,
-                );
-                if (dir != null) onSelected(dir);
+                try {
+                  final dir = await FilePicker.platform
+                      .getDirectoryPath(
+                        dialogTitle: context.s.multiAgentSelectDirTitle,
+                      )
+                      .timeout(const Duration(seconds: 60));
+                  if (dir != null) onSelected(dir);
+                } on TimeoutException {
+                  // 系统文件对话框超时
+                } catch (_) {}
               },
               icon: const Icon(Icons.folder, size: 20),
               label: Text(context.s.multiAgentOpenDir),

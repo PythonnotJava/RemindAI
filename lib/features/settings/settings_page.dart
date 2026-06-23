@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -119,9 +121,16 @@ class SettingsPage extends ConsumerWidget {
   }
 
   Future<void> _pickHistoryPath(BuildContext context, WidgetRef ref) async {
-    final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: '选择历史记录保存目录',
-    );
+    final String? result;
+    try {
+      result = await FilePicker.platform
+          .getDirectoryPath(dialogTitle: '选择历史记录保存目录')
+          .timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      return;
+    } catch (_) {
+      return;
+    }
     if (result == null) return;
     if (!context.mounted) return;
 
@@ -134,9 +143,16 @@ class SettingsPage extends ConsumerWidget {
   }
 
   Future<void> _pickSkillsPath(BuildContext context, WidgetRef ref) async {
-    final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: '选择技能存放目录',
-    );
+    final String? result;
+    try {
+      result = await FilePicker.platform
+          .getDirectoryPath(dialogTitle: '选择技能存放目录')
+          .timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      return;
+    } catch (_) {
+      return;
+    }
     if (result == null) return;
     if (!context.mounted) return;
 
@@ -151,9 +167,16 @@ class SettingsPage extends ConsumerWidget {
   }
 
   Future<void> _pickLogsPath(BuildContext context, WidgetRef ref) async {
-    final result = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: '选择日志存放目录',
-    );
+    final String? result;
+    try {
+      result = await FilePicker.platform
+          .getDirectoryPath(dialogTitle: '选择日志存放目录')
+          .timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      return;
+    } catch (_) {
+      return;
+    }
     if (result == null) return;
     if (!context.mounted) return;
 

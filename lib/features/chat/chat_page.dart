@@ -1332,13 +1332,27 @@ class _WorkDirChip extends ConsumerWidget {
   }
 
   Future<void> _pickDir(BuildContext context, WidgetRef ref) async {
-    final dir = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: context.s.chatSelectWorkingDir,
-    );
-    if (dir != null && context.mounted) {
-      ref.read(workingDirectoryProvider.notifier).state = dir;
-      // 同步到设置持久化
-      await ref.read(settingsProvider.notifier).updateWorkingDirectory(dir);
+    final title = context.s.chatSelectWorkingDir;
+
+    // 如果当前工作目录已被删除，先清空，避免系统文件对话框卡死
+    final current = ref.read(workingDirectoryProvider);
+    if (current.isNotEmpty && !Directory(current).existsSync()) {
+      ref.read(workingDirectoryProvider.notifier).state = '';
+      await ref.read(settingsProvider.notifier).updateWorkingDirectory('');
+    }
+
+    try {
+      final dir = await FilePicker.platform
+          .getDirectoryPath(dialogTitle: title)
+          .timeout(const Duration(seconds: 60));
+      if (dir != null && context.mounted) {
+        ref.read(workingDirectoryProvider.notifier).state = dir;
+        await ref.read(settingsProvider.notifier).updateWorkingDirectory(dir);
+      }
+    } on TimeoutException {
+      // 文件对话框超时（系统级卡死），静默忽略
+    } catch (_) {
+      // 其他平台异常，静默忽略
     }
   }
 
