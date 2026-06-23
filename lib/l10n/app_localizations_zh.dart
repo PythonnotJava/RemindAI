@@ -3163,4 +3163,141 @@ class SZh extends S {
 
   @override
   String get trayServerNeedConfig => '对外服务器 (需先配置令牌)';
+
+  @override
+  String trayOnlineOn(Object port) {
+    return '在线服务 · 运行中 (端口 $port)';
+  }
+
+  @override
+  String get trayOnlineOff => '在线服务 · 已停止';
+
+  @override
+  String get servicesOnlineTab => '在线服务';
+
+  @override
+  String get olsTitle => '在线服务';
+
+  @override
+  String get olsIntro => '局域网内共享 AI 对话服务。白名单用户通过浏览器访问即可使用。';
+
+  @override
+  String olsRunningPort(Object port) {
+    return '运行中 :$port';
+  }
+
+  @override
+  String get olsStopped => '已停止';
+
+  @override
+  String get olsControl => '服务控制';
+
+  @override
+  String get olsPort => '端口';
+
+  @override
+  String get olsMaxConn => '最大连接';
+
+  @override
+  String get olsPause => '拉闸';
+
+  @override
+  String get olsResume => '恢复';
+
+  @override
+  String get olsPauseHint => '停止接受新连接，已在线用户不受影响';
+
+  @override
+  String get olsOnlineUsers => '在线用户';
+
+  @override
+  String get olsNoUsers => '暂无在线用户';
+
+  @override
+  String get olsBusy => '处理中';
+
+  @override
+  String get olsKick => '踢出';
+
+  @override
+  String get olsWhitelist => '白名单';
+
+  @override
+  String get olsWhitelistHint => '(空=允许所有局域网 IP)';
+
+  @override
+  String get olsWhitelistAdd => '添加';
+
+  @override
+  String get olsWhitelistEdit => '编辑白名单';
+
+  @override
+  String get olsWhitelistAddTitle => '添加白名单';
+
+  @override
+  String get olsWhitelistEditTitle => '编辑白名单';
+
+  @override
+  String get olsWhitelistIp => 'IP 地址';
+
+  @override
+  String get olsWhitelistIpHint => '192.168.1.5 或 192.168.1.0/24';
+
+  @override
+  String get olsWhitelistNickname => '昵称';
+
+  @override
+  String get olsWhitelistModels => '模型 (不选=全部可用)';
+
+  @override
+  String get olsWhitelistMcp => 'MCP 服务';
+
+  @override
+  String get olsWhitelistSkill => '技能';
+
+  @override
+  String get olsWhitelistSearch => '联网搜索';
+
+  @override
+  String get olsWhitelistSearchOff => '关闭';
+
+  @override
+  String get olsWhitelistSearchTavily => 'Tavily';
+
+  @override
+  String get olsWhitelistSearchBrave => 'Brave';
+
+  @override
+  String get olsWhitelistSearchBaidu => '百度千帆';
+
+  @override
+  String get olsAllModels => '全部模型';
+
+  @override
+  String olsNModels(Object n) {
+    return '$n个模型';
+  }
+
+  @override
+  String get olsRemove => '移除';
+
+  @override
+  String get olsCancel => '取消';
+
+  @override
+  String get olsSave => '保存';
+
+  @override
+  String get olsOpenBrowser => '浏览器打开';
+
+  @override
+  String olsUserSessionInfo(String ip, Object minutes, Object msgCount) {
+    return '$ip · $minutes分钟 · $msgCount条消息';
+  }
+
+  @override
+  String get olsWhitelistEmpty => '未设置白名单，所有局域网 IP 均可连接';
+
+  @override
+  String get olsNicknameHint => '用户名称';
 }

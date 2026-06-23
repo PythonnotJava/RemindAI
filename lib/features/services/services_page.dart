@@ -4,11 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/l10n/l10n_ext.dart';
 import '../skills/skills_page.dart';
 import '../mcp/mcp_page.dart';
+import '../online_service/online_service_page.dart';
 import '../search/search_page.dart';
 import '../server/server_page.dart';
 import '../toolchain/toolchain_page.dart';
 
-/// 合并的"服务"页 — 包含技能管理、MCP 服务、搜索服务和工具链四个子页面
+/// 合并的"服务"页 — 包含技能管理、MCP 服务、搜索服务、工具链、服务器和在线服务
 class ServicesPage extends ConsumerStatefulWidget {
   const ServicesPage({super.key});
 
@@ -23,7 +24,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -59,6 +60,10 @@ class _ServicesPageState extends ConsumerState<ServicesPage>
               icon: const Icon(Icons.dns_outlined, size: 18),
               text: context.s.servicesServerTab,
             ),
+            Tab(
+              icon: const Icon(Icons.cloud_outlined, size: 18),
+              text: context.s.servicesOnlineTab,
+            ),
           ],
           labelStyle: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w600,
@@ -74,6 +79,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage>
           SearchPageBody(),
           ToolchainPageBody(),
           ServerPageBody(),
+          OnlineServicePageBody(),
         ],
       ),
     );

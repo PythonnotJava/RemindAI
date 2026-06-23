@@ -6012,6 +6012,264 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'对外服务器 (需先配置令牌)'**
   String get trayServerNeedConfig;
+
+  /// No description provided for @trayOnlineOn.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线服务 · 运行中 (端口 {port})'**
+  String trayOnlineOn(Object port);
+
+  /// No description provided for @trayOnlineOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线服务 · 已停止'**
+  String get trayOnlineOff;
+
+  /// No description provided for @servicesOnlineTab.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线服务'**
+  String get servicesOnlineTab;
+
+  /// No description provided for @olsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线服务'**
+  String get olsTitle;
+
+  /// No description provided for @olsIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'局域网内共享 AI 对话服务。白名单用户通过浏览器访问即可使用。'**
+  String get olsIntro;
+
+  /// No description provided for @olsRunningPort.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行中 :{port}'**
+  String olsRunningPort(Object port);
+
+  /// No description provided for @olsStopped.
+  ///
+  /// In zh, this message translates to:
+  /// **'已停止'**
+  String get olsStopped;
+
+  /// No description provided for @olsControl.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务控制'**
+  String get olsControl;
+
+  /// No description provided for @olsPort.
+  ///
+  /// In zh, this message translates to:
+  /// **'端口'**
+  String get olsPort;
+
+  /// No description provided for @olsMaxConn.
+  ///
+  /// In zh, this message translates to:
+  /// **'最大连接'**
+  String get olsMaxConn;
+
+  /// No description provided for @olsPause.
+  ///
+  /// In zh, this message translates to:
+  /// **'拉闸'**
+  String get olsPause;
+
+  /// No description provided for @olsResume.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复'**
+  String get olsResume;
+
+  /// No description provided for @olsPauseHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'停止接受新连接，已在线用户不受影响'**
+  String get olsPauseHint;
+
+  /// No description provided for @olsOnlineUsers.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线用户'**
+  String get olsOnlineUsers;
+
+  /// No description provided for @olsNoUsers.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无在线用户'**
+  String get olsNoUsers;
+
+  /// No description provided for @olsBusy.
+  ///
+  /// In zh, this message translates to:
+  /// **'处理中'**
+  String get olsBusy;
+
+  /// No description provided for @olsKick.
+  ///
+  /// In zh, this message translates to:
+  /// **'踢出'**
+  String get olsKick;
+
+  /// No description provided for @olsWhitelist.
+  ///
+  /// In zh, this message translates to:
+  /// **'白名单'**
+  String get olsWhitelist;
+
+  /// No description provided for @olsWhitelistHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'(空=允许所有局域网 IP)'**
+  String get olsWhitelistHint;
+
+  /// No description provided for @olsWhitelistAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加'**
+  String get olsWhitelistAdd;
+
+  /// No description provided for @olsWhitelistEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑白名单'**
+  String get olsWhitelistEdit;
+
+  /// No description provided for @olsWhitelistAddTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加白名单'**
+  String get olsWhitelistAddTitle;
+
+  /// No description provided for @olsWhitelistEditTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑白名单'**
+  String get olsWhitelistEditTitle;
+
+  /// No description provided for @olsWhitelistIp.
+  ///
+  /// In zh, this message translates to:
+  /// **'IP 地址'**
+  String get olsWhitelistIp;
+
+  /// No description provided for @olsWhitelistIpHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'192.168.1.5 或 192.168.1.0/24'**
+  String get olsWhitelistIpHint;
+
+  /// No description provided for @olsWhitelistNickname.
+  ///
+  /// In zh, this message translates to:
+  /// **'昵称'**
+  String get olsWhitelistNickname;
+
+  /// No description provided for @olsWhitelistModels.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型 (不选=全部可用)'**
+  String get olsWhitelistModels;
+
+  /// No description provided for @olsWhitelistMcp.
+  ///
+  /// In zh, this message translates to:
+  /// **'MCP 服务'**
+  String get olsWhitelistMcp;
+
+  /// No description provided for @olsWhitelistSkill.
+  ///
+  /// In zh, this message translates to:
+  /// **'技能'**
+  String get olsWhitelistSkill;
+
+  /// No description provided for @olsWhitelistSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'联网搜索'**
+  String get olsWhitelistSearch;
+
+  /// No description provided for @olsWhitelistSearchOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭'**
+  String get olsWhitelistSearchOff;
+
+  /// No description provided for @olsWhitelistSearchTavily.
+  ///
+  /// In zh, this message translates to:
+  /// **'Tavily'**
+  String get olsWhitelistSearchTavily;
+
+  /// No description provided for @olsWhitelistSearchBrave.
+  ///
+  /// In zh, this message translates to:
+  /// **'Brave'**
+  String get olsWhitelistSearchBrave;
+
+  /// No description provided for @olsWhitelistSearchBaidu.
+  ///
+  /// In zh, this message translates to:
+  /// **'百度千帆'**
+  String get olsWhitelistSearchBaidu;
+
+  /// No description provided for @olsAllModels.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部模型'**
+  String get olsAllModels;
+
+  /// No description provided for @olsNModels.
+  ///
+  /// In zh, this message translates to:
+  /// **'{n}个模型'**
+  String olsNModels(Object n);
+
+  /// No description provided for @olsRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除'**
+  String get olsRemove;
+
+  /// No description provided for @olsCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消'**
+  String get olsCancel;
+
+  /// No description provided for @olsSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存'**
+  String get olsSave;
+
+  /// No description provided for @olsOpenBrowser.
+  ///
+  /// In zh, this message translates to:
+  /// **'浏览器打开'**
+  String get olsOpenBrowser;
+
+  /// No description provided for @olsUserSessionInfo.
+  ///
+  /// In zh, this message translates to:
+  /// **'{ip} · {minutes}分钟 · {msgCount}条消息'**
+  String olsUserSessionInfo(String ip, Object minutes, Object msgCount);
+
+  /// No description provided for @olsWhitelistEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'未设置白名单，所有局域网 IP 均可连接'**
+  String get olsWhitelistEmpty;
+
+  /// No description provided for @olsNicknameHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'用户名称'**
+  String get olsNicknameHint;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

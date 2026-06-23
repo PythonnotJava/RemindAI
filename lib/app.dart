@@ -13,6 +13,7 @@ import 'l10n/app_localizations.dart';
 import 'core/l10n/l10n_ext.dart';
 import 'providers/settings_provider.dart';
 import 'providers/api_server_provider.dart';
+import 'features/online_service/online_service_provider.dart';
 import 'shared/layout/app_scaffold.dart';
 import 'shared/widgets/region_screenshot.dart';
 import 'shared/widgets/screenshot_editor.dart';
@@ -35,6 +36,7 @@ class RemindAIApp extends ConsumerWidget {
     // 首帧后按需拉起对外 API 服务 (进程级一次性, 不阻塞 UI)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       bootstrapApiServer(ref);
+      bootstrapOnlineService(ref);
     });
 
     return MaterialApp(
@@ -190,6 +192,13 @@ class _WindowWrapperState extends ConsumerState<_WindowWrapper>
       serverLabel = s.trayServerNeedConfig;
     }
 
+    // 在线服务状态
+    final olsServer = ref.read(onlineServerProvider);
+    final olsRunning = olsServer.isRunning;
+    final olsLabel = olsRunning
+        ? s.trayOnlineOn(olsServer.boundPort ?? 2002)
+        : s.trayOnlineOff;
+
     final menu = Menu(
       items: [
         MenuItem(key: 'show', label: s.trayShow),
@@ -200,6 +209,11 @@ class _WindowWrapperState extends ConsumerState<_WindowWrapper>
           checked: running,
           // 未配置令牌时禁用勾选 (点击会引导用户打开窗口配置)
           disabled: !running && !hasToken,
+        ),
+        MenuItem.checkbox(
+          key: 'toggle_online',
+          label: olsLabel,
+          checked: olsRunning,
         ),
         MenuItem.separator(),
         MenuItem(key: 'exit', label: s.trayExit),
@@ -230,6 +244,21 @@ class _WindowWrapperState extends ConsumerState<_WindowWrapper>
     await _refreshTrayMenu();
   }
 
+  /// 切换在线服务的启停
+  Future<void> _toggleOnlineService() async {
+    final server = ref.read(onlineServerProvider);
+    final notifier = ref.read(onlineServiceConfigProvider.notifier);
+    final config = ref.read(onlineServiceConfigProvider).valueOrNull;
+    if (config == null) return;
+
+    if (server.isRunning) {
+      await notifier.save(config.copyWith(enabled: false));
+    } else {
+      await notifier.save(config.copyWith(enabled: true));
+    }
+    await _refreshTrayMenu();
+  }
+
   // ─── TrayListener ───
 
   @override
@@ -254,6 +283,9 @@ class _WindowWrapperState extends ConsumerState<_WindowWrapper>
         break;
       case 'toggle_server':
         _toggleServer();
+        break;
+      case 'toggle_online':
+        _toggleOnlineService();
         break;
       case 'exit':
         windowManager.setPreventClose(false);

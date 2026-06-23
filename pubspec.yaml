@@ -74,6 +74,7 @@ flutter:
     - assets/default_skills/toolshell/
     - assets/default_skills/schedule/
     - assets/default_skills/system/
+    - assets/web/
     - assets/icons/
     - assets/scripts/paddle_ocr/
     - assets/scripts/volcano_tts/

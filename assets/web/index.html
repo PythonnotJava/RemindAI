@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 在线服务</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>AI 对话</h1>
+      <div id="status">连接中...</div>
+    </header>
+    <main id="chat-container">
+      <div id="messages"></div>
+    </main>
+    <footer>
+      <div id="input-area">
+        <textarea id="input" placeholder="输入消息..." rows="1"></textarea>
+        <button id="send-btn" title="发送">➤</button>
+        <button id="stop-btn" title="停止" style="display:none">■</button>
+      </div>
+    </footer>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

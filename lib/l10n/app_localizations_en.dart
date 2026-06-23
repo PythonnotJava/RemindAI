@@ -3246,4 +3246,143 @@ class SEn extends S {
 
   @override
   String get trayServerNeedConfig => 'API Server (configure token first)';
+
+  @override
+  String trayOnlineOn(Object port) {
+    return 'Online Service · Running (port $port)';
+  }
+
+  @override
+  String get trayOnlineOff => 'Online Service · Stopped';
+
+  @override
+  String get servicesOnlineTab => 'Online';
+
+  @override
+  String get olsTitle => 'Online Service';
+
+  @override
+  String get olsIntro =>
+      'Share AI chat service across LAN. Whitelisted users can access via browser.';
+
+  @override
+  String olsRunningPort(Object port) {
+    return 'Running :$port';
+  }
+
+  @override
+  String get olsStopped => 'Stopped';
+
+  @override
+  String get olsControl => 'Service Control';
+
+  @override
+  String get olsPort => 'Port';
+
+  @override
+  String get olsMaxConn => 'Max Connections';
+
+  @override
+  String get olsPause => 'Pause';
+
+  @override
+  String get olsResume => 'Resume';
+
+  @override
+  String get olsPauseHint =>
+      'Stop accepting new connections; online users unaffected';
+
+  @override
+  String get olsOnlineUsers => 'Online Users';
+
+  @override
+  String get olsNoUsers => 'No users online';
+
+  @override
+  String get olsBusy => 'Busy';
+
+  @override
+  String get olsKick => 'Kick';
+
+  @override
+  String get olsWhitelist => 'Whitelist';
+
+  @override
+  String get olsWhitelistHint => '(empty = allow all LAN IPs)';
+
+  @override
+  String get olsWhitelistAdd => 'Add';
+
+  @override
+  String get olsWhitelistEdit => 'Edit whitelist';
+
+  @override
+  String get olsWhitelistAddTitle => 'Add to Whitelist';
+
+  @override
+  String get olsWhitelistEditTitle => 'Edit Whitelist';
+
+  @override
+  String get olsWhitelistIp => 'IP Address';
+
+  @override
+  String get olsWhitelistIpHint => '192.168.1.5 or 192.168.1.0/24';
+
+  @override
+  String get olsWhitelistNickname => 'Nickname';
+
+  @override
+  String get olsWhitelistModels => 'Models (none = all available)';
+
+  @override
+  String get olsWhitelistMcp => 'MCP Servers';
+
+  @override
+  String get olsWhitelistSkill => 'Skills';
+
+  @override
+  String get olsWhitelistSearch => 'Web Search';
+
+  @override
+  String get olsWhitelistSearchOff => 'Off';
+
+  @override
+  String get olsWhitelistSearchTavily => 'Tavily';
+
+  @override
+  String get olsWhitelistSearchBrave => 'Brave';
+
+  @override
+  String get olsWhitelistSearchBaidu => 'Baidu Qianfan';
+
+  @override
+  String get olsAllModels => 'All models';
+
+  @override
+  String olsNModels(Object n) {
+    return '$n models';
+  }
+
+  @override
+  String get olsRemove => 'Remove';
+
+  @override
+  String get olsCancel => 'Cancel';
+
+  @override
+  String get olsSave => 'Save';
+
+  @override
+  String get olsOpenBrowser => 'Open in Browser';
+
+  @override
+  String olsUserSessionInfo(String ip, Object minutes, Object msgCount) {
+    return '$ip · $minutes min · $msgCount messages';
+  }
+
+  @override
+  String get olsWhitelistEmpty => 'No whitelist set; all LAN IPs can connect';
+
+  @override
+  String get olsNicknameHint => 'Username';
 }
