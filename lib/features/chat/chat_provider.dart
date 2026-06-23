@@ -573,17 +573,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // 把工具调用历史也追加为消息（展示用）
       final toolMessages = state.activeToolCalls
           .where((tc) => tc.status == ToolCallStatus.done)
-          .map((tc) => ChatMessage(
-                role: ChatRole.assistant,
-                content: '[工具调用] ${tc.name}',
-                toolCalls: [
-                  ChatToolCall(
-                    id: tc.id,
-                    name: tc.name,
-                    arguments: tc.arguments,
-                  ),
-                ],
-              ))
+          .map(
+            (tc) => ChatMessage(
+              role: ChatRole.assistant,
+              content: '[工具调用] ${tc.name}',
+              toolCalls: [
+                ChatToolCall(id: tc.id, name: tc.name, arguments: tc.arguments),
+              ],
+            ),
+          )
           .toList();
 
       state = state.copyWith(

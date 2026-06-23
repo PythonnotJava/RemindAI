@@ -33,8 +33,8 @@ class OnlineServiceConfigNotifier extends AsyncNotifier<OnlineServiceConfig> {
 
 final onlineServiceConfigProvider =
     AsyncNotifierProvider<OnlineServiceConfigNotifier, OnlineServiceConfig>(
-  OnlineServiceConfigNotifier.new,
-);
+      OnlineServiceConfigNotifier.new,
+    );
 
 /// 活跃连接列表 (定期刷新)
 class OnlineUsersNotifier extends StateNotifier<List<OnlineSession>> {
@@ -62,9 +62,9 @@ class OnlineUsersNotifier extends StateNotifier<List<OnlineSession>> {
 
 final onlineUsersProvider =
     StateNotifierProvider<OnlineUsersNotifier, List<OnlineSession>>((ref) {
-  final server = ref.watch(onlineServerProvider);
-  return OnlineUsersNotifier(server);
-});
+      final server = ref.watch(onlineServerProvider);
+      return OnlineUsersNotifier(server);
+    });
 
 /// 启动在线服务 (app 启动时调用, 同 bootstrapApiServer 模式)
 bool _bootstrapped = false;

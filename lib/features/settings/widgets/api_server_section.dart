@@ -181,8 +181,9 @@ class _ApiServerCardState extends ConsumerState<_ApiServerCard> {
                                     : Icons.visibility_off_outlined,
                                 size: 18,
                               ),
-                              onPressed: () =>
-                                  setState(() => _obscureToken = !_obscureToken),
+                              onPressed: () => setState(
+                                () => _obscureToken = !_obscureToken,
+                              ),
                             ),
                             IconButton(
                               tooltip: s.apiServerTokenRandom,
@@ -263,7 +264,9 @@ class _ApiServerCardState extends ConsumerState<_ApiServerCard> {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.s.apiServerTestInBrowserFailed(uri.toString()))),
+        SnackBar(
+          content: Text(context.s.apiServerTestInBrowserFailed(uri.toString())),
+        ),
       );
     }
   }

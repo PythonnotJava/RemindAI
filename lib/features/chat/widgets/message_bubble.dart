@@ -88,8 +88,7 @@ class MessageBubble extends ConsumerWidget {
                 onEdit: onEdit,
               ),
             // 中断标记
-            if (message.interrupted)
-              _InterruptedTag(colorScheme: colorScheme),
+            if (message.interrupted) _InterruptedTag(colorScheme: colorScheme),
           ],
         ),
       ),
@@ -284,10 +283,7 @@ class _InterruptedTag extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             context.s.msgInterrupted,
-            style: TextStyle(
-              fontSize: 11,
-              color: colorScheme.outline,
-            ),
+            style: TextStyle(fontSize: 11, color: colorScheme.outline),
           ),
         ],
       ),
@@ -386,10 +382,7 @@ class _StreamingBubbleState extends State<StreamingBubble>
         ),
         child: widget.text.isEmpty
             ? _buildThinkingIndicator(context, colorScheme)
-            : MarkdownView(
-                data: widget.text,
-                textColor: colorScheme.onSurface,
-              ),
+            : MarkdownView(data: widget.text, textColor: colorScheme.onSurface),
       ),
     );
   }
@@ -415,10 +408,7 @@ class _StreamingBubbleState extends State<StreamingBubble>
           const SizedBox(width: 8),
           Text(
             context.s.msgThinking,
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(width: 6),
           Text(

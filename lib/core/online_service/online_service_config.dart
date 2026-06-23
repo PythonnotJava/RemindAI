@@ -59,14 +59,12 @@ class WhitelistEntry {
   factory WhitelistEntry.fromJson(Map<String, dynamic> json) => WhitelistEntry(
     ip: json['ip'] as String? ?? '',
     nickname: json['nickname'] as String? ?? '',
-    allowedModelCardIds: (json['allowedModelCardIds'] as List?)
-        ?.cast<String>() ?? const [],
+    allowedModelCardIds:
+        (json['allowedModelCardIds'] as List?)?.cast<String>() ?? const [],
     mcpEnabled: json['mcpEnabled'] as bool? ?? false,
-    mcpServerIds: (json['mcpServerIds'] as List?)
-        ?.cast<String>() ?? const [],
+    mcpServerIds: (json['mcpServerIds'] as List?)?.cast<String>() ?? const [],
     skillEnabled: json['skillEnabled'] as bool? ?? false,
-    skillIds: (json['skillIds'] as List?)
-        ?.cast<String>() ?? const [],
+    skillIds: (json['skillIds'] as List?)?.cast<String>() ?? const [],
     searchProvider: json['searchProvider'] as String? ?? 'none',
   );
 }
@@ -117,9 +115,11 @@ class OnlineServiceConfig {
         port: json['port'] as int? ?? 2002,
         maxConnections: json['maxConnections'] as int? ?? 5,
         accepting: json['accepting'] as bool? ?? true,
-        whitelist: (json['whitelist'] as List?)
-            ?.map((e) => WhitelistEntry.fromJson(e as Map<String, dynamic>))
-            .toList() ?? const [],
+        whitelist:
+            (json['whitelist'] as List?)
+                ?.map((e) => WhitelistEntry.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
       );
 
   /// 持久化路径
@@ -167,7 +167,9 @@ class OnlineServiceConfig {
     }
     // 通配符: "192.168.1.*"
     if (pattern.contains('*')) {
-      final regex = RegExp('^${pattern.replaceAll('.', r'\.').replaceAll('*', r'\d+')}');
+      final regex = RegExp(
+        '^${pattern.replaceAll('.', r'\.').replaceAll('*', r'\d+')}',
+      );
       return regex.hasMatch(clientIp);
     }
     return false;

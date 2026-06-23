@@ -47,9 +47,12 @@ class OnlineServer {
     final address = InternetAddress.anyIPv4; // 局域网可访问
     _server = await HttpServer.bind(address, _config.port);
     _boundPort = _server!.port;
-    _server!.listen(_handleRequest, onError: (e) {
-      _emit(OnlineServerEvent.error('Server error: $e'));
-    });
+    _server!.listen(
+      _handleRequest,
+      onError: (e) {
+        _emit(OnlineServerEvent.error('Server error: $e'));
+      },
+    );
     _emit(OnlineServerEvent.started(_boundPort!));
   }
 
@@ -126,14 +129,20 @@ class OnlineServer {
       } else if (path == '/style.css') {
         _serveString(request, WebAssets.css, 'text/css; charset=utf-8');
       } else if (path == '/app.js') {
-        _serveString(request, WebAssets.js, 'application/javascript; charset=utf-8');
+        _serveString(
+          request,
+          WebAssets.js,
+          'application/javascript; charset=utf-8',
+        );
       } else if (path == '/health') {
         request.response.statusCode = 200;
-        request.response.write(jsonEncode({
-          'status': 'ok',
-          'connections': connectionCount,
-          'maxConnections': _config.maxConnections,
-        }));
+        request.response.write(
+          jsonEncode({
+            'status': 'ok',
+            'connections': connectionCount,
+            'maxConnections': _config.maxConnections,
+          }),
+        );
         await request.response.close();
       } else if (path.startsWith('/download/')) {
         await _handleDownload(request);
@@ -180,8 +189,8 @@ class OnlineServer {
     }
 
     // 白名单检查 (本机始终放行)
-    final isLocalhost = clientIp == '127.0.0.1' || clientIp == '::1' ||
-        clientIp == 'localhost';
+    final isLocalhost =
+        clientIp == '127.0.0.1' || clientIp == '::1' || clientIp == 'localhost';
     final entry = _config.matchIp(clientIp);
     if (!isLocalhost && _config.whitelist.isNotEmpty && entry == null) {
       request.response.statusCode = 403;
@@ -304,7 +313,10 @@ class OnlineServer {
     }
   }
 
-  Future<void> _handleChat(OnlineSession session, Map<String, dynamic> msg) async {
+  Future<void> _handleChat(
+    OnlineSession session,
+    Map<String, dynamic> msg,
+  ) async {
     if (session.busy) {
       _wsSend(session.ws, {'type': 'error', 'message': '正在处理中，请等待'});
       return;
@@ -358,7 +370,10 @@ class OnlineServer {
       var stopped = false;
       final fullBuffer = StringBuffer();
       for (var round = 0; round < 8; round++) {
-        if (!session.busy) { stopped = true; break; }
+        if (!session.busy) {
+          stopped = true;
+          break;
+        }
 
         final buffer = StringBuffer();
         StreamComplete? complete;
@@ -367,7 +382,10 @@ class OnlineServer {
           buildMessages(),
           tools: tools.isNotEmpty ? tools : null,
         )) {
-          if (!session.busy) { stopped = true; break; }
+          if (!session.busy) {
+            stopped = true;
+            break;
+          }
           switch (event) {
             case ContentToken(:final text):
               buffer.write(text);
@@ -389,15 +407,33 @@ class OnlineServer {
 
           // 逐个执行工具
           for (final tc in complete.toolCalls!) {
-            if (!session.busy) { stopped = true; break; }
-            _wsSend(session.ws, {'type': 'tool_call', 'name': tc.name, 'args': tc.arguments});
-            final result = await _executeTool(session, toolHandlers, tc.name, tc.arguments);
+            if (!session.busy) {
+              stopped = true;
+              break;
+            }
+            _wsSend(session.ws, {
+              'type': 'tool_call',
+              'name': tc.name,
+              'args': tc.arguments,
+            });
+            final result = await _executeTool(
+              session,
+              toolHandlers,
+              tc.name,
+              tc.arguments,
+            );
             session.messages.add({
               'role': 'tool',
               'tool_call_id': tc.id,
               'content': result,
             });
-            _wsSend(session.ws, {'type': 'tool_result', 'name': tc.name, 'truncated': result.length > 200 ? '${result.substring(0, 200)}...' : result});
+            _wsSend(session.ws, {
+              'type': 'tool_result',
+              'name': tc.name,
+              'truncated': result.length > 200
+                  ? '${result.substring(0, 200)}...'
+                  : result,
+            });
           }
           if (stopped) break;
           fullBuffer.write(buffer.toString());
@@ -428,7 +464,6 @@ class OnlineServer {
       } else {
         _wsSend(session.ws, {'type': 'done', 'content': response});
       }
-
     } catch (e) {
       _wsSend(session.ws, {'type': 'error', 'message': 'LLM 调用失败: $e'});
     }
@@ -439,7 +474,9 @@ class OnlineServer {
   // ─── 工具收集与执行 ────────────────────────────────────
 
   /// 收集当前 session 可用的工具定义 (OpenAI function format)
-  Future<List<Map<String, dynamic>>> _collectTools(OnlineSession session) async {
+  Future<List<Map<String, dynamic>>> _collectTools(
+    OnlineSession session,
+  ) async {
     final tools = <Map<String, dynamic>>[];
 
     // 1) 联网搜索
@@ -480,7 +517,8 @@ class OnlineServer {
   }
 
   /// 收集工具处理器映射 (name -> handler)
-  Map<String, Future<String> Function(Map<String, dynamic>)> _collectToolHandlers(OnlineSession session) {
+  Map<String, Future<String> Function(Map<String, dynamic>)>
+  _collectToolHandlers(OnlineSession session) {
     final handlers = <String, Future<String> Function(Map<String, dynamic>)>{};
 
     // 搜索
@@ -498,7 +536,9 @@ class OnlineServer {
         ? session.activeMcpServerIds.toList()
         : (session.mcpEnabled ? session.mcpServerIds : <String>[]);
     for (final serverId in mcpIds) {
-      if (mcpState.statuses[serverId] != McpConnectionStatus.connected) continue;
+      if (mcpState.statuses[serverId] != McpConnectionStatus.connected) {
+        continue;
+      }
       final serverTools = mcpState.toolsCache[serverId] ?? [];
       for (final tool in serverTools) {
         final fn = tool['function'] as Map<String, dynamic>?;
@@ -568,10 +608,17 @@ class OnlineServer {
           if (prompt.isNotEmpty) {
             parts.add('## Skill: ${skill.name}\n$prompt');
           } else {
-            _wsSend(session.ws, {'type': 'debug_skills_warn', 'message': 'Skill [${skill.name}] SKILL.md 为空, path=${skill.path}'});
+            _wsSend(session.ws, {
+              'type': 'debug_skills_warn',
+              'message':
+                  'Skill [${skill.name}] SKILL.md 为空, path=${skill.path}',
+            });
           }
         } catch (e) {
-          _wsSend(session.ws, {'type': 'debug_skills_warn', 'message': 'Skill [${skill.name}] 读取失败: $e'});
+          _wsSend(session.ws, {
+            'type': 'debug_skills_warn',
+            'message': 'Skill [${skill.name}] 读取失败: $e',
+          });
         }
       }
     }
@@ -600,24 +647,33 @@ class OnlineServer {
     final allowed = session.allowedModelCardIds;
 
     // 服务端分配的模型
-    final serverModels = (allowed.isEmpty ? allCards : allCards.where(
-      (c) => allowed.contains(c.id),
-    )).map((c) => <String, dynamic>{
-      'id': c.id,
-      'name': c.name,
-      'modelId': c.modelId,
-      'provider': c.provider,
-      'source': 'server',
-    }).toList();
+    final serverModels =
+        (allowed.isEmpty
+                ? allCards
+                : allCards.where((c) => allowed.contains(c.id)))
+            .map(
+              (c) => <String, dynamic>{
+                'id': c.id,
+                'name': c.name,
+                'modelId': c.modelId,
+                'provider': c.provider,
+                'source': 'server',
+              },
+            )
+            .toList();
 
     // 用户自定义模型
-    final userModels = session.userModels.map((m) => <String, dynamic>{
-      'id': m.id,
-      'name': m.name,
-      'modelId': m.modelId,
-      'provider': m.provider,
-      'source': 'user',
-    }).toList();
+    final userModels = session.userModels
+        .map(
+          (m) => <String, dynamic>{
+            'id': m.id,
+            'name': m.name,
+            'modelId': m.modelId,
+            'provider': m.provider,
+            'source': 'user',
+          },
+        )
+        .toList();
 
     _wsSend(session.ws, {
       'type': 'models',
@@ -629,7 +685,9 @@ class OnlineServer {
 
   void _handleAddModel(OnlineSession session, Map<String, dynamic> msg) {
     try {
-      final config = UserModelConfig.fromJson(msg['model'] as Map<String, dynamic>);
+      final config = UserModelConfig.fromJson(
+        msg['model'] as Map<String, dynamic>,
+      );
       // 移除已有同 id 的
       session.userModels.removeWhere((m) => m.id == config.id);
       session.userModels.add(config);
@@ -648,39 +706,60 @@ class OnlineServer {
     _handleListModels(session);
   }
 
-  Future<void> _handleTestModel(OnlineSession session, Map<String, dynamic> msg) async {
-    final baseUrl = (msg['baseUrl'] as String? ?? '').replaceAll(RegExp(r'/$'), '');
+  Future<void> _handleTestModel(
+    OnlineSession session,
+    Map<String, dynamic> msg,
+  ) async {
+    final baseUrl = (msg['baseUrl'] as String? ?? '').replaceAll(
+      RegExp(r'/$'),
+      '',
+    );
     final apiKey = msg['apiKey'] as String? ?? '';
     final provider = msg['provider'] as String? ?? 'openai';
 
     if (baseUrl.isEmpty || apiKey.isEmpty) {
-      _wsSend(session.ws, {'type': 'test_result', 'success': false, 'error': '请填写完整信息'});
+      _wsSend(session.ws, {
+        'type': 'test_result',
+        'success': false,
+        'error': '请填写完整信息',
+      });
       return;
     }
 
     try {
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
-      ));
+      final dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      );
 
       List<String> models = [];
       switch (provider) {
         case 'anthropic':
           final resp = await dio.get(
             '$baseUrl/v1/models',
-            options: Options(headers: {'x-api-key': apiKey, 'anthropic-version': '2023-06-01'}),
+            options: Options(
+              headers: {'x-api-key': apiKey, 'anthropic-version': '2023-06-01'},
+            ),
           );
           if (resp.data is Map && resp.data['data'] is List) {
-            models = (resp.data['data'] as List).map((m) => (m['id'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+            models = (resp.data['data'] as List)
+                .map((m) => (m['id'] ?? '').toString())
+                .where((s) => s.isNotEmpty)
+                .toList();
           }
         case 'gemini':
-          final resp = await dio.get('$baseUrl/models', queryParameters: {'key': apiKey});
+          final resp = await dio.get(
+            '$baseUrl/models',
+            queryParameters: {'key': apiKey},
+          );
           if (resp.data is Map && resp.data['models'] is List) {
             models = (resp.data['models'] as List)
                 .map((m) => (m['name'] ?? '').toString())
                 .map((n) => n.startsWith('models/') ? n.substring(7) : n)
-                .where((s) => s.isNotEmpty).toList();
+                .where((s) => s.isNotEmpty)
+                .toList();
           }
         default: // openai
           final resp = await dio.get(
@@ -688,9 +767,15 @@ class OnlineServer {
             options: Options(headers: {'Authorization': 'Bearer $apiKey'}),
           );
           if (resp.data is Map && resp.data['data'] is List) {
-            models = (resp.data['data'] as List).map((m) => (m['id'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+            models = (resp.data['data'] as List)
+                .map((m) => (m['id'] ?? '').toString())
+                .where((s) => s.isNotEmpty)
+                .toList();
           } else if (resp.data is List) {
-            models = (resp.data as List).map((m) => (m is Map ? (m['id'] ?? '') : m).toString()).where((s) => s.isNotEmpty).toList();
+            models = (resp.data as List)
+                .map((m) => (m is Map ? (m['id'] ?? '') : m).toString())
+                .where((s) => s.isNotEmpty)
+                .toList();
           }
       }
 
@@ -704,10 +789,16 @@ class OnlineServer {
       _wsSend(session.ws, {
         'type': 'test_result',
         'success': false,
-        'error': e.response?.statusCode != null ? 'HTTP ${e.response!.statusCode}' : (e.message ?? '网络错误'),
+        'error': e.response?.statusCode != null
+            ? 'HTTP ${e.response!.statusCode}'
+            : (e.message ?? '网络错误'),
       });
     } catch (e) {
-      _wsSend(session.ws, {'type': 'test_result', 'success': false, 'error': '$e'});
+      _wsSend(session.ws, {
+        'type': 'test_result',
+        'success': false,
+        'error': '$e',
+      });
     }
   }
 
@@ -716,18 +807,26 @@ class OnlineServer {
   void _handleListMcpServers(OnlineSession session) {
     final servers = _ref.read(mcpServersProvider).valueOrNull ?? [];
     final connState = _ref.read(mcpConnectionsProvider);
-    final list = servers.map((s) => <String, dynamic>{
-      'id': s.id,
-      'name': s.name,
-      'transportType': s.transportType.name,
-      'connected': connState.statuses[s.id] == McpConnectionStatus.connected,
-      'active': session.activeMcpServerIds.contains(s.id),
-      'toolCount': (connState.toolsCache[s.id] ?? []).length,
-    }).toList();
+    final list = servers
+        .map(
+          (s) => <String, dynamic>{
+            'id': s.id,
+            'name': s.name,
+            'transportType': s.transportType.name,
+            'connected':
+                connState.statuses[s.id] == McpConnectionStatus.connected,
+            'active': session.activeMcpServerIds.contains(s.id),
+            'toolCount': (connState.toolsCache[s.id] ?? []).length,
+          },
+        )
+        .toList();
     _wsSend(session.ws, {'type': 'mcp_servers', 'data': list});
   }
 
-  Future<void> _handleToggleMcp(OnlineSession session, Map<String, dynamic> msg) async {
+  Future<void> _handleToggleMcp(
+    OnlineSession session,
+    Map<String, dynamic> msg,
+  ) async {
     final serverId = msg['serverId'] as String? ?? '';
     final active = msg['active'] as bool? ?? false;
     if (serverId.isEmpty) return;
@@ -756,13 +855,17 @@ class OnlineServer {
 
   Future<void> _handleListSkills(OnlineSession session) async {
     final skills = _ref.read(skillsProvider).valueOrNull ?? [];
-    final list = skills.map((s) => <String, dynamic>{
-      'id': s.id,
-      'name': s.name,
-      'description': s.description,
-      'isActive': s.isActive,
-      'active': session.activeSkillIds.contains(s.id),
-    }).toList();
+    final list = skills
+        .map(
+          (s) => <String, dynamic>{
+            'id': s.id,
+            'name': s.name,
+            'description': s.description,
+            'isActive': s.isActive,
+            'active': session.activeSkillIds.contains(s.id),
+          },
+        )
+        .toList();
     _wsSend(session.ws, {'type': 'skills', 'data': list});
   }
 
@@ -830,7 +933,10 @@ class OnlineServer {
       // 尝试从内容首行提取文件名 (// file: xxx 或 # file: xxx)
       if (filename.isEmpty) {
         final firstLine = content.split('\n').first.trim();
-        final fileHint = RegExp(r'^(?://|#|/\*)\s*(?:file|filename|path):\s*(.+)', caseSensitive: false);
+        final fileHint = RegExp(
+          r'^(?://|#|/\*)\s*(?:file|filename|path):\s*(.+)',
+          caseSensitive: false,
+        );
         final hintMatch = fileHint.firstMatch(firstLine);
         if (hintMatch != null) {
           filename = hintMatch.group(1)!.trim();
@@ -843,12 +949,14 @@ class OnlineServer {
           final ext = _langToExt(lang);
           filename = 'file_${artifacts.length + 1}$ext';
         }
-        artifacts.add(SessionArtifact(
-          id: const Uuid().v4(),
-          filename: filename,
-          content: content,
-          language: lang,
-        ));
+        artifacts.add(
+          SessionArtifact(
+            id: const Uuid().v4(),
+            filename: filename,
+            content: content,
+            language: lang,
+          ),
+        );
       }
     }
     return artifacts;
@@ -856,13 +964,31 @@ class OnlineServer {
 
   String _langToExt(String lang) {
     const map = {
-      'dart': '.dart', 'python': '.py', 'py': '.py',
-      'javascript': '.js', 'js': '.js', 'typescript': '.ts', 'ts': '.ts',
-      'java': '.java', 'kotlin': '.kt', 'swift': '.swift',
-      'rust': '.rs', 'go': '.go', 'c': '.c', 'cpp': '.cpp',
-      'html': '.html', 'css': '.css', 'json': '.json', 'yaml': '.yaml',
-      'sql': '.sql', 'shell': '.sh', 'bash': '.sh', 'xml': '.xml',
-      'markdown': '.md', 'md': '.md', 'toml': '.toml',
+      'dart': '.dart',
+      'python': '.py',
+      'py': '.py',
+      'javascript': '.js',
+      'js': '.js',
+      'typescript': '.ts',
+      'ts': '.ts',
+      'java': '.java',
+      'kotlin': '.kt',
+      'swift': '.swift',
+      'rust': '.rs',
+      'go': '.go',
+      'c': '.c',
+      'cpp': '.cpp',
+      'html': '.html',
+      'css': '.css',
+      'json': '.json',
+      'yaml': '.yaml',
+      'sql': '.sql',
+      'shell': '.sh',
+      'bash': '.sh',
+      'xml': '.xml',
+      'markdown': '.md',
+      'md': '.md',
+      'toml': '.toml',
     };
     return map[lang.toLowerCase()] ?? '.txt';
   }
@@ -870,11 +996,14 @@ class OnlineServer {
   // ─── LLM 客户端创建 ────────────────────────────────
 
   Future<LlmClient?> _createLlmForSession(
-    OnlineSession session, String? requestedModelId,
+    OnlineSession session,
+    String? requestedModelId,
   ) async {
     // 优先检查是否请求的是用户自定义模型
     if (requestedModelId != null) {
-      final userModel = session.userModels.where((m) => m.id == requestedModelId).firstOrNull;
+      final userModel = session.userModels
+          .where((m) => m.id == requestedModelId)
+          .firstOrNull;
       if (userModel != null) {
         return LlmClient(
           baseUrl: userModel.baseUrl,
@@ -959,7 +1088,9 @@ class OnlineServer {
     if (segments.length >= 3) {
       // 单文件下载
       final artifactId = segments[2];
-      final artifact = session.artifacts.where((a) => a.id == artifactId).firstOrNull;
+      final artifact = session.artifacts
+          .where((a) => a.id == artifactId)
+          .firstOrNull;
       if (artifact == null) {
         request.response.statusCode = 404;
         request.response.write('Artifact not found');
@@ -969,7 +1100,10 @@ class OnlineServer {
       final bytes = utf8.encode(artifact.content);
       request.response.headers
         ..contentType = ContentType('application', 'octet-stream')
-        ..add('Content-Disposition', 'attachment; filename="${artifact.filename}"');
+        ..add(
+          'Content-Disposition',
+          'attachment; filename="${artifact.filename}"',
+        );
       request.response.statusCode = 200;
       request.response.add(bytes);
       await request.response.close();
@@ -993,7 +1127,10 @@ class OnlineServer {
 
     request.response.headers
       ..contentType = ContentType('application', 'zip')
-      ..add('Content-Disposition', 'attachment; filename="artifacts_${session.nickname}.zip"');
+      ..add(
+        'Content-Disposition',
+        'attachment; filename="artifacts_${session.nickname}.zip"',
+      );
     request.response.statusCode = 200;
     request.response.add(zipBytes);
     await request.response.close();
@@ -1029,7 +1166,8 @@ sealed class OnlineServerEvent {
   factory OnlineServerEvent.userJoined(OnlineSession session) = UserJoined;
   factory OnlineServerEvent.userLeft(OnlineSession session) = UserLeft;
   factory OnlineServerEvent.error(String message) = ServerError;
-  factory OnlineServerEvent.configChanged(OnlineServiceConfig config) = ConfigChanged;
+  factory OnlineServerEvent.configChanged(OnlineServiceConfig config) =
+      ConfigChanged;
 }
 
 class ServerStarted implements OnlineServerEvent {

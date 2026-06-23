@@ -2064,4 +2064,3 @@ class _ThinkingBarState extends State<_ThinkingBar>
     return '$m:${s.toString().padLeft(2, '0')}';
   }
 }
-

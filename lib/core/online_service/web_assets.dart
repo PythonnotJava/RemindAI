@@ -826,4 +826,3 @@ document.addEventListener("drop",function(e){e.preventDefault();if(e.dataTransfe
 })();
 ''';
 }
-

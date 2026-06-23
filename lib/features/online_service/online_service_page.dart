@@ -68,9 +68,12 @@ class _OnlineServicePageBodyState extends ConsumerState<OnlineServicePageBody> {
           children: [
             Icon(Icons.cloud_outlined, size: 20, color: cs.primary),
             const SizedBox(width: 8),
-            Text(context.s.olsTitle, style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            )),
+            Text(
+              context.s.olsTitle,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const Spacer(),
             _StatusChip(isRunning: isRunning, port: server.boundPort as int?),
           ],
@@ -78,7 +81,9 @@ class _OnlineServicePageBodyState extends ConsumerState<OnlineServicePageBody> {
         const SizedBox(height: 4),
         Text(
           context.s.olsIntro,
-          style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 20),
 
@@ -116,18 +121,19 @@ class _StatusChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: isRunning
-            ? Colors.green.withOpacity(0.1)
+            ? Colors.green.withValues(alpha: 0.1)
             : cs.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isRunning ? Colors.green : cs.outline.withOpacity(0.3),
+          color: isRunning ? Colors.green : cs.outline.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 8, height: 8,
+            width: 8,
+            height: 8,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isRunning ? Colors.green : cs.outline,
@@ -135,7 +141,9 @@ class _StatusChip extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            isRunning ? context.s.olsRunningPort(port ?? 0) : context.s.olsStopped,
+            isRunning
+                ? context.s.olsRunningPort(port ?? 0)
+                : context.s.olsStopped,
             style: TextStyle(
               fontSize: 12,
               color: isRunning ? Colors.green.shade700 : cs.onSurfaceVariant,
@@ -231,13 +239,16 @@ class _ControlSection extends ConsumerWidget {
                 const Spacer(),
                 // 拉闸按钮
                 FilledButton.tonalIcon(
-                  onPressed: () => _save(
-                    ref, config.copyWith(accepting: !config.accepting),
+                  onPressed: () =>
+                      _save(ref, config.copyWith(accepting: !config.accepting)),
+                  icon: Icon(
+                    config.accepting
+                        ? Icons.power_settings_new
+                        : Icons.power_off,
                   ),
-                  icon: Icon(config.accepting
-                      ? Icons.power_settings_new
-                      : Icons.power_off),
-                  label: Text(config.accepting ? context.s.olsPause : context.s.olsResume),
+                  label: Text(
+                    config.accepting ? context.s.olsPause : context.s.olsResume,
+                  ),
                   style: FilledButton.styleFrom(
                     backgroundColor: config.accepting
                         ? cs.errorContainer
@@ -281,24 +292,33 @@ class _UsersSection extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Text(context.s.olsOnlineUsers, style: theme.textTheme.titleSmall),
+                Text(
+                  context.s.olsOnlineUsers,
+                  style: theme.textTheme.titleSmall,
+                ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: cs.primaryContainer,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('${users.length}',
-                    style: TextStyle(fontSize: 11, color: cs.primary)),
+                  child: Text(
+                    '${users.length}',
+                    style: TextStyle(fontSize: 11, color: cs.primary),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             if (users.isEmpty)
-              Text(context.s.olsNoUsers, style: TextStyle(
-                color: cs.onSurfaceVariant, fontSize: 13,
-              ))
+              Text(
+                context.s.olsNoUsers,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              )
             else
               ...users.map((u) => _UserTile(session: u)),
           ],
@@ -331,7 +351,11 @@ class _UserTile extends ConsumerWidget {
               children: [
                 Text(session.nickname, style: const TextStyle(fontSize: 13)),
                 Text(
-                  context.s.olsUserSessionInfo(session.clientIp, minutes, session.messages.length),
+                  context.s.olsUserSessionInfo(
+                    session.clientIp,
+                    minutes,
+                    session.messages.length,
+                  ),
                   style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                 ),
               ],
@@ -341,10 +365,13 @@ class _UserTile extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Text(context.s.olsBusy, style: const TextStyle(fontSize: 10, color: Colors.orange)),
+              child: Text(
+                context.s.olsBusy,
+                style: const TextStyle(fontSize: 10, color: Colors.orange),
+              ),
             ),
           const SizedBox(width: 8),
           IconButton(
@@ -401,8 +428,10 @@ class _WhitelistSection extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             if (config.whitelist.isEmpty)
-              Text(context.s.olsWhitelistEmpty,
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13))
+              Text(
+                context.s.olsWhitelistEmpty,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              )
             else
               ...config.whitelist.asMap().entries.map(
                 (e) => _WhitelistTile(
@@ -425,9 +454,9 @@ class _WhitelistSection extends ConsumerWidget {
         config: config,
         onSave: (entry) {
           final newList = [...config.whitelist, entry];
-          ref.read(onlineServiceConfigProvider.notifier).save(
-            config.copyWith(whitelist: newList),
-          );
+          ref
+              .read(onlineServiceConfigProvider.notifier)
+              .save(config.copyWith(whitelist: newList));
         },
       ),
     );
@@ -487,7 +516,11 @@ class _WhitelistEditDialogState extends ConsumerState<_WhitelistEditDialog> {
     final skills = ref.watch(skillsProvider).valueOrNull ?? [];
 
     return AlertDialog(
-      title: Text(widget.existing == null ? context.s.olsWhitelistAddTitle : context.s.olsWhitelistEditTitle),
+      title: Text(
+        widget.existing == null
+            ? context.s.olsWhitelistAddTitle
+            : context.s.olsWhitelistEditTitle,
+      ),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -518,16 +551,26 @@ class _WhitelistEditDialogState extends ConsumerState<_WhitelistEditDialog> {
               // 模型分配
               _buildSectionHeader(context.s.olsWhitelistModels),
               Wrap(
-                spacing: 6, runSpacing: 4,
-                children: modelCards.map((c) => FilterChip(
-                  label: Text(c.name, style: const TextStyle(fontSize: 11)),
-                  selected: _selectedModels.contains(c.id),
-                  onSelected: (v) => setState(() {
-                    v ? _selectedModels.add(c.id) : _selectedModels.remove(c.id);
-                  }),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                )).toList(),
+                spacing: 6,
+                runSpacing: 4,
+                children: modelCards
+                    .map(
+                      (c) => FilterChip(
+                        label: Text(
+                          c.name,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        selected: _selectedModels.contains(c.id),
+                        onSelected: (v) => setState(() {
+                          v
+                              ? _selectedModels.add(c.id)
+                              : _selectedModels.remove(c.id);
+                        }),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    )
+                    .toList(),
               ),
               const SizedBox(height: 12),
 
@@ -544,16 +587,27 @@ class _WhitelistEditDialogState extends ConsumerState<_WhitelistEditDialog> {
               ),
               if (_mcpEnabled)
                 Wrap(
-                  spacing: 6, runSpacing: 4,
-                  children: mcpServers.map((s) => FilterChip(
-                    label: Text(s.name, style: const TextStyle(fontSize: 11)),
-                    selected: _selectedMcps.contains(s.id),
-                    onSelected: (v) => setState(() {
-                      v ? _selectedMcps.add(s.id) : _selectedMcps.remove(s.id);
-                    }),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  )).toList(),
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: mcpServers
+                      .map(
+                        (s) => FilterChip(
+                          label: Text(
+                            s.name,
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          selected: _selectedMcps.contains(s.id),
+                          onSelected: (v) => setState(() {
+                            v
+                                ? _selectedMcps.add(s.id)
+                                : _selectedMcps.remove(s.id);
+                          }),
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
+                      .toList(),
                 ),
               const SizedBox(height: 12),
 
@@ -570,16 +624,27 @@ class _WhitelistEditDialogState extends ConsumerState<_WhitelistEditDialog> {
               ),
               if (_skillEnabled)
                 Wrap(
-                  spacing: 6, runSpacing: 4,
-                  children: skills.map((s) => FilterChip(
-                    label: Text(s.name, style: const TextStyle(fontSize: 11)),
-                    selected: _selectedSkills.contains(s.id),
-                    onSelected: (v) => setState(() {
-                      v ? _selectedSkills.add(s.id) : _selectedSkills.remove(s.id);
-                    }),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  )).toList(),
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: skills
+                      .map(
+                        (s) => FilterChip(
+                          label: Text(
+                            s.name,
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          selected: _selectedSkills.contains(s.id),
+                          onSelected: (v) => setState(() {
+                            v
+                                ? _selectedSkills.add(s.id)
+                                : _selectedSkills.remove(s.id);
+                          }),
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
+                      .toList(),
                 ),
             ],
           ),
@@ -614,9 +679,10 @@ class _WhitelistEditDialogState extends ConsumerState<_WhitelistEditDialog> {
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(title, style: const TextStyle(
-        fontSize: 12, fontWeight: FontWeight.w600,
-      )),
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
@@ -644,9 +710,10 @@ class _WhitelistTile extends ConsumerWidget {
         children: [
           Expanded(
             flex: 2,
-            child: Text(entry.ip, style: const TextStyle(
-              fontSize: 13, fontFamily: 'monospace',
-            )),
+            child: Text(
+              entry.ip,
+              style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+            ),
           ),
           Expanded(
             child: Text(
@@ -665,7 +732,8 @@ class _WhitelistTile extends ConsumerWidget {
           _MiniToggle(
             label: 'Skill',
             value: entry.skillEnabled,
-            onChanged: (v) => _updateEntry(ref, entry.copyWith(skillEnabled: v)),
+            onChanged: (v) =>
+                _updateEntry(ref, entry.copyWith(skillEnabled: v)),
           ),
           const SizedBox(width: 8),
           // 模型数量标识
@@ -683,6 +751,12 @@ class _WhitelistTile extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 8),
+          // 编辑
+          IconButton(
+            icon: Icon(Icons.edit_outlined, size: 16, color: cs.primary),
+            tooltip: context.s.olsWhitelistEdit,
+            onPressed: () => _showEditDialog(context, ref),
+          ),
           // 删除
           IconButton(
             icon: Icon(Icons.delete_outline, size: 16, color: cs.error),
@@ -697,16 +771,27 @@ class _WhitelistTile extends ConsumerWidget {
   void _updateEntry(WidgetRef ref, WhitelistEntry newEntry) {
     final list = [...config.whitelist];
     list[index] = newEntry;
-    ref.read(onlineServiceConfigProvider.notifier).save(
-      config.copyWith(whitelist: list),
-    );
+    ref
+        .read(onlineServiceConfigProvider.notifier)
+        .save(config.copyWith(whitelist: list));
   }
 
   void _removeEntry(WidgetRef ref) {
     final list = [...config.whitelist];
     list.removeAt(index);
-    ref.read(onlineServiceConfigProvider.notifier).save(
-      config.copyWith(whitelist: list),
+    ref
+        .read(onlineServiceConfigProvider.notifier)
+        .save(config.copyWith(whitelist: list));
+  }
+
+  void _showEditDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _WhitelistEditDialog(
+        config: config,
+        existing: entry,
+        onSave: (updated) => _updateEntry(ref, updated),
+      ),
     );
   }
 }

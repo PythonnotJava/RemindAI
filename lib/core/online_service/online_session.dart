@@ -18,14 +18,15 @@ class UserModelConfig {
     required this.provider,
   });
 
-  factory UserModelConfig.fromJson(Map<String, dynamic> json) => UserModelConfig(
-    id: json['id'] as String? ?? '',
-    name: json['name'] as String? ?? '',
-    baseUrl: json['baseUrl'] as String? ?? '',
-    apiKey: json['apiKey'] as String? ?? '',
-    modelId: json['modelId'] as String? ?? '',
-    provider: json['provider'] as String? ?? 'openai',
-  );
+  factory UserModelConfig.fromJson(Map<String, dynamic> json) =>
+      UserModelConfig(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        baseUrl: json['baseUrl'] as String? ?? '',
+        apiKey: json['apiKey'] as String? ?? '',
+        modelId: json['modelId'] as String? ?? '',
+        provider: json['provider'] as String? ?? 'openai',
+      );
 
   Map<String, dynamic> toJson() => {
     'id': id,
