@@ -72,7 +72,13 @@ Future<void> main() async {
           final stack = details.stack?.toString() ?? '';
           if (stack.contains('flutter_math_fork')) return;
         }
-        // 其他错误正常处理
+        // 其他错误：终端 + 日志双写
+        final errorMsg = '[FlutterError] ${details.exceptionAsString()}';
+        final stackStr = details.stack?.toString() ?? '';
+        print(errorMsg);
+        if (stackStr.isNotEmpty) {
+          print(stackStr.split('\n').take(8).join('\n'));
+        }
         FlutterError.presentError(details);
       };
 

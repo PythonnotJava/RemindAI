@@ -1429,17 +1429,6 @@ class _MemorySheetState extends ConsumerState<_MemorySheet> {
     super.initState();
     _useQdrant = widget.embedding.useQdrant;
     _persistToSqlite = widget.embedding.persistToSqlite;
-
-    // 打开记忆面板时，如果 session provider 尚未设置 (null)，
-    // 立即初始化为 true，让"打开面板 = 启用记忆"
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (ref.read(sessionMemoryRecallProvider) == null) {
-        ref.read(sessionMemoryRecallProvider.notifier).state = true;
-      }
-      if (ref.read(sessionMemoryStoreProvider) == null) {
-        ref.read(sessionMemoryStoreProvider.notifier).state = true;
-      }
-    });
   }
 
   @override
