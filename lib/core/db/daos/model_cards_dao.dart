@@ -47,6 +47,7 @@ class ModelCardsDao {
     required String modelId,
     String logoPath = '',
     String provider = 'openai',
+    int contextWindow = 0,
   }) async {
     final db = await _dbHelper.database;
     final id = _uuid.v4();
@@ -61,8 +62,8 @@ class ModelCardsDao {
     final nextIndex = ((maxResult.first['m'] as int?) ?? -1) + 1;
 
     db.execute(
-      '''INSERT INTO model_cards (id, name, base_url, api_key, model_id, is_default, created_at, sort_index, logo_path, provider)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+      '''INSERT INTO model_cards (id, name, base_url, api_key, model_id, is_default, created_at, sort_index, logo_path, provider, context_window)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
       [
         id,
         name,
@@ -74,6 +75,7 @@ class ModelCardsDao {
         nextIndex,
         logoPath,
         provider,
+        contextWindow,
       ],
     );
 
@@ -88,6 +90,7 @@ class ModelCardsDao {
       sortIndex: nextIndex,
       logoPath: logoPath,
       provider: provider,
+      contextWindow: contextWindow,
     );
   }
 
@@ -95,7 +98,7 @@ class ModelCardsDao {
     final db = await _dbHelper.database;
     db.execute(
       '''UPDATE model_cards
-         SET name = ?, base_url = ?, api_key = ?, model_id = ?, logo_path = ?, provider = ?
+         SET name = ?, base_url = ?, api_key = ?, model_id = ?, logo_path = ?, provider = ?, context_window = ?
          WHERE id = ?''',
       [
         card.name,
@@ -104,6 +107,7 @@ class ModelCardsDao {
         card.modelId,
         card.logoPath,
         card.provider,
+        card.contextWindow,
         card.id,
       ],
     );

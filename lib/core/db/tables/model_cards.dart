@@ -16,6 +16,9 @@ class ModelCard {
   /// 协议类型标识 (openai / anthropic / gemini)，默认 openai。
   final String provider;
 
+  /// 模型上下文窗口大小 (token 数)，0 表示未知。
+  final int contextWindow;
+
   const ModelCard({
     required this.id,
     required this.name,
@@ -27,6 +30,7 @@ class ModelCard {
     this.sortIndex = 0,
     this.logoPath = '',
     this.provider = 'openai',
+    this.contextWindow = 0,
   });
 
   factory ModelCard.fromRow(Row row) {
@@ -41,6 +45,7 @@ class ModelCard {
       sortIndex: (row['sort_index'] as int?) ?? 0,
       logoPath: row['logo_path'] as String? ?? '',
       provider: row['provider'] as String? ?? 'openai',
+      contextWindow: (row['context_window'] as int?) ?? 0,
     );
   }
 
@@ -53,6 +58,7 @@ class ModelCard {
     int? sortIndex,
     String? logoPath,
     String? provider,
+    int? contextWindow,
   }) {
     return ModelCard(
       id: id,
@@ -65,6 +71,7 @@ class ModelCard {
       sortIndex: sortIndex ?? this.sortIndex,
       logoPath: logoPath ?? this.logoPath,
       provider: provider ?? this.provider,
+      contextWindow: contextWindow ?? this.contextWindow,
     );
   }
 }

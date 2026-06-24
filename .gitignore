@@ -68,3 +68,5 @@ tree.md
 tree.pdf
 
 _engine/
+
+.qdrant-initialized

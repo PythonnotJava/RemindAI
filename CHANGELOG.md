@@ -2,11 +2,13 @@
 
 ## zh
 
-- 提供了在线访问Agent的功能
+- 提供了在线访问Agent的功能.
+- 优化了上下文压缩.
 
 ## en
 
 - Provides online access to the Agent.
+- Optimized context compression.
 
 
 # V1.0.2

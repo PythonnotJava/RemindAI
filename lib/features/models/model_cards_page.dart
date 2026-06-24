@@ -9,6 +9,13 @@ import '../../providers/database_provider.dart';
 import '../../widgets/reorderable_card_grid.dart';
 import '../../widgets/model_logo.dart';
 
+/// 模型检测结果：id + 上下文窗口大小 (0=未知)
+class _DetectedModel {
+  final String id;
+  final int contextWindow;
+  const _DetectedModel(this.id, [this.contextWindow = 0]);
+}
+
 class ModelCardsPage extends ConsumerWidget {
   const ModelCardsPage({super.key});
 
@@ -91,7 +98,7 @@ class ModelCardsPage extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => _ModelCardDialog(
-        onSave: (name, baseUrl, apiKey, modelId, logoPath, provider) {
+        onSave: (name, baseUrl, apiKey, modelId, logoPath, provider, contextWindow) {
           ref
               .read(modelCardsProvider.notifier)
               .addCard(
@@ -101,6 +108,7 @@ class ModelCardsPage extends ConsumerWidget {
                 modelId: modelId,
                 logoPath: logoPath,
                 provider: provider,
+                contextWindow: contextWindow,
               );
         },
       ),
@@ -305,7 +313,7 @@ class _ModelCardTile extends ConsumerWidget {
         initialModelId: card.modelId,
         initialLogoPath: card.logoPath,
         initialProvider: card.provider,
-        onSave: (name, baseUrl, apiKey, modelId, logoPath, provider) {
+        onSave: (name, baseUrl, apiKey, modelId, logoPath, provider, contextWindow) {
           final updated = card.copyWith(
             name: name,
             baseUrl: baseUrl,
@@ -313,6 +321,7 @@ class _ModelCardTile extends ConsumerWidget {
             modelId: modelId,
             logoPath: logoPath,
             provider: provider,
+            contextWindow: contextWindow,
           );
           ref.read(modelCardsProvider.notifier).updateCard(updated);
         },
@@ -359,6 +368,7 @@ class _ModelCardDialog extends StatefulWidget {
     String modelId,
     String logoPath,
     String provider,
+    int contextWindow,
   )
   onSave;
 
@@ -390,7 +400,7 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
   LlmProvider _provider = LlmProvider.openai;
 
   // 模型检测相关
-  List<String> _availableModels = [];
+  List<_DetectedModel> _availableModels = [];
   String? _selectedModel;
   bool _isFetchingModels = false;
   String? _fetchError;
@@ -405,7 +415,7 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
     _provider = LlmProviderX.fromId(widget.initialProvider);
     _selectedModel = widget.initialModelId;
     if (widget.initialModelId != null && widget.initialModelId!.isNotEmpty) {
-      _availableModels = [widget.initialModelId!];
+      _availableModels = [_DetectedModel(widget.initialModelId!)];
     }
   }
 
@@ -442,7 +452,7 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
           ? url.substring(0, url.length - 1)
           : url;
 
-      final List<String> models;
+      final List<_DetectedModel> models;
       switch (_provider) {
         case LlmProvider.anthropic:
           models = await _fetchAnthropicModels(dio, baseUrl, key);
@@ -455,12 +465,12 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
           break;
       }
 
-      models.sort();
+      models.sort((a, b) => a.id.compareTo(b.id));
       setState(() {
         _availableModels = models;
         _isFetchingModels = false;
         if (models.isNotEmpty && _selectedModel == null) {
-          _selectedModel = models.first;
+          _selectedModel = models.first.id;
         }
         if (models.isEmpty) {
           _fetchError = '接口返回空模型列表';
@@ -482,7 +492,8 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
   }
 
   /// OpenAI: GET {base}/models, Bearer
-  Future<List<String>> _fetchOpenAiModels(
+  /// 兼容 OpenRouter/OneAPI 等中转站返回的 context_length 字段。
+  Future<List<_DetectedModel>> _fetchOpenAiModels(
     Dio dio,
     String baseUrl,
     String key,
@@ -494,20 +505,32 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
     final data = response.data;
     if (data is Map && data['data'] is List) {
       return (data['data'] as List)
-          .map((m) => (m['id'] ?? m['name'] ?? '').toString())
-          .where((id) => id.isNotEmpty)
+          .map((m) {
+            final id = (m['id'] ?? m['name'] ?? '').toString();
+            final ctx = _extractContextWindow(m);
+            return id.isNotEmpty ? _DetectedModel(id, ctx) : null;
+          })
+          .whereType<_DetectedModel>()
           .toList();
     } else if (data is List) {
       return data
-          .map((m) => (m is Map ? (m['id'] ?? m['name'] ?? '') : m).toString())
-          .where((id) => id.isNotEmpty)
+          .map((m) {
+            if (m is Map) {
+              final id = (m['id'] ?? m['name'] ?? '').toString();
+              final ctx = _extractContextWindow(m);
+              return id.isNotEmpty ? _DetectedModel(id, ctx) : null;
+            }
+            final id = m.toString();
+            return id.isNotEmpty ? _DetectedModel(id) : null;
+          })
+          .whereType<_DetectedModel>()
           .toList();
     }
     return [];
   }
 
   /// Anthropic: GET {base}/v1/models, x-api-key + anthropic-version
-  Future<List<String>> _fetchAnthropicModels(
+  Future<List<_DetectedModel>> _fetchAnthropicModels(
     Dio dio,
     String baseUrl,
     String key,
@@ -521,15 +544,20 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
     final data = response.data;
     if (data is Map && data['data'] is List) {
       return (data['data'] as List)
-          .map((m) => (m['id'] ?? '').toString())
-          .where((id) => id.isNotEmpty)
+          .map((m) {
+            final id = (m['id'] ?? '').toString();
+            final ctx = _extractContextWindow(m);
+            return id.isNotEmpty ? _DetectedModel(id, ctx) : null;
+          })
+          .whereType<_DetectedModel>()
           .toList();
     }
     return [];
   }
 
   /// Gemini: GET {base}/models?key=, 返回 models[].name (去掉 "models/" 前缀)
-  Future<List<String>> _fetchGeminiModels(
+  /// Gemini API 返回 inputTokenLimit 字段。
+  Future<List<_DetectedModel>> _fetchGeminiModels(
     Dio dio,
     String baseUrl,
     String key,
@@ -541,12 +569,39 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
     final data = response.data;
     if (data is Map && data['models'] is List) {
       return (data['models'] as List)
-          .map((m) => (m['name'] ?? '').toString())
-          .map((n) => n.startsWith('models/') ? n.substring(7) : n)
-          .where((id) => id.isNotEmpty)
+          .map((m) {
+            var id = (m['name'] ?? '').toString();
+            if (id.startsWith('models/')) id = id.substring(7);
+            // Gemini 返回 inputTokenLimit
+            final ctx = (m['inputTokenLimit'] as int?) ?? 0;
+            return id.isNotEmpty ? _DetectedModel(id, ctx) : null;
+          })
+          .whereType<_DetectedModel>()
           .toList();
     }
     return [];
+  }
+
+  /// 从模型对象中尝试提取 context window 大小。
+  /// 兼容多种 API 返回格式:
+  /// - OpenRouter/OneAPI: `context_length`
+  /// - 部分中转站: `max_context`, `context_window`, `max_tokens`
+  /// - Gemini: `inputTokenLimit` (在 _fetchGeminiModels 中单独处理)
+  static int _extractContextWindow(dynamic model) {
+    if (model is! Map) return 0;
+    // 按优先级尝试多种字段名
+    for (final key in [
+      'context_length',
+      'context_window',
+      'max_context',
+      'inputTokenLimit',
+      'max_model_len',
+    ]) {
+      final val = model[key];
+      if (val is int && val > 0) return val;
+      if (val is num && val > 0) return val.toInt();
+    }
+    return 0;
   }
 
   /// 选择 logo 图片文件 (可为空)。
@@ -639,7 +694,7 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
                     // 切换协议后清空已检测模型 (避免跨协议串味)
                     _availableModels =
                         _selectedModel != null && _selectedModel!.isNotEmpty
-                        ? [_selectedModel!]
+                        ? [_DetectedModel(_selectedModel!)]
                         : [];
                     _fetchError = null;
                   });
@@ -705,19 +760,20 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
                               return null;
                             },
                           )
-                        : Autocomplete<String>(
+                        : Autocomplete<_DetectedModel>(
+                            displayStringForOption: (m) => m.id,
                             optionsBuilder: (textEditingValue) {
                               final query = textEditingValue.text.toLowerCase();
                               if (query.isEmpty) return _availableModels;
                               return _availableModels.where(
-                                (m) => m.toLowerCase().contains(query),
+                                (m) => m.id.toLowerCase().contains(query),
                               );
                             },
                             initialValue: _selectedModel != null
                                 ? TextEditingValue(text: _selectedModel!)
                                 : null,
                             onSelected: (v) =>
-                                setState(() => _selectedModel = v),
+                                setState(() => _selectedModel = v.id),
                             optionsMaxHeight: 240,
                             fieldViewBuilder:
                                 (context, controller, focusNode, onSubmitted) {
@@ -778,6 +834,11 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
             if (_formKey.currentState!.validate() &&
                 _selectedModel != null &&
                 _selectedModel!.isNotEmpty) {
+              // 尝试从已检测列表中获取 contextWindow
+              final detected = _availableModels
+                  .where((m) => m.id == _selectedModel)
+                  .firstOrNull;
+              final ctxWindow = detected?.contextWindow ?? 0;
               widget.onSave(
                 _nameCtrl.text.trim(),
                 _urlCtrl.text.trim(),
@@ -785,6 +846,7 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
                 _selectedModel!,
                 _logoPath,
                 _provider.id,
+                ctxWindow,
               );
               Navigator.pop(context);
             }

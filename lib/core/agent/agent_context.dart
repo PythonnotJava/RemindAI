@@ -32,6 +32,7 @@ import 'hooks/memory_recall_hook.dart';
 import 'hooks/memory_store_hook.dart';
 import 'middleware/logging_middleware.dart';
 import 'middleware/permission_middleware.dart';
+import 'transformers/context_compactor.dart';
 
 /// Agent 执行上下文 — 封装一次对话所需的全部运行时资源
 ///
@@ -272,7 +273,17 @@ class AgentContextBuilder {
       systemPromptPrefix: systemPromptPrefix,
       skillsSection: skillsSection,
       messages: existingMessages,
-      messagePipeline: const MessagePipeline(), // 默认空管线，零开销透传
+      messagePipeline: MessagePipeline([
+        if (effectiveStore && memoryManager != null && memoryCollection != null)
+          ContextCompactor(
+            llm: llm,
+            memoryManager: memoryManager,
+            memoryCollection: memoryCollection,
+            useQdrant: useQdrant,
+            // contextWindow 为 0 时，ContextCompactor 用 128K 兜底
+            contextWindow: modelCard.contextWindow,
+          ),
+      ])
     );
   }
 

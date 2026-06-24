@@ -148,6 +148,13 @@ class DatabaseHelper {
       'http_headers',
       "TEXT NOT NULL DEFAULT '{}'",
     );
+    // Migration: add context_window for model cards (模型上下文窗口大小, 0=未知)
+    _migrateAddColumn(
+      db,
+      'model_cards',
+      'context_window',
+      "INTEGER NOT NULL DEFAULT 0",
+    );
 
     // 记忆持久化表 (SQLite 备份层)
     db.execute('''

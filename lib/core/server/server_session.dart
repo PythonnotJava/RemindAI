@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../agent/agent_hook.dart';
 import '../agent/hooks/memory_recall_hook.dart';
 import '../agent/hooks/memory_store_hook.dart';
+import '../agent/message_pipeline.dart';
 import '../agent/tool_middleware.dart';
 import '../agent/tool_pipeline.dart';
+import '../agent/transformers/context_compactor.dart';
 import '../db/daos/memory_dao.dart';
 import '../db/tables/model_cards.dart';
 import '../llm/llm_client.dart';
@@ -39,6 +41,7 @@ class ServerSession {
   final List<AgentHook> hooks;
   final List<Map<String, dynamic>> tools;
   final List<Map<String, dynamic>> messages;
+  final MessagePipeline messagePipeline;
 
   /// 本次会话实际使用的模型卡对外标识 (modelId), 用于响应回显。
   final String modelId;
@@ -50,6 +53,7 @@ class ServerSession {
     required this.tools,
     required this.messages,
     required this.modelId,
+    this.messagePipeline = const MessagePipeline(),
   });
 
   AgentLoop createLoop() => AgentLoop(
@@ -57,6 +61,7 @@ class ServerSession {
     executor: _PipelineExecutor(pipeline),
     tools: tools,
     messages: messages,
+    messagePipeline: messagePipeline,
     hooks: hooks,
   );
 }
@@ -308,6 +313,19 @@ class ServerSessionBuilder {
       'sources=${sourceMapping.length}',
     );
 
+    // ─── 消息变换管线 (上下文压缩) ───
+    final msgPipeline = MessagePipeline([
+      if (memoryManager != null && memoryCollection != null)
+        ContextCompactor(
+          llm: llm,
+          memoryManager: memoryManager,
+          memoryCollection: memoryCollection,
+          useQdrant: useQdrant,
+          // contextWindow 为 0 时，ContextCompactor 用 128K 兜底
+          contextWindow: card.contextWindow,
+        ),
+    ]);
+
     return ServerSession._(
       llm: llm,
       pipeline: pipeline,
@@ -315,6 +333,7 @@ class ServerSessionBuilder {
       tools: tools,
       messages: messages,
       modelId: card.modelId,
+      messagePipeline: msgPipeline,
     );
   }
 }

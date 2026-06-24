@@ -118,6 +118,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       model: defaultCard.modelId,
       logoPath: defaultCard.logoPath,
       provider: defaultCard.provider,
+      contextWindow: defaultCard.contextWindow,
     );
     ref.read(activeModelCardProvider.notifier).state = llmCard;
   }
@@ -213,6 +214,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   model: selected.modelId,
                   logoPath: selected.logoPath,
                   provider: selected.provider,
+                  contextWindow: selected.contextWindow,
                 );
                 ref.read(chatProvider.notifier).switchModel(llmCard);
               },

@@ -139,6 +139,11 @@ class ModelCard {
   /// 协议类型标识 (openai / anthropic / gemini)。
   final String provider;
 
+  /// 模型上下文窗口大小 (token 数)。
+  /// 用于动态计算上下文压缩阈值等场景。
+  /// 0 表示未知，会使用保守默认值。
+  final int contextWindow;
+
   const ModelCard({
     required this.id,
     required this.name,
@@ -147,5 +152,6 @@ class ModelCard {
     required this.model,
     this.logoPath = '',
     this.provider = 'openai',
+    this.contextWindow = 0,
   });
 }

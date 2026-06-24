@@ -72,6 +72,7 @@ class ModelCardsNotifier extends AsyncNotifier<List<ModelCard>> {
     required String modelId,
     String logoPath = '',
     String provider = 'openai',
+    int contextWindow = 0,
   }) async {
     await _dao.insert(
       name: name,
@@ -80,6 +81,7 @@ class ModelCardsNotifier extends AsyncNotifier<List<ModelCard>> {
       modelId: modelId,
       logoPath: logoPath,
       provider: provider,
+      contextWindow: contextWindow,
     );
     ref.invalidateSelf();
   }
