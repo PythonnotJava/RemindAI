@@ -2,9 +2,9 @@
 
 ## zh
 
-- 提供了在线访问Agent的功能.
-- 优化了上下文压缩.
-- 在工作目录下创建、使用临时技能进行临时性自我进化.
+- 提供了在线访问Agent的功能
+- 优化了上下文压缩
+- 在工作目录下创建、使用临时技能进行临时性自我进化
 - 命令功能，比如说创建全局技能并且自己导入
 
 
@@ -12,6 +12,8 @@
 
 - Provides online access to the Agent.
 - Optimized context compression.
+- Create and use temporary skills for temporary self-evolution within the working directory.
+- Command functionality, such as creating global skills and importing them automatically.
 
 
 # V1.0.2

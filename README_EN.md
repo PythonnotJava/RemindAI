@@ -1,7 +1,7 @@
 <div align="center">
   <img src="snapshots/logos/logo_egg.png" alt="RemindAI Logo" width="128" />
   <h1>🧠 RemindAI</h1>
-  <p><strong>Open-source Desktop AI Assistant — Not just chat, a real Tool Shell</strong></p>
+  <p><strong>Open-source Desktop AI Assistant — Beyond just chat</strong></p>
   <p>
     <a href="./README.md">🌐 中文</a> |
     <a href="https://github.com/PythonnotJava/RemindAI/releases">📦 Download</a> |
@@ -28,19 +28,51 @@
 
 ## 💡 What is RemindAI
 
-RemindAI is an **open-source desktop AI assistant** built around a complete **ToolShell** layer that gives LLMs the ability to manipulate files, execute code, call external tools, and manage persistent memory — turning AI into a real productivity tool.
+RemindAI is an **open-source desktop AI assistant** built around a complete **ToolShell** layer that gives LLMs the ability to manipulate files, execute code, call external tools, manage persistent memory, and autonomously plan tasks — turning AI into a productivity tool that can actually *do* things, not just talk about them.
 
-> 🎯 In one line: **Free AI from the chatbox — give it an operating system.**
+> 🎯 Beyond the chatbox — give AI real agency.
 
 ### 🆚 How it differs from typical AI clients
 
 | | 🔵 Typical AI Client | 🟣 RemindAI |
 |---|---|---|
 | 📁 File Ops | ❌ Not supported | ✅ Built-in sandboxed filesystem |
-| 💻 Code Exec | ❌ Not supported | ✅ Built-in Python/Shell executor |
+| 💻 Code Exec | ❌ Not supported | ✅ Built-in Python/Shell/JS executor |
 | 🧠 Memory | ❌ None or context-only | ✅ Vector semantic memory + SQLite |
-| 🔌 Extensions | ⚠️ Limited | ✅ MCP + Skills + Capability plugins |
-| 🤝 Multi-Agent | ⚠️ Side-by-side windows | ✅ Real collaboration with routing |
+| 🔌 Extensions | ⚠️ Limited | ✅ MCP + four-layer Skills + Capability plugins |
+| 🤝 Multi-Agent | ⚠️ Side-by-side windows | ✅ Real collaboration with routing & permission isolation |
+| 🌐 External API | ❌ Not supported | ✅ Built-in HTTP API server with three endpoint types |
+| 🐱 Desktop Companion | ❌ None | ✅ Pixel pet + TTS voice + shop economy + achievements |
+
+---
+
+## 🏗️ RemindAI's Skill System
+
+RemindAI's Skill System uses a **four-layer architecture**, each with independent storage and lifecycle:
+
+| Layer | Name | Storage | Lifecycle | Description |
+|-------|------|---------|-----------|-------------|
+| **L1** | Default Meta-Skills | `assets/default_skills/` | Global, shipped with app | ToolShell, Schedule, System — the three core meta-skills forming AI's fundamental capabilities: file I/O, command execution, task planning, environment probing |
+| **L2** | User Global Skills | `Skills/` | Global, user-toggled | Imported via ZIP or created with `/skill-cti`; reusable across projects. Format: `SKILL.md` + `tools.json` |
+| **L3** | Workspace Temp Skills | `.toolshell/skills/` | Per workspace, always active | AI creates on-demand during guidance; solidifies workflows for the current project; disappears when switching directories — **never pollutes global skills** |
+| **L4** | AI Self-Generated Skills 🧪 | (Planned) | Global, not yet implemented for safety | AI auto-generates skills from long-term conversation memory (e.g., if you frequently consult on operations research, AI distills a dedicated OR skill) and invokes it autonomously |
+
+### Design Philosophy
+
+- **L1 Meta-Skills**: The AI's "OS kernel" — file I/O, command execution, environment probing, task scheduling; the foundation of ToolShell
+- **L2 Global Skills**: Your "toolbox" — reusable expertise for specific domains, code generation, document templates, workflow automation
+- **L3 Temp Skills**: The AI's "sticky notes" — solidify a workflow for the current project, discard cleanly when done. For example, the ToolShell/Schedule/System meta-skill definitions in `memory.json` are injected via the L3 mechanism
+- **L4 Self-Generated** (planned): The AI's "long-term learning" — distill domain preferences and working patterns from conversations into personalized skills. **Deferred due to safety concerns around auto-generated executable code**
+
+### Skill Workflows
+
+| Command | Purpose | Destination |
+|---------|---------|-------------|
+| Direct request to create a skill | Create a project-level skill in current workspace | L3 `.toolshell/skills/` (default) |
+| `/skill-temp` | Explicitly create a project-level temp skill | L3 `.toolshell/skills/` |
+| `/skill-cti` | Create → Self-test → Install as global skill | Built in `.toolshell/_staging/`, installed to L2 `Skills/` after passing tests |
+
+> 💡 If RemindAI's skills system inspires your projects, papers, or other research, please help me improve and link to the project. This would be very helpful for my graduation and future employment. 🙇‍
 
 ---
 
@@ -50,19 +82,22 @@ RemindAI is an **open-source desktop AI assistant** built around a complete **To
 |---|---|---|
 | AI Chat Core (LLM + tool calling) | ✅ | AgentLoop streaming + event-driven UI |
 | Three LLM Protocols (OpenAI/Anthropic/Gemini) | ✅ | Independent clients, streaming+tools+multimodal |
-| ToolShell Meta-Skill | ✅ | read/write/delete/search/exec/python + rg/fd/rtk |
+| ToolShell Meta-Skill | ✅ | read/write/delete/search/exec/python/js + rg/fd/rtk |
 | Schedule Meta-Skill | ✅ | 7 tools CRUD + review + archive |
 | System Meta-Skill | ✅ | Env probe + sanitized env vars |
 | MCP Multi-Transport | ✅ | stdio / SSE / Streamable HTTP |
 | Vector Memory | ✅ | Qdrant + SQLite dual-write + auto failover |
 | Pluggable Capability | ✅ | Search landed, framework extensible |
-| Skills System | ✅ | ZIP import / sort / activate |
+| Four-Layer Skill System | ✅ | L1 default meta + L2 user global + L3 workspace temp, L4 planned |
 | Model Card Management | ✅ | CRUD + logo + drag-sort |
 | Multi-Agent Collaboration | ⚡ | Framework built, execution loop ongoing |
 | Domain Experts | ✅ | Preset/custom roles + skill binding |
 | Conversation Export | ✅ | MD / PDF / Word / HTML |
 | Desktop Experience | ✅ | Tray / notifications / splash / theme animation |
 | Global Pet Agent | ✅ | Pixel cat + TTS voice + shop economy + achievements |
+| External API Server | ✅ | Built-in HTTP server, three endpoints: OpenAI aggregation / Claude Agent / Claude proxy |
+| Online Agent Access | ✅ | Remote access to RemindAI Agent via browser |
+| Context Compression | ✅ | RTK Token compression 60-90% + context management optimization |
 
 ---
 
@@ -70,14 +105,14 @@ RemindAI is an **open-source desktop AI assistant** built around a complete **To
 
 | Feature | Description |
 |---|---|
-| 🐚 ToolShell | File sandbox + Python/Shell exec + rg/fd/rtk + RTK compression 60-90% token savings |
-| 🌐 API Server | Built-in HTTP server with three endpoints: OpenAI aggregation, Claude Agent (RemindAI's own agent loop), and Claude proxy (pass-through) |
+| 🐚 ToolShell | File sandbox + Python/Shell/JS exec + rg/fd/rtk + RTK compression 60-90% token savings |
+| 🌐 API Server | Built-in HTTP server with three endpoints: OpenAI aggregation, Claude Agent (runs RemindAI's own agent loop), and Claude proxy (pass-through) |
 | 🔌 MCP Protocol | stdio/SSE/Streamable HTTP + auto-discovery + drag-and-drop management |
 | 🧠 Vector Memory | Qdrant semantic search + SQLite backup + auto-ops + index rebuild |
 | 🤝 Multi-Agent | Commander/Worker/Reviewer roles + permission isolation + auto-routing |
 | 🎨 Multi-Model | OpenAI/Anthropic/Gemini native + streaming reasoning chain + multimodal |
 | 🧩 Capability | Pluggable architecture, Custom → MCP → ToolShell three-tier routing |
-| 📦 Skills | SKILL.md + tools.json format, one-click ZIP import |
+| 📦 Skills | Four-layer architecture (L1 meta / L2 global / L3 temp / L4 self-gen planned), SKILL.md + tools.json format, one-click ZIP import, command-based creation |
 | 🔍 Web Search | Tavily / Brave / Baidu AI Search, session-level toggle |
 | 📋 Schedule | SCHEDULE.md driven, P0/P1/P2 priority, AI proactive review |
 | 👤 Domain Experts | Preset/custom roles + dedicated system prompts |
@@ -86,6 +121,8 @@ RemindAI is an **open-source desktop AI assistant** built around a complete **To
 | 🌍 i18n | Full Chinese and English |
 | 🎨 Themes | Material 3 light/dark + ripple transition animation |
 | 🐱 Global Pet Agent | Pixel cat companion + right-click AI Q&A + Volcano TTS + shop/inventory/feeding + achievements |
+| 🗜️ Context Compression | RTK output compression + intelligent conversation context trimming |
+| 🌐 Online Access | Remote browser access to Agent with online session management |
 
 ### 📦 Bundled CLI Tools
 

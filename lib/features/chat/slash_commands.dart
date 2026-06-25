@@ -21,6 +21,10 @@ class SlashCommand {
   /// 是否仅在工作目录模式可用（纯对话模式下不可用）
   final bool requiresWorkspace;
 
+  /// 是否必须提供描述。为 true 时，命令后无描述将阻止发送并提示补充；
+  /// 为 false 时，无描述也可直接发送（命令自身即完整意图）。
+  final bool requiresDescription;
+
   /// 把"命令 + 用户描述"展开为发给模型的完整指令
   final String Function(String description) expand;
 
@@ -30,6 +34,7 @@ class SlashCommand {
     required this.subtitle,
     required this.requiresWorkspace,
     required this.expand,
+    this.requiresDescription = true,
   });
 }
 
@@ -41,6 +46,13 @@ const List<SlashCommand> kSlashCommands = [
     subtitle: '创建·测试·安装一个全局技能',
     requiresWorkspace: true,
     expand: _expandSkillCti,
+  ),
+  SlashCommand(
+    command: '/skill-temp',
+    title: '/skill-temp',
+    subtitle: '在当前工作目录创建项目级技能（不装全局）',
+    requiresWorkspace: true,
+    expand: _expandSkillTemp,
   ),
 ];
 
@@ -80,7 +92,7 @@ SlashParseResult parseSlashCommand(String rawText) {
         text.startsWith('${cmd.command} ') || text.startsWith('${cmd.command}\n');
     if (isExact || hasArg) {
       final description = text.substring(cmd.command.length).trim();
-      if (description.isEmpty) {
+      if (description.isEmpty && cmd.requiresDescription) {
         return SlashNeedsDescription(cmd);
       }
       return SlashExpanded(cmd, cmd.expand(description));
@@ -115,3 +127,24 @@ String _expandSkillCti(String description) =>
     '把临时技能提升为全局技能（落在 Skills/ 目录，出现在技能页，由我自行开关，'
     '可在任意工作目录复用）。安装成功后 staging 目录会被自动清理。'
     '安装成功后告知我技能名、用途，并提示可在技能页管理与开关。\n';
+
+/// `/skill-temp` 展开模板：在当前工作目录创建项目级技能，不装全局
+String _expandSkillTemp(String description) =>
+    '请执行 /skill-temp 工作流，在**当前工作目录**创建一个**项目级技能**'
+    '（仅本工作目录生效、恒定激活、跟随工作目录），**不要**装到全局技能库。\n'
+    '\n'
+    '技能需求描述：\n'
+    '$description\n'
+    '\n'
+    '请按以下步骤执行：\n'
+    '\n'
+    '1. 在 `.toolshell/skills/<技能名>/` 下，用 toolshell_write 写入 `SKILL.md`'
+    '（必需，写清技能用途、触发条件、使用指南）；若技能需要自定义工具，'
+    '再按 OpenAI function 格式写 `tools.json`（可选）。\n'
+    '\n'
+    '2. 若技能含可执行逻辑，用 toolshell_run_python / toolshell_run_js / '
+    'toolshell_exec 跑一个最小用例自测，失败则修正后重测。\n'
+    '\n'
+    '3. **不要**调用 toolshell_install_skill——该技能就留在工作目录里。'
+    '完成后告知我：技能已建为项目级技能，仅在当前工作目录生效、下一轮上下文构建时'
+    '自动加载；如需提升为全局可复用技能，可用 /skill-cti。\n';
