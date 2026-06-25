@@ -75,6 +75,41 @@
 
 创建技能后，告知用户该技能已就绪、将在新对话或下一轮上下文构建时自动加载。
 
+## /skill-cti 工作流 (创建·测试·安装到全局)
+
+当用户消息以 `/skill-cti` 开头时（后面跟着对所需技能的描述），按以下三步闭环执行，目标是产出一个**全局可复用**的技能：
+
+### 1. 创建 (Create)
+
+在工作目录下选一个临时目录搭建技能骨架（推荐 `.toolshell/skills/<技能名>/`，便于即时调试）：
+- `SKILL.md`（必需）：清晰写明技能用途、触发条件、使用指南
+- `tools.json`（可选）：若技能需要自定义工具，按 OpenAI function 格式声明
+
+用 `toolshell_write` 写入这些文件。
+
+### 2. 测试 (Test)
+
+安装到全局**之前**必须自测，确认技能可用：
+- 校验 `SKILL.md` 内容完整、`tools.json`（若有）为合法 JSON
+- 若技能含可执行逻辑，用 `toolshell_run_python` / `toolshell_run_js` / `toolshell_exec` 跑一个最小用例验证
+- 自测失败则修正后重测，**不要**带着已知问题安装
+
+### 3. 安装到全局 (Install)
+
+自测通过后，调用 `toolshell_install_skill`，把临时技能目录提升为**全局技能**：
+
+```
+toolshell_install_skill(source_dir="<技能目录绝对路径>", name="<技能名>")
+```
+
+- 全局技能落在应用的 `Skills/` 目录，**不是** `.toolshell/skills/`
+- 安装后该技能出现在技能页，可在任意工作目录启用复用
+- 安装成功后告知用户技能名、用途，并提示可在技能页管理
+
+注意区分两类技能去向：
+- **临时调试 / 仅本目录用** → 放 `.toolshell/skills/`（项目级，跟随工作目录）
+- **沉淀为可复用能力** → 用 `toolshell_install_skill` 装到全局 `Skills/`
+
 ## 记忆系统
 
 ### 存储位置

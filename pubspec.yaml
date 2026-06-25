@@ -45,6 +45,9 @@ dependencies:
   path_provider: ^2.1.5
   archive: ^4.0.2
   file_picker: ^8.1.6
+  # 目录选择改用 file_selector：Windows 上走现代 IFileDialog COM 接口，
+  # 绕开 file_picker 依赖的旧 comdlg32.dll(在部分 Win10 环境会 0xc0000005 崩溃)。
+  file_selector: ^1.0.3
   path: ^1.9.1
   url_launcher: ^6.3.2
   open_filex: ^4.7.0

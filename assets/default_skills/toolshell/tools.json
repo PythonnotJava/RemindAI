@@ -129,6 +129,21 @@
   {
     "type": "function",
     "function": {
+      "name": "toolshell_install_skill",
+      "description": "把一个已做好的技能目录安装到【全局技能库】，使其出现在技能页、可在任意工作目录复用。等价于 App 的「导入技能」功能。典型用于 /skill-cti 流程最后一步：你已在工作目录里写好并自测了技能 (该目录需直接包含 SKILL.md，可选 tools.json)，调用本工具将其提升为全局技能。注意：全局技能落在 Skills 目录，不是 .toolshell/skills。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source_dir": {"type": "string", "description": "技能源目录的绝对路径，必须直接包含 SKILL.md"},
+          "name": {"type": "string", "description": "可选：全局技能名(默认取源目录名)。已存在同名全局技能时覆盖"}
+        },
+        "required": ["source_dir"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "toolshell_run_js",
       "description": "执行JavaScript/TypeScript代码并返回结果。【重要】当用户要求用JS/TS/Node/Bun实现功能、画图、运行脚本时，你必须调用此工具实际执行代码，禁止仅输出代码文本。自动检测可用运行时(优先bun，其次node)。支持ESM语法(import/export)。自动检测echarts等图表库并注入无头渲染，图表会自动输出为PNG图片并返回路径，用![](路径)在回复中展示图片。纯文本结果直接引用stdout。",
       "parameters": {
