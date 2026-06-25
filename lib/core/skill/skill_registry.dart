@@ -353,12 +353,80 @@ class SkillRegistry {
   }
 
   /// 解析技能的 tools.json
+  ///
+  /// 健壮处理多种顶层形态，任何解析失败都只返回空列表、绝不抛异常——
+  /// 单个坏技能不能拖垮整个 Agent 上下文构建（曾因强转 `as List` 崩溃）。
+  /// 支持的顶层形态：
+  /// - 数组 `[ {...}, {...} ]`（标准）
+  /// - 对象包裹 `{ "tools": [ ... ] }`（部分技能写法）
+  /// - 单个工具对象
+  ///
+  /// 同时把**扁平格式**的工具 `{ "name", "description", "parameters" }`
+  /// 归一化为 **OpenAI 标准嵌套格式** `{ "type":"function", "function":{...} }`，
+  /// 使下游（sourceMapping 的 `t['function']`、LLM API）拿到统一 schema。
   Future<List<Map<String, dynamic>>> loadSkillTools(Skill skill) async {
     final file = File(p.join(skill.path, 'tools.json'));
     if (!await file.exists()) return [];
-    final content = await file.readAsString();
-    final list = jsonDecode(content) as List;
-    return list.cast<Map<String, dynamic>>();
+    try {
+      final content = await file.readAsString();
+      if (content.trim().isEmpty) return [];
+      final decoded = jsonDecode(content);
+
+      List<dynamic>? rawList;
+      if (decoded is List) {
+        rawList = decoded;
+      } else if (decoded is Map<String, dynamic>) {
+        final inner = decoded['tools'];
+        if (inner is List) {
+          rawList = inner; // { "tools": [...] }
+        } else if (decoded['function'] != null ||
+            decoded['name'] != null ||
+            decoded['type'] != null) {
+          rawList = [decoded]; // 单个工具对象
+        }
+      }
+
+      if (rawList == null) {
+        print('[SKILL] ⚠ 技能「${skill.name}」tools.json 顶层格式无法识别，已跳过');
+        return [];
+      }
+
+      // 归一化每个工具为 OpenAI 标准嵌套格式，丢弃无法识别的项
+      final result = <Map<String, dynamic>>[];
+      for (final item in rawList) {
+        if (item is! Map<String, dynamic>) continue;
+        final normalized = _normalizeToolDef(item);
+        if (normalized != null) result.add(normalized);
+      }
+      return result;
+    } catch (e) {
+      print('[SKILL] ⚠ 技能「${skill.name}」tools.json 解析失败，已跳过: $e');
+      return [];
+    }
+  }
+
+  /// 把单个工具定义归一化为 OpenAI 标准嵌套格式
+  /// `{ "type":"function", "function":{ "name","description","parameters" } }`。
+  /// 已是嵌套格式则原样返回；扁平格式则包装；无 name 则视为非法返回 null。
+  Map<String, dynamic>? _normalizeToolDef(Map<String, dynamic> tool) {
+    // 已是标准嵌套格式
+    final fn = tool['function'];
+    if (fn is Map<String, dynamic> && fn['name'] is String) {
+      return tool;
+    }
+    // 扁平格式 { name, description, parameters } → 包装
+    if (tool['name'] is String) {
+      return {
+        'type': 'function',
+        'function': {
+          'name': tool['name'],
+          if (tool['description'] != null) 'description': tool['description'],
+          'parameters':
+              tool['parameters'] ?? {'type': 'object', 'properties': {}},
+        },
+      };
+    }
+    return null; // 无 name，无法识别
   }
 
   // ─── 私有方法 ─────────────────────────────────────────────

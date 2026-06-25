@@ -36,7 +36,7 @@ class ImageGenTool extends ToolPlugin {
       label: 'API 地址',
       type: ConfigFieldType.url,
       required: true,
-      hint: '可以是中转站地址，如: https://yunwu.ai',
+      hint: '可以是中转站地址，如: https://example.ai',
     ),
     ConfigField(
       key: 'apiKey',
@@ -719,7 +719,7 @@ class _ImageGenSettingsState extends State<_ImageGenSettings> {
           controller: _apiUrlCtrl,
           decoration: const InputDecoration(
             labelText: 'API 地址',
-            hintText: 'https://yunwu.ai',
+            hintText: 'https://example.ai',
           ),
         ),
         const SizedBox(height: 12),

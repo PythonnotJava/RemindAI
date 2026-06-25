@@ -606,7 +606,7 @@ class _FormulaOcrSettingsState extends State<_FormulaOcrSettings> {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => launchUrl(
-                  Uri.parse('https://www.breezedeus.com/pix2text'),
+                  Uri.parse('https://p2t.breezedeus.com/api-keys'),
                   mode: LaunchMode.externalApplication,
                 ),
                 icon: const Icon(Icons.open_in_new, size: 14),
