@@ -17,6 +17,7 @@ import '../../core/utils/file_processor.dart';
 import '../../core/pet/pet_observer.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../providers/skills_provider.dart';
 export '../../providers/session_provider.dart';
 
 /// UI 中用于展示的工具调用信息
@@ -384,6 +385,19 @@ class ChatNotifier extends StateNotifier<ChatState> {
         if (input.trim().isNotEmpty) {'type': 'text', 'text': input},
         ...fileParts,
       ];
+    }
+
+    // ─── 重扫项目级临时技能目录,感知中途变化 ───
+    // 模型可能在上一轮用 toolshell_write 往工作目录的 .toolshell/skills/
+    // 写入了新的项目级技能。这里强制重建 projectSkillsProvider 让其重扫磁盘,
+    // 使新技能的工具与 SKILL.md 在本轮就能生效。
+    // 项目技能与全局技能数据源隔离,重扫不影响全局技能管理 UI。
+    // 技能集合未变时,下方的签名比对会保持 prompt cache,无额外开销。
+    try {
+      _ref.invalidate(projectSkillsProvider);
+      await _ref.read(projectSkillsProvider.future);
+    } catch (e) {
+      print('[SKILL] 重扫项目技能失败(忽略): $e');
     }
 
     // ─── 使用 AgentContext 构建执行环境 ───

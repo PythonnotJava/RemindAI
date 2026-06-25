@@ -14,6 +14,7 @@ import '../memory/memory_manager.dart';
 import '../memory/project_config.dart';
 import '../memory/qdrant_service.dart';
 import '../search/search_capability.dart';
+import '../skill/skill_model.dart';
 import '../toolshell/agent_loop.dart';
 import '../toolshell/executor.dart';
 import '../../providers/database_provider.dart';
@@ -210,9 +211,8 @@ class AgentContextBuilder {
         PermissionMiddleware(onPermissionRequest: onPermissionRequest),
     ];
 
-    // ─── 收集 skill 可读路径 ───
-    final skillsState = _ref.read(skillsProvider);
-    final activeSkillPaths = (skillsState.valueOrNull ?? [])
+    // ─── 收集 skill 可读路径 (全局 + 项目级) ───
+    final activeSkillPaths = _collectAllSkills()
         .where((s) => s.isActive && s.path.isNotEmpty)
         .map((s) => s.path)
         .toList();
@@ -291,6 +291,17 @@ class AgentContextBuilder {
 
   Map<String, String> _lastSourceMapping = {};
 
+  /// 合并全局技能与项目级临时技能，供 Agent 运行时统一消费。
+  ///
+  /// 全局技能来自 [skillsProvider]（技能页可管理），项目技能来自
+  /// [projectSkillsProvider]（仅扫描工作目录 `.toolshell/skills/`，恒定激活）。
+  /// 两者数据源隔离：项目技能只在此处合并挂载，不污染任何全局技能管理 UI。
+  List<Skill> _collectAllSkills() {
+    final global = _ref.read(skillsProvider).valueOrNull ?? const [];
+    final project = _ref.read(projectSkillsProvider).valueOrNull ?? const [];
+    return [...global, ...project];
+  }
+
   Future<List<Map<String, dynamic>>> _loadTools() async {
     final tools = <Map<String, dynamic>>[];
     final sourceMapping = <String, String>{};
@@ -332,10 +343,9 @@ class AgentContextBuilder {
       tools.addAll(sysTools);
     }
 
-    // 用户技能
+    // 用户技能 (全局 + 项目级临时技能)
     final registry = _ref.read(skillRegistryProvider);
-    final skillsState = _ref.read(skillsProvider);
-    final skills = skillsState.valueOrNull ?? [];
+    final skills = _collectAllSkills();
     final allSkillNames = skills
         .map((s) => '${s.name}(${s.isActive ? "激活" : "未启用"})')
         .toList();
@@ -382,9 +392,9 @@ class AgentContextBuilder {
 
   /// 计算当前激活用户技能的轻量签名。
   /// 用于判断会话中途技能集合是否变化，决定是否需要刷新 system prompt。
-  /// 与 [_buildSkillsSection] 的数据来源保持一致。
+  /// 与 [_buildSkillsSection] 的数据来源保持一致（全局 + 项目级）。
   String computeSkillSignature() {
-    final skills = _ref.read(skillsProvider).valueOrNull ?? [];
+    final skills = _collectAllSkills();
     final active =
         skills
             .where((s) => s.isActive)
@@ -438,8 +448,7 @@ class AgentContextBuilder {
   Future<String> _buildSkillsSection() async {
     final parts = <String>[];
     final registry = _ref.read(skillRegistryProvider);
-    final skillsState = _ref.read(skillsProvider);
-    final skills = skillsState.valueOrNull ?? [];
+    final skills = _collectAllSkills();
     for (final skill in skills) {
       if (!skill.isActive) continue;
       final prompt = await registry.loadSkillPrompt(skill);

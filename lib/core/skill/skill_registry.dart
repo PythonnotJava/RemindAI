@@ -64,6 +64,68 @@ class SkillRegistry {
     return skills;
   }
 
+  /// 项目级临时技能目录的相对路径约定: `<workDir>/.toolshell/skills/`
+  static const projectSkillsRelPath = '.toolshell/skills';
+
+  /// 扫描工作目录下的项目级临时技能 (`.toolshell/skills/<名字>/`)。
+  ///
+  /// 与全局技能不同:
+  /// - 不要求 .skill_meta.json (模型/用户手建时通常不会写)
+  /// - 恒定 isActive=true、isProjectLevel=true
+  /// - id 用 "project:<目录名>" 前缀，避免与全局技能 id 冲突
+  /// - 生命周期跟随工作目录，不写入/不修改任何元数据
+  ///
+  /// [workDir] 为空或目录不存在时返回空列表。
+  Future<List<Skill>> listProjectSkills(String workDir) async {
+    if (workDir.isEmpty) return [];
+
+    final dir = Directory(p.join(workDir, '.toolshell', 'skills'));
+    if (!await dir.exists()) return [];
+
+    final skills = <Skill>[];
+    await for (final entity in dir.list()) {
+      if (entity is! Directory) continue;
+      final skillMdFile = File(p.join(entity.path, 'SKILL.md'));
+      if (!await skillMdFile.exists()) continue;
+
+      final name = p.basename(entity.path);
+
+      // 统计工具数量 (tools.json 可选)
+      int toolCount = 0;
+      final toolsJsonFile = File(p.join(entity.path, 'tools.json'));
+      if (await toolsJsonFile.exists()) {
+        try {
+          final tools = jsonDecode(await toolsJsonFile.readAsString()) as List;
+          toolCount = tools.length;
+        } catch (_) {}
+      }
+
+      DateTime installedAt = DateTime.now();
+      try {
+        installedAt = await skillMdFile
+            .lastModified()
+            .timeout(const Duration(seconds: 2));
+      } catch (_) {}
+
+      skills.add(
+        Skill(
+          id: 'project:$name',
+          name: name,
+          description: '',
+          path: entity.path,
+          toolCount: toolCount,
+          isActive: true, // 项目技能恒定激活
+          installedAt: installedAt,
+          sortIndex: 0,
+          isProjectLevel: true,
+        ),
+      );
+    }
+
+    skills.sort((a, b) => a.name.compareTo(b.name));
+    return skills;
+  }
+
   /// 从 ZIP 文件导入技能
   Future<Skill> importFromZip(String zipPath) async {
     final zipFile = File(zipPath);

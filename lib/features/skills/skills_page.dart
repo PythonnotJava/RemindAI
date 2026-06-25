@@ -189,7 +189,9 @@ class _SkillCardTile extends ConsumerWidget {
             Row(
               children: [
                 Icon(
-                  skill.isBuiltIn ? Icons.lock : Icons.extension,
+                  skill.isProjectLevel
+                      ? Icons.folder_special
+                      : (skill.isBuiltIn ? Icons.lock : Icons.extension),
                   size: 18,
                   color: skill.isActive ? colorScheme.primary : Colors.grey,
                 ),
@@ -204,7 +206,25 @@ class _SkillCardTile extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (skill.isBuiltIn)
+                if (skill.isProjectLevel)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '项目',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: colorScheme.onTertiaryContainer,
+                      ),
+                    ),
+                  )
+                else if (skill.isBuiltIn)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 6,
@@ -246,7 +266,7 @@ class _SkillCardTile extends ConsumerWidget {
               children: [
                 Switch(
                   value: skill.isActive,
-                  onChanged: skill.isBuiltIn
+                  onChanged: (skill.isBuiltIn || skill.isProjectLevel)
                       ? null
                       : (_) => ref
                             .read(skillsProvider.notifier)
@@ -259,14 +279,14 @@ class _SkillCardTile extends ConsumerWidget {
                   visualDensity: VisualDensity.compact,
                   onPressed: () => _showSkillMd(context, ref),
                 ),
-                if (!skill.isBuiltIn)
+                if (!skill.isBuiltIn && !skill.isProjectLevel)
                   IconButton(
                     icon: const Icon(Icons.edit_outlined, size: 18),
                     tooltip: context.s.skillsEditDesc,
                     visualDensity: VisualDensity.compact,
                     onPressed: () => _editDescription(context, ref),
                   ),
-                if (!skill.isBuiltIn)
+                if (!skill.isBuiltIn && !skill.isProjectLevel)
                   IconButton(
                     icon: const Icon(Icons.delete_outline, size: 18),
                     tooltip: context.s.commonDelete,
