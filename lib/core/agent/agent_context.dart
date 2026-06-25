@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +16,7 @@ import '../memory/project_config.dart';
 import '../memory/qdrant_service.dart';
 import '../search/search_capability.dart';
 import '../skill/skill_model.dart';
+import '../skill/skill_registry.dart';
 import '../toolshell/agent_loop.dart';
 import '../toolshell/executor.dart';
 import '../../providers/database_provider.dart';
@@ -179,6 +181,15 @@ class AgentContextBuilder {
     final capabilities = _collectCapabilities();
     final customHandlers = <String, CustomToolHandler>{};
 
+    // 技能安装工具 (toolshell_install_skill): 把工作目录里临时做好的技能
+    // 提升到全局技能库。仅在工作目录模式注册 (其工具定义也只在 toolshell/tools.json)。
+    if (_ref.read(workingDirectoryProvider).isNotEmpty) {
+      final registry = _ref.read(skillRegistryProvider);
+      customHandlers['toolshell_install_skill'] = (args) =>
+          _installSkill(registry, args);
+      toolSourceMapping['toolshell_install_skill'] = '元技能:ToolShell';
+    }
+
     for (final cap in capabilities) {
       if (!cap.isActive) continue;
       // 注册工具定义
@@ -291,15 +302,109 @@ class AgentContextBuilder {
 
   Map<String, String> _lastSourceMapping = {};
 
+  /// 自定义工具 `toolshell_install_skill` 的执行体。
+  ///
+  /// 把工作目录里临时做好的技能目录 (须直接含 SKILL.md) 提升为全局技能，
+  /// 落在 `Skills/` 目录、出现在技能页。安装后刷新 [skillsProvider] 让技能页即时更新。
+  ///
+  /// 安装成功后，若源目录位于 `<工作目录>/.toolshell/` 内（即模型用 /skill-cti 流程
+  /// 搭建的临时 staging 目录），会删除该源目录——技能从"项目临时"毕业为"全局可复用"，
+  /// 不在工作目录留副本。这样避免同一技能被项目技能扫描器重复加载（双载）。
+  /// 内容已存入全局 Skills/，删除不丢数据；仅删模型显式传入、且确属工作目录 .toolshell 下的目录。
+  ///
+  /// 返回 JSON 字符串供模型解析。
+  Future<String> _installSkill(
+    SkillRegistry registry,
+    Map<String, dynamic> args,
+  ) async {
+    final sourceDir = (args['source_dir'] as String?)?.trim() ?? '';
+    final name = (args['name'] as String?)?.trim();
+    if (sourceDir.isEmpty) {
+      return jsonEncode({
+        'status': 'error',
+        'message': '缺少必需参数 source_dir (技能源目录的绝对路径)',
+      });
+    }
+    try {
+      final skill = await registry.installFromDirectory(
+        sourceDir,
+        name: (name != null && name.isNotEmpty) ? name : null,
+      );
+      // 刷新技能页数据源，让新技能立即出现在技能管理 UI
+      _ref.invalidate(skillsProvider);
+      AppLogger.instance.log(
+        '[AgentContext] 技能已安装到全局: ${skill.name} (${skill.path})',
+      );
+
+      // 清理 staging 源目录：仅当其位于 <工作目录>/.toolshell/ 内时删除，
+      // 避免技能在工作目录里残留成无法关闭的项目临时副本（导致双载）。
+      final cleaned = await _cleanupStagingDir(sourceDir);
+      if (cleaned) {
+        _ref.invalidate(projectSkillsProvider);
+      }
+
+      return jsonEncode({
+        'status': 'ok',
+        'name': skill.name,
+        'path': skill.path,
+        'tool_count': skill.toolCount,
+        'staging_cleaned': cleaned,
+        'message': '技能「${skill.name}」已安装到全局技能库，可在技能页管理并在任意工作目录复用'
+            '${cleaned ? "（工作目录的临时副本已清理）" : ""}。',
+      });
+    } catch (e) {
+      AppLogger.instance.log('[AgentContext] 技能安装失败: $e');
+      return jsonEncode({'status': 'error', 'message': '安装失败: $e'});
+    }
+  }
+
+  /// 若 [sourceDir] 位于当前工作目录的 `.toolshell/` 下，则删除它并返回 true；
+  /// 否则不动并返回 false。用于 /skill-cti 安装后清理临时 staging 目录。
+  ///
+  /// 边界保护：解析为绝对/规范化路径后，严格校验 sourceDir 在
+  /// `<工作目录>/.toolshell/` 之内，绝不删除工作目录本身或其外部路径。
+  Future<bool> _cleanupStagingDir(String sourceDir) async {
+    try {
+      final workDir = _ref.read(workingDirectoryProvider);
+      if (workDir.isEmpty) return false;
+
+      final toolshellRoot = p.canonicalize(p.join(workDir, '.toolshell'));
+      final src = p.canonicalize(sourceDir);
+
+      // src 必须严格在 .toolshell/ 之内（且不等于 .toolshell 本身）
+      final isInside = p.isWithin(toolshellRoot, src);
+      if (!isInside) return false;
+
+      final dir = Directory(src);
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
+        AppLogger.instance.log('[AgentContext] 已清理 staging 技能目录: $src');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      AppLogger.instance.log('[AgentContext] 清理 staging 目录失败(忽略): $e');
+      return false;
+    }
+  }
+
   /// 合并全局技能与项目级临时技能，供 Agent 运行时统一消费。
   ///
   /// 全局技能来自 [skillsProvider]（技能页可管理），项目技能来自
   /// [projectSkillsProvider]（仅扫描工作目录 `.toolshell/skills/`，恒定激活）。
   /// 两者数据源隔离：项目技能只在此处合并挂载，不污染任何全局技能管理 UI。
+  ///
+  /// 去重安全网：项目技能与全局技能同名时丢弃项目版（全局优先）。避免某技能既装到
+  /// 全局、又在工作目录 `.toolshell/skills/` 留有同名副本时被重复加载（工具名注册两遍、
+  /// 提示词注入两段）。这是纯内存去重，不删除任何文件。
   List<Skill> _collectAllSkills() {
     final global = _ref.read(skillsProvider).valueOrNull ?? const [];
     final project = _ref.read(projectSkillsProvider).valueOrNull ?? const [];
-    return [...global, ...project];
+    final globalNames = global.map((s) => s.name).toSet();
+    final dedupedProject = project
+        .where((s) => !globalNames.contains(s.name))
+        .toList();
+    return [...global, ...dedupedProject];
   }
 
   Future<List<Map<String, dynamic>>> _loadTools() async {

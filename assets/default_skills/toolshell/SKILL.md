@@ -81,11 +81,16 @@
 
 ### 1. 创建 (Create)
 
-在工作目录下选一个临时目录搭建技能骨架（推荐 `.toolshell/skills/<技能名>/`，便于即时调试）：
+在工作目录下的 **staging 目录** `.toolshell/_staging/<技能名>/` 搭建技能骨架：
 - `SKILL.md`（必需）：清晰写明技能用途、触发条件、使用指南
 - `tools.json`（可选）：若技能需要自定义工具，按 OpenAI function 格式声明
 
 用 `toolshell_write` 写入这些文件。
+
+> 为什么用 `.toolshell/_staging/` 而**不是** `.toolshell/skills/`？
+> `.toolshell/skills/` 会被扫描成"项目级临时技能"并恒定激活——若把 /skill-cti 的产物放那里，
+> 它既会作为项目技能加载、装到全局后又会作为全局技能加载，造成**双重加载**（工具名注册两遍）。
+> `_staging` 不会被扫描，纯粹用于搭建/自测；装到全局后该目录会被自动清理。
 
 ### 2. 测试 (Test)
 
@@ -96,19 +101,20 @@
 
 ### 3. 安装到全局 (Install)
 
-自测通过后，调用 `toolshell_install_skill`，把临时技能目录提升为**全局技能**：
+自测通过后，调用 `toolshell_install_skill`，把 staging 技能目录提升为**全局技能**：
 
 ```
-toolshell_install_skill(source_dir="<技能目录绝对路径>", name="<技能名>")
+toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<技能名>")
 ```
 
-- 全局技能落在应用的 `Skills/` 目录，**不是** `.toolshell/skills/`
-- 安装后该技能出现在技能页，可在任意工作目录启用复用
-- 安装成功后告知用户技能名、用途，并提示可在技能页管理
+- 全局技能落在应用的 `Skills/` 目录，**不是** `.toolshell/`
+- 安装后该技能出现在技能页，由用户自行开关，可在任意工作目录复用
+- 安装成功后 `.toolshell/_staging/<技能名>/` 会被**自动清理**，不在工作目录留副本
+- 安装成功后告知用户技能名、用途，并提示可在技能页管理与开关
 
 注意区分两类技能去向：
-- **临时调试 / 仅本目录用** → 放 `.toolshell/skills/`（项目级，跟随工作目录）
-- **沉淀为可复用能力** → 用 `toolshell_install_skill` 装到全局 `Skills/`
+- **仅本目录长期使用的项目规范** → 放 `.toolshell/skills/`（项目级，跟随工作目录，恒定激活）
+- **沉淀为全局可复用能力**（/skill-cti 的目标）→ 在 `.toolshell/_staging/` 搭建并自测，再用 `toolshell_install_skill` 装到全局 `Skills/`，由用户开关
 
 ## 记忆系统
 

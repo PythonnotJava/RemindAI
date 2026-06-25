@@ -194,6 +194,68 @@ class SkillRegistry {
     return skill;
   }
 
+  /// 从普通目录安装技能到全局技能库 (应用支持目录/Skills 或设置指定目录)。
+  ///
+  /// 用于把工作目录里临时做好的技能 (如 `.toolshell/skills/<名字>/`) "提升"为
+  /// 全局技能：递归复制目录内容到 `Skills/<名字>/`，并补写 `.skill_meta.json`。
+  /// 与 [importFromZip] 共享同一套元数据与加载逻辑，安装后即出现在技能页。
+  ///
+  /// [sourceDir] 源技能目录，必须直接包含 SKILL.md。
+  /// [name] 可选的目标技能名 (默认取源目录名)。
+  /// 已存在同名全局技能目录时覆盖。
+  Future<Skill> installFromDirectory(String sourceDir, {String? name}) async {
+    final src = Directory(sourceDir);
+    if (!await src.exists()) {
+      throw Exception('源目录不存在: $sourceDir');
+    }
+    final srcSkillMd = File(p.join(src.path, 'SKILL.md'));
+    if (!await srcSkillMd.exists()) {
+      throw Exception('源目录缺少 SKILL.md，无法识别为技能: $sourceDir');
+    }
+
+    final skillName = (name != null && name.trim().isNotEmpty)
+        ? name.trim()
+        : p.basename(src.path);
+    final skillId = _uuid.v4();
+    final skillsDir = await getSkillsDir();
+    final skillDir = Directory(p.join(skillsDir.path, skillName));
+
+    // 已存在同名目录则覆盖
+    if (await skillDir.exists()) {
+      await skillDir.delete(recursive: true);
+    }
+    await skillDir.create(recursive: true);
+
+    // 递归复制源目录内容 (跳过源自带的 .skill_meta.json，下面重写)
+    await for (final entity in src.list(recursive: true)) {
+      final rel = p.relative(entity.path, from: src.path);
+      if (rel == '.skill_meta.json') continue;
+      final outPath = p.join(skillDir.path, rel);
+      if (entity is Directory) {
+        await Directory(outPath).create(recursive: true);
+      } else if (entity is File) {
+        await File(outPath).parent.create(recursive: true);
+        await entity.copy(outPath);
+      }
+    }
+
+    // 写入元数据
+    final meta = {
+      'id': skillId,
+      'installed_at': DateTime.now().toIso8601String(),
+      'is_active': true,
+      'sort_index': await _nextSortIndex(),
+    };
+    final metaFile = File(p.join(skillDir.path, '.skill_meta.json'));
+    await metaFile.writeAsString(jsonEncode(meta));
+
+    final skill = await _loadSkillFromDir(skillDir);
+    if (skill == null) {
+      throw Exception('技能加载失败');
+    }
+    return skill;
+  }
+
   /// 删除技能
   Future<void> remove(String skillId) async {
     final skills = await listInstalled();

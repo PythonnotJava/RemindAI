@@ -283,6 +283,17 @@ class SEn extends S {
   String get chatAttachments => 'Attachments';
 
   @override
+  String get chatSlashCommands => 'Commands';
+
+  @override
+  String get chatSlashRequiresWorkspace => 'Open a workspace first';
+
+  @override
+  String chatSlashNeedsDescription(String command) {
+    return 'Add a description after $command before sending';
+  }
+
+  @override
   String get chatInterruptHint =>
       'Type a new message to interrupt current response...';
 

@@ -24,6 +24,7 @@ import '../../providers/skills_provider.dart';
 import '../../core/db/tables/model_cards.dart' as db;
 import '../../widgets/model_logo.dart';
 import 'chat_provider.dart';
+import 'slash_commands.dart';
 import 'widgets/chat_scroll_nav.dart';
 import 'widgets/markdown_view.dart';
 import 'widgets/message_bubble.dart';
@@ -96,9 +97,32 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void _send() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    _controller.clear();
-    ref.read(chatProvider.notifier).sendMessage(text);
-    _focusNode.requestFocus();
+
+    // Slash 命令解析：命中命令则按模板展开，缺描述则阻止发送
+    final parsed = parseSlashCommand(text);
+    switch (parsed) {
+      case SlashNeedsDescription(command: final cmd):
+        // 命令存在但没有描述：不发送，提示用户补充
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(context.s.chatSlashNeedsDescription(cmd.command)),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        return;
+      case SlashExpanded(expandedText: final expanded):
+        _controller.clear();
+        ref.read(chatProvider.notifier).sendMessage(expanded);
+        _focusNode.requestFocus();
+        return;
+      case PlainMessage(text: final plain):
+        _controller.clear();
+        ref.read(chatProvider.notifier).sendMessage(plain);
+        _focusNode.requestFocus();
+        return;
+    }
   }
 
   /// 自动加载默认模型卡片到 activeModelCardProvider
@@ -634,6 +658,17 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
     }
   }
 
+  /// 把选中的 Slash 命令插入输入框：替换为 `<命令> `，光标置于末尾，
+  /// 用户继续补充描述后发送。
+  void _insertSlashCommand(SlashCommand cmd) {
+    final text = '${cmd.command} ';
+    widget.controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    widget.focusNode.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -647,9 +682,14 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Toolbar: Skills / MCP / WorkDir / Memory / Search / Attach chips
+          // Toolbar: Slash / Skills / MCP / WorkDir / Memory / Search / Attach chips
           Row(
             children: [
+              _SlashCommandButton(
+                enabled: !widget.isLoading,
+                onInsert: _insertSlashCommand,
+              ),
+              const SizedBox(width: 8),
               const _SkillsChip(),
               const SizedBox(width: 8),
               const _McpChip(),
@@ -838,6 +878,69 @@ class _AttachmentChipsRow extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Slash 命令按钮 — 弹出命令菜单，点击命令插入输入框
+///
+/// 工作目录专属命令（[SlashCommand.requiresWorkspace]）在纯对话模式下禁用并置灰。
+class _SlashCommandButton extends ConsumerWidget {
+  final bool enabled;
+  final void Function(SlashCommand) onInsert;
+
+  const _SlashCommandButton({required this.enabled, required this.onInsert});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasWorkspace = ref.watch(workingDirectoryProvider).isNotEmpty;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return MenuAnchor(
+      builder: (context, controller, _) => ActionChip(
+        avatar: const Icon(Icons.terminal, size: 16),
+        label: Text(
+          context.s.chatSlashCommands,
+          style: const TextStyle(fontSize: 12),
+        ),
+        onPressed: enabled
+            ? () => controller.isOpen ? controller.close() : controller.open()
+            : null,
+      ),
+      menuChildren: [
+        for (final cmd in kSlashCommands)
+          MenuItemButton(
+            onPressed: (cmd.requiresWorkspace && !hasWorkspace)
+                ? null
+                : () => onInsert(cmd),
+            child: SizedBox(
+              width: 280,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    cmd.title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    (cmd.requiresWorkspace && !hasWorkspace)
+                        ? '${cmd.subtitle}（${context.s.chatSlashRequiresWorkspace}）'
+                        : cmd.subtitle,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

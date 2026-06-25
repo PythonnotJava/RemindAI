@@ -625,6 +625,24 @@ abstract class S {
   /// **'附件'**
   String get chatAttachments;
 
+  /// No description provided for @chatSlashCommands.
+  ///
+  /// In zh, this message translates to:
+  /// **'命令'**
+  String get chatSlashCommands;
+
+  /// No description provided for @chatSlashRequiresWorkspace.
+  ///
+  /// In zh, this message translates to:
+  /// **'需先打开工作目录'**
+  String get chatSlashRequiresWorkspace;
+
+  /// No description provided for @chatSlashNeedsDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'请在 {command} 后补充描述再发送'**
+  String chatSlashNeedsDescription(String command);
+
   /// No description provided for @chatInterruptHint.
   ///
   /// In zh, this message translates to:

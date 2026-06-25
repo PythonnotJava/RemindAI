@@ -277,6 +277,17 @@ class SZh extends S {
   String get chatAttachments => '附件';
 
   @override
+  String get chatSlashCommands => '命令';
+
+  @override
+  String get chatSlashRequiresWorkspace => '需先打开工作目录';
+
+  @override
+  String chatSlashNeedsDescription(String command) {
+    return '请在 $command 后补充描述再发送';
+  }
+
+  @override
   String get chatInterruptHint => '输入新消息可中断当前响应...';
 
   @override
