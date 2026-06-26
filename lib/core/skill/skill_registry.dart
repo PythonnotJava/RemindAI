@@ -102,9 +102,9 @@ class SkillRegistry {
 
       DateTime installedAt = DateTime.now();
       try {
-        installedAt = await skillMdFile
-            .lastModified()
-            .timeout(const Duration(seconds: 2));
+        installedAt = await skillMdFile.lastModified().timeout(
+          const Duration(seconds: 2),
+        );
       } catch (_) {}
 
       skills.add(

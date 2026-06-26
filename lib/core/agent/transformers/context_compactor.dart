@@ -125,10 +125,7 @@ class ContextCompactor extends MessageTransformer {
     // ─── 第三步：重组消息列表 ───
     final result = <Map<String, dynamic>>[
       system,
-      {
-        'role': 'system',
-        'content': '[以下是之前对话的摘要，供你参考上下文]\n$summary',
-      },
+      {'role': 'system', 'content': '[以下是之前对话的摘要，供你参考上下文]\n$summary'},
       ...recent,
     ];
 
@@ -207,9 +204,7 @@ class ContextCompactor extends MessageTransformer {
   /// 每 3 轮对话为一组，调用 LLM 提取值得记忆的信息并存储。
   /// 这确保了即使摘要被再次压缩，重要信息仍可通过语义检索召回。
   Future<void> _sinkToMemory(List<Map<String, dynamic>> messages) async {
-    AppLogger.instance.log(
-      '[Compactor] 开始记忆沉淀: ${messages.length}条消息',
-    );
+    AppLogger.instance.log('[Compactor] 开始记忆沉淀: ${messages.length}条消息');
 
     // 按 6 条为一组（约 3 轮对话）批量处理
     const batchSize = 6;
@@ -266,9 +261,7 @@ class ContextCompactor extends MessageTransformer {
   Future<String> _summarize(List<Map<String, dynamic>> messages) async {
     final text = _messagesToText(messages);
 
-    AppLogger.instance.log(
-      '[Compactor] 生成摘要: 原文 ${text.length} 字符',
-    );
+    AppLogger.instance.log('[Compactor] 生成摘要: 原文 ${text.length} 字符');
 
     try {
       final response = await llm.chat([
@@ -288,9 +281,7 @@ class ContextCompactor extends MessageTransformer {
       ]);
 
       final summary = response.content?.trim() ?? '';
-      AppLogger.instance.log(
-        '[Compactor] 摘要生成完成: ${summary.length} 字符',
-      );
+      AppLogger.instance.log('[Compactor] 摘要生成完成: ${summary.length} 字符');
       return summary.isEmpty ? _fallbackSummary(messages) : summary;
     } catch (e) {
       AppLogger.instance.log('[Compactor] 摘要生成失败: $e, 使用降级方案');
@@ -307,7 +298,9 @@ class ContextCompactor extends MessageTransformer {
         final content = msg['content'];
         final text = content is String ? content : '';
         if (text.isNotEmpty) {
-          final preview = text.length > 80 ? '${text.substring(0, 80)}...' : text;
+          final preview = text.length > 80
+              ? '${text.substring(0, 80)}...'
+              : text;
           lines.add('[$role] $preview');
         }
       }

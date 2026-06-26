@@ -8,6 +8,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/l10n/l10n_ext.dart';
+import '../../../core/utils/directory_picker.dart';
 import 'siyu_markdown.dart';
 
 /// 思宇项目的标识文件名
@@ -54,7 +55,7 @@ class _SiyuEditorPageState extends State<SiyuEditorPage> {
 
   /// 新建项目：用户选择父目录 + 输入项目名 → 自动创建项目文件夹
   Future<void> _newProject() async {
-    final parentDir = await FilePicker.platform.getDirectoryPath(
+    final parentDir = await pickDirectory(
       dialogTitle: context.s.siyuPickLocation,
     );
     if (parentDir == null) return;

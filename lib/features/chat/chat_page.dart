@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/export/conversation_exporter.dart';
 import '../../core/l10n/l10n_ext.dart';
+import '../../core/utils/directory_picker.dart';
 import '../../core/llm/models.dart';
 import '../../core/models/file_attachment.dart';
 import '../../core/settings/app_settings.dart';
@@ -1446,18 +1447,10 @@ class _WorkDirChip extends ConsumerWidget {
       await ref.read(settingsProvider.notifier).updateWorkingDirectory('');
     }
 
-    try {
-      final dir = await FilePicker.platform
-          .getDirectoryPath(dialogTitle: title)
-          .timeout(const Duration(seconds: 60));
-      if (dir != null && context.mounted) {
-        ref.read(workingDirectoryProvider.notifier).state = dir;
-        await ref.read(settingsProvider.notifier).updateWorkingDirectory(dir);
-      }
-    } on TimeoutException {
-      // 文件对话框超时（系统级卡死），静默忽略
-    } catch (_) {
-      // 其他平台异常，静默忽略
+    final dir = await pickDirectory(dialogTitle: title);
+    if (dir != null && context.mounted) {
+      ref.read(workingDirectoryProvider.notifier).state = dir;
+      await ref.read(settingsProvider.notifier).updateWorkingDirectory(dir);
     }
   }
 

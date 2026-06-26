@@ -1,14 +1,13 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/l10n/l10n_ext.dart';
+import '../../../core/utils/directory_picker.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../providers/settings_provider.dart';
 import '../chat_provider.dart';
@@ -455,16 +454,12 @@ class _NewWorkspaceDialogState extends ConsumerState<NewWorkspaceDialog> {
     if (_parentDir.isNotEmpty && !Directory(_parentDir).existsSync()) {
       setState(() => _parentDir = '');
     }
-    try {
-      final dir = await FilePicker.platform
-          .getDirectoryPath(dialogTitle: context.s.wsDialogSelectParentTitle)
-          .timeout(const Duration(seconds: 60));
-      if (dir != null) {
-        setState(() => _parentDir = dir);
-      }
-    } on TimeoutException {
-      // 系统文件对话框超时
-    } catch (_) {}
+    final dir = await pickDirectory(
+      dialogTitle: context.s.wsDialogSelectParentTitle,
+    );
+    if (dir != null && mounted) {
+      setState(() => _parentDir = dir);
+    }
   }
 
   Future<void> _runTest(EmbeddingConfig? cfg) async {

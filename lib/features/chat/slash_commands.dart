@@ -89,7 +89,8 @@ SlashParseResult parseSlashCommand(String rawText) {
   for (final cmd in kSlashCommands) {
     final isExact = text == cmd.command;
     final hasArg =
-        text.startsWith('${cmd.command} ') || text.startsWith('${cmd.command}\n');
+        text.startsWith('${cmd.command} ') ||
+        text.startsWith('${cmd.command}\n');
     if (isExact || hasArg) {
       final description = text.substring(cmd.command.length).trim();
       if (description.isEmpty && cmd.requiresDescription) {

@@ -294,7 +294,7 @@ class AgentContextBuilder {
             // contextWindow 为 0 时，ContextCompactor 用 128K 兜底
             contextWindow: modelCard.contextWindow,
           ),
-      ])
+      ]),
     );
   }
 
@@ -349,7 +349,8 @@ class AgentContextBuilder {
         'path': skill.path,
         'tool_count': skill.toolCount,
         'staging_cleaned': cleaned,
-        'message': '技能「${skill.name}」已安装到全局技能库，可在技能页管理并在任意工作目录复用'
+        'message':
+            '技能「${skill.name}」已安装到全局技能库，可在技能页管理并在任意工作目录复用'
             '${cleaned ? "（工作目录的临时副本已清理）" : ""}。',
       });
     } catch (e) {

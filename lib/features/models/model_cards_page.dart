@@ -98,19 +98,28 @@ class ModelCardsPage extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => _ModelCardDialog(
-        onSave: (name, baseUrl, apiKey, modelId, logoPath, provider, contextWindow) {
-          ref
-              .read(modelCardsProvider.notifier)
-              .addCard(
-                name: name,
-                baseUrl: baseUrl,
-                apiKey: apiKey,
-                modelId: modelId,
-                logoPath: logoPath,
-                provider: provider,
-                contextWindow: contextWindow,
-              );
-        },
+        onSave:
+            (
+              name,
+              baseUrl,
+              apiKey,
+              modelId,
+              logoPath,
+              provider,
+              contextWindow,
+            ) {
+              ref
+                  .read(modelCardsProvider.notifier)
+                  .addCard(
+                    name: name,
+                    baseUrl: baseUrl,
+                    apiKey: apiKey,
+                    modelId: modelId,
+                    logoPath: logoPath,
+                    provider: provider,
+                    contextWindow: contextWindow,
+                  );
+            },
       ),
     );
   }
@@ -313,18 +322,27 @@ class _ModelCardTile extends ConsumerWidget {
         initialModelId: card.modelId,
         initialLogoPath: card.logoPath,
         initialProvider: card.provider,
-        onSave: (name, baseUrl, apiKey, modelId, logoPath, provider, contextWindow) {
-          final updated = card.copyWith(
-            name: name,
-            baseUrl: baseUrl,
-            apiKey: apiKey,
-            modelId: modelId,
-            logoPath: logoPath,
-            provider: provider,
-            contextWindow: contextWindow,
-          );
-          ref.read(modelCardsProvider.notifier).updateCard(updated);
-        },
+        onSave:
+            (
+              name,
+              baseUrl,
+              apiKey,
+              modelId,
+              logoPath,
+              provider,
+              contextWindow,
+            ) {
+              final updated = card.copyWith(
+                name: name,
+                baseUrl: baseUrl,
+                apiKey: apiKey,
+                modelId: modelId,
+                logoPath: logoPath,
+                provider: provider,
+                contextWindow: contextWindow,
+              );
+              ref.read(modelCardsProvider.notifier).updateCard(updated);
+            },
       ),
     );
   }
