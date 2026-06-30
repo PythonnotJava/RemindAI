@@ -160,6 +160,28 @@ class ChatNotifier extends StateNotifier<ChatState> {
   /// 当前轮次的 token 计数（用于宠物经济系统奖励）
   int _currentTokenCount = 0;
 
+  /// 流式 token 合并缓冲：每个 token 先入此缓冲，由 [_flushTimer] 周期性合并到
+  /// state.streamingText，避免"每 token 一次 setState + 全量 rebuild + markdown 重解析"
+  /// 导致的长思考卡顿。仅改变状态刷新时机，不改变最终文本内容。
+  final StringBuffer _streamBuffer = StringBuffer();
+  Timer? _flushTimer;
+
+  /// 流式刷新间隔。约 50ms（≈20fps）足够顺滑，又把每秒 setState 次数从
+  /// 数百次降到 ~20 次。
+  static const _flushInterval = Duration(milliseconds: 50);
+
+  /// 把累积的流式缓冲合并进 state.streamingText 并清空缓冲、停掉计时器。
+  /// 在任何需要读取完整 streamingText 的时机（工具开始、完成、出错、中断、新会话、销毁）
+  /// 必须先调用本方法，保证消费方拿到的是完整文本。
+  void _flushStreamBuffer() {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    if (_streamBuffer.isEmpty) return;
+    final pending = _streamBuffer.toString();
+    _streamBuffer.clear();
+    state = state.copyWith(streamingText: state.streamingText + pending);
+  }
+
   ChatNotifier(this._ref) : super(const ChatState());
 
   ConversationsDao get _conversationsDao => _ref.read(conversationsDaoProvider);
@@ -167,6 +189,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
   /// 创建新会话
   Future<void> newConversation() async {
     _subscription?.cancel();
+    // 清理流式缓冲与计时器，避免残留 token 写入新会话
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    _streamBuffer.clear();
     // hooks: onSessionEnd
     await _fireSessionEnd();
     _agentMessages.clear();
@@ -361,6 +387,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
 
     final userMsg = ChatMessage.user(input, attachments: pendingAttachments);
+    // 新一轮开始前清理可能残留的流式缓冲/计时器
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    _streamBuffer.clear();
     state = state.copyWith(
       messages: [...state.messages, userMsg],
       isLoading: true,
@@ -479,8 +509,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
     switch (event) {
       case AgentToken(text: final text):
         _currentTokenCount += text.length ~/ 4; // 粗略估算: 4字符≈1 token
-        state = state.copyWith(streamingText: state.streamingText + text);
+        // 合并写入缓冲，由计时器周期性刷新到 state，避免每 token 一次全量 rebuild
+        _streamBuffer.write(text);
+        _flushTimer ??= Timer(_flushInterval, _flushStreamBuffer);
       case AgentToolStart(name: final name, args: final args):
+        // 工具开始前先把缓冲刷净，保证下面读取的 streamingText 完整
+        _flushStreamBuffer();
         final toolCall = ToolCallDisplay(
           id: '${name}_${DateTime.now().millisecondsSinceEpoch}',
           name: name,
@@ -509,6 +543,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
         }).toList();
         state = state.copyWith(activeToolCalls: updated);
       case AgentDone(content: final content):
+        // 刷净缓冲，确保 state.streamingText 含全部已流式文本
+        _flushStreamBuffer();
         // 如果最终 content 为空，使用之前流式累积的文本
         // (某些模型在 tool_call 后的回复轮次不返回 content)
         final finalContent = content.isNotEmpty ? content : state.streamingText;
@@ -562,6 +598,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
           _currentTokenCount = 0;
         }
       case AgentError(message: final message):
+        // 刷净缓冲，保留出错前已生成的部分文本
+        _flushStreamBuffer();
         AppLogger.instance.log('[ChatProvider] AgentError: $message');
         PetObserver.instance.notifyAiError(error: message);
         _setError(message);
@@ -572,6 +610,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void cancelResponse() {
     _subscription?.cancel();
     _subscription = null;
+    // 中断前刷净缓冲，保留已生成的部分输出
+    _flushStreamBuffer();
 
     final partial = state.streamingText;
     final convId = state.currentConversationId;
@@ -746,6 +786,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _flushTimer?.cancel();
     _errorTimer?.cancel();
     _fireSessionEnd();
     super.dispose();

@@ -629,7 +629,14 @@ class _ChatInput extends ConsumerStatefulWidget {
 }
 
 class _ChatInputState extends ConsumerState<_ChatInput> {
-  /// 发送逻辑: 如果正在 loading，先中断当前响应再发送新消息
+  /// 输入框是否处于展开状态（展开时显示更多行）
+  bool _expanded = false;
+
+  /// 收缩态最大行数
+  static const _collapsedMaxLines = 6;
+
+  /// 展开态最大行数
+  static const _expandedMaxLines = 20;
 
   /// 发送逻辑: 如果正在 loading，先中断当前响应再发送新消息
   void _handleSend() {
@@ -719,7 +726,7 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
             _AttachmentChipsRow(attachments: attachments),
           ],
           const SizedBox(height: 8),
-          // Text field + send button
+          // Text field + expand/collapse + send button
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -750,7 +757,7 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
                   child: TextField(
                     controller: widget.controller,
                     focusNode: widget.focusNode,
-                    maxLines: null,
+                    maxLines: _expanded ? _expandedMaxLines : _collapsedMaxLines,
                     minLines: 1,
                     decoration: InputDecoration(
                       hintText: widget.isLoading
@@ -767,7 +774,18 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
+              // 展开/收缩按钮
+              IconButton(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                icon: Icon(
+                  _expanded ? Icons.unfold_less : Icons.unfold_more,
+                  size: 20,
+                ),
+                tooltip: _expanded ? '收缩输入框' : '展开输入框',
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 4),
               widget.isLoading
                   ? Row(
                       mainAxisSize: MainAxisSize.min,

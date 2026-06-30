@@ -158,8 +158,10 @@ cd RemindAI
 # Windows
 flutter build windows --release --tree-shake-icons --split-debug-info=./debug-info
 
-# Linux / macOS
+# Linux  
 flutter build linux --release --tree-shake-icons --split-debug-info=./debug-info
+# macOS
+flutter create --platforms=macos
 flutter build macos --release --tree-shake-icons --split-debug-info=./debug-info
 ```
 

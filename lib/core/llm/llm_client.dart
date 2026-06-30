@@ -38,9 +38,17 @@ class StreamComplete extends StreamEvent {
   /// 转换为 assistant 消息 JSON (用于追加到 messages 历史)
   Map<String, dynamic> toMessageJson() {
     final msg = <String, dynamic>{'role': 'assistant'};
+    final hasToolCalls = toolCalls != null && toolCalls!.isNotEmpty;
     if (content != null) msg['content'] = content;
-    if (toolCalls != null && toolCalls!.isNotEmpty) {
+    if (hasToolCalls) {
       msg['tool_calls'] = toolCalls!.map((tc) => tc.toJson()).toList();
+    }
+    // 防御：assistant 消息必须至少有 content 或 tool_calls 之一，否则
+    // OpenAI 兼容 API 会报 400 "content or tool_calls must be set"。
+    // 思维链模型(DeepSeek 等)可能只产出 reasoning_content、content 为空且无工具调用，
+    // 此时补一个空字符串 content，保证消息合法（不改变有内容/有工具调用时的行为）。
+    if (!hasToolCalls && msg['content'] == null) {
+      msg['content'] = '';
     }
     return msg;
   }
@@ -531,9 +539,14 @@ class ChatResponse {
 
   Map<String, dynamic> toMessageJson() {
     final msg = <String, dynamic>{'role': 'assistant'};
+    final hasToolCalls = toolCalls != null && toolCalls!.isNotEmpty;
     if (content != null) msg['content'] = content;
-    if (toolCalls != null) {
+    if (hasToolCalls) {
       msg['tool_calls'] = toolCalls!.map((tc) => tc.toJson()).toList();
+    }
+    // 防御：assistant 消息至少需 content 或 tool_calls 之一，避免 400。
+    if (!hasToolCalls && msg['content'] == null) {
+      msg['content'] = '';
     }
     return msg;
   }
