@@ -9,10 +9,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:path_provider/path_provider.dart';
+
 import '../../core/export/conversation_exporter.dart';
 import '../../core/l10n/l10n_ext.dart';
 import '../../core/utils/directory_picker.dart';
 import '../../core/llm/models.dart';
+import '../../core/memory/project_config.dart';
 import '../../core/models/file_attachment.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/skill/skill_model.dart';
@@ -30,6 +33,7 @@ import 'widgets/chat_scroll_nav.dart';
 import 'widgets/markdown_view.dart';
 import 'widgets/message_bubble.dart';
 import 'widgets/new_workspace_dialog.dart';
+import 'widgets/sub_readers_card.dart';
 import 'widgets/tool_call_card.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -116,6 +120,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       case SlashExpanded(expandedText: final expanded):
         _controller.clear();
         ref.read(chatProvider.notifier).sendMessage(expanded);
+        _focusNode.requestFocus();
+        return;
+      case SlashAction(rawDescription: final description):
+        _controller.clear();
+        ref.read(chatProvider.notifier).runSubReaders(description);
         _focusNode.requestFocus();
         return;
       case PlainMessage(text: final plain):
@@ -374,47 +383,58 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
     if (modelCard == null) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.credit_card_off, size: 48, color: colorScheme.outline),
-            const SizedBox(height: 16),
-            Text(
-              '请先在「模型」页面添加模型卡片',
-              style: TextStyle(fontSize: 16, color: colorScheme.outline),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              context.s.chatNeedConfig,
-              style: TextStyle(fontSize: 13, color: colorScheme.outlineVariant),
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.credit_card_off, size: 48, color: colorScheme.outline),
+              const SizedBox(height: 16),
+              Text(
+                '请先在「模型」页面添加模型卡片',
+                style: TextStyle(fontSize: 16, color: colorScheme.outline),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.s.chatNeedConfig,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colorScheme.outlineVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.chat_bubble_outline, size: 48, color: colorScheme.outline),
-          const SizedBox(height: 16),
-          Text(
-            context.s.chatStartConversation,
-            style: TextStyle(fontSize: 16, color: colorScheme.outline),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            context.s.chatSupportsTools,
-            style: TextStyle(fontSize: 13, color: colorScheme.outlineVariant),
-          ),
-          const SizedBox(height: 20),
-          OutlinedButton.icon(
-            onPressed: () => NewWorkspaceDialog.show(context),
-            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-            label: Text(context.s.chatCreateWorkspace),
-          ),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 48,
+              color: colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              context.s.chatStartConversation,
+              style: TextStyle(fontSize: 16, color: colorScheme.outline),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.s.chatSupportsTools,
+              style: TextStyle(fontSize: 13, color: colorScheme.outlineVariant),
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: () => NewWorkspaceDialog.show(context),
+              icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+              label: Text(context.s.chatCreateWorkspace),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -424,10 +444,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final messages = chatState.messages;
     final activeToolCalls = chatState.activeToolCalls;
     final isLoading = chatState.isLoading;
+    final subReadersRun = chatState.subReadersRun;
 
-    // 总 item 数 = 消息 + 活跃 tool calls + 流式输出 (可选)
+    // 总 item 数 = 消息 + sub-readers 卡片(可选) + 活跃 tool calls + 流式输出(可选)
+    final hasSubReadersCard = subReadersRun != null;
     final itemCount =
-        messages.length + activeToolCalls.length + (isLoading ? 1 : 0);
+        messages.length +
+        (hasSubReadersCard ? 1 : 0) +
+        activeToolCalls.length +
+        (isLoading && !hasSubReadersCard ? 1 : 0);
 
     return Scrollbar(
       controller: _scrollController,
@@ -443,10 +468,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           if (index < messages.length) {
             return _buildMessageItem(messages[index], index);
           }
+          // sub-readers 进度卡片（跟在消息区之后，展示规划+并行执行进度）
+          if (hasSubReadersCard && index == messages.length) {
+            return SubReadersCard(run: subReadersRun);
+          }
+          final afterSubReaders =
+              index - messages.length - (hasSubReadersCard ? 1 : 0);
           // 活跃 tool calls 区
-          final toolCallIndex = index - messages.length;
-          if (toolCallIndex < activeToolCalls.length) {
-            return ToolCallCard(toolCall: activeToolCalls[toolCallIndex]);
+          if (afterSubReaders < activeToolCalls.length) {
+            return ToolCallCard(toolCall: activeToolCalls[afterSubReaders]);
           }
           // 流式输出 bubble
           return StreamingBubble(text: chatState.streamingText);
@@ -710,6 +740,8 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
               const SizedBox(width: 8),
               const _SearchChip(),
               const SizedBox(width: 8),
+              const _LoopChip(),
+              const SizedBox(width: 8),
               ActionChip(
                 avatar: const Icon(Icons.attach_file, size: 16),
                 label: Text(
@@ -757,7 +789,9 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
                   child: TextField(
                     controller: widget.controller,
                     focusNode: widget.focusNode,
-                    maxLines: _expanded ? _expandedMaxLines : _collapsedMaxLines,
+                    maxLines: _expanded
+                        ? _expandedMaxLines
+                        : _collapsedMaxLines,
                     minLines: 1,
                     decoration: InputDecoration(
                       hintText: widget.isLoading
@@ -1540,22 +1574,55 @@ class _MemorySheetState extends ConsumerState<_MemorySheet> {
   late bool _useQdrant;
   late bool _persistToSqlite;
 
+  // 记忆召回/存储开关的持久化来源是 memory.json，不是 session 临时状态。
+  // 面板打开时必须先从磁盘加载，工作目录下没有 memory.json 时默认全关闭
+  // (与 ProjectConfig 的默认构造保持一致)。
+  String _workDir = '';
+  ProjectConfig _projectConfig = const ProjectConfig();
+  bool _recallEnabled = false;
+  bool _storeEnabled = false;
+  bool _loading = true;
+
   @override
   void initState() {
     super.initState();
     _useQdrant = widget.embedding.useQdrant;
     _persistToSqlite = widget.embedding.persistToSqlite;
+    _loadProjectConfig();
+  }
+
+  Future<void> _loadProjectConfig() async {
+    var workDir = ref.read(workingDirectoryProvider);
+    if (workDir.isEmpty) {
+      final documentsDir = await getApplicationDocumentsDirectory();
+      workDir = p.join(documentsDir.path, '.RemindAI', 'workspace');
+    }
+    final config = await ProjectConfig.load(workDir);
+    if (!mounted) return;
+    setState(() {
+      _workDir = workDir;
+      _projectConfig = config;
+      _recallEnabled = config.longTermRecall;
+      _storeEnabled = config.longTermStore;
+      _loading = false;
+    });
+  }
+
+  /// 把当前召回/存储开关状态写回 memory.json，并清除 session 级临时覆盖，
+  /// 让 memory.json 重新成为下一轮对话的唯一决策依据。
+  Future<void> _persistMemoryConfig() async {
+    final updated = _projectConfig.copyWith(
+      longTermRecall: _recallEnabled,
+      longTermStore: _storeEnabled,
+    );
+    _projectConfig = updated;
+    await updated.save(_workDir);
+    ref.read(sessionMemoryRecallProvider.notifier).state = null;
+    ref.read(sessionMemoryStoreProvider.notifier).state = null;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Session 级记忆开关 (null = 跟随 memory.json)
-    final sessionRecall = ref.watch(sessionMemoryRecallProvider);
-    final sessionStore = ref.watch(sessionMemoryStoreProvider);
-    // 未设置 session 覆盖时默认开启
-    final recallEnabled = sessionRecall ?? true;
-    final storeEnabled = sessionStore ?? true;
-
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1588,19 +1655,25 @@ class _MemorySheetState extends ConsumerState<_MemorySheet> {
               secondary: const Icon(Icons.manage_search),
               title: Text(context.s.chatEnableRecall),
               subtitle: Text(context.s.chatEnableRecallDesc),
-              value: recallEnabled,
-              onChanged: (v) {
-                ref.read(sessionMemoryRecallProvider.notifier).state = v;
-              },
+              value: _recallEnabled,
+              onChanged: _loading
+                  ? null
+                  : (v) {
+                      setState(() => _recallEnabled = v);
+                      _persistMemoryConfig();
+                    },
             ),
             SwitchListTile(
               secondary: const Icon(Icons.save_alt),
               title: Text(context.s.chatEnableStore),
               subtitle: Text(context.s.chatEnableStoreDesc),
-              value: storeEnabled,
-              onChanged: (v) {
-                ref.read(sessionMemoryStoreProvider.notifier).state = v;
-              },
+              value: _storeEnabled,
+              onChanged: _loading
+                  ? null
+                  : (v) {
+                      setState(() => _storeEnabled = v);
+                      _persistMemoryConfig();
+                    },
             ),
             const Divider(height: 1, indent: 16, endIndent: 16),
             SwitchListTile(
@@ -1779,6 +1852,168 @@ class _SearchChip extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Loop 模式 Chip
+class _LoopChip extends ConsumerWidget {
+  const _LoopChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final chatState = ref.watch(chatProvider);
+    final loopEnabled = chatState.loopEnabled;
+    final loopRunning = chatState.loopRunning;
+    final loopIter = chatState.loopIteration;
+    final loopMax = chatState.loopMaxIterations;
+
+    final String label;
+    if (loopRunning) {
+      label = 'Loop $loopIter/$loopMax';
+    } else if (loopEnabled) {
+      label = 'Loop ($loopMax)';
+    } else {
+      label = 'Loop';
+    }
+
+    return ActionChip(
+      avatar: Icon(
+        loopRunning
+            ? Icons.sync
+            : loopEnabled
+            ? Icons.loop
+            : Icons.loop_outlined,
+        size: 16,
+        color: loopEnabled || loopRunning ? colorScheme.primary : null,
+      ),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: loopEnabled || loopRunning ? colorScheme.primary : null,
+        ),
+      ),
+      tooltip: loopRunning
+          ? context.s.chatLoopRunning
+          : loopEnabled
+          ? context.s.chatLoopEnabled
+          : context.s.chatLoopHint,
+      side: loopEnabled || loopRunning
+          ? BorderSide(color: colorScheme.primary.withValues(alpha: 0.5))
+          : null,
+      onPressed: loopRunning ? null : () => _showLoopConfig(context, ref),
+    );
+  }
+
+  void _showLoopConfig(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final chatNotifier = ref.read(chatProvider.notifier);
+    final initialState = ref.read(chatProvider);
+    var currentMax = initialState.loopMaxIterations.toDouble();
+    var loopOn = initialState.loopEnabled;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.loop, size: 20, color: colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        context.s.chatLoopTitle,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const Spacer(),
+                      Switch(
+                        value: loopOn,
+                        onChanged: (v) {
+                          setSheetState(() => loopOn = v);
+                          chatNotifier.toggleLoop();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    context.s.chatLoopDesc,
+                    style: TextStyle(fontSize: 13, color: colorScheme.outline),
+                  ),
+                  const SizedBox(height: 16),
+                  // 最大轮次 Slider
+                  Row(
+                    children: [
+                      Text(
+                        context.s.chatLoopMaxIter,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${currentMax.round()}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: currentMax,
+                    min: 10,
+                    max: 100,
+                    divisions: 18,
+                    label: '${currentMax.round()}',
+                    onChanged: (v) {
+                      setSheetState(() => currentMax = v);
+                      chatNotifier.setLoopMaxIterations(v.round());
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  // 提示
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer.withValues(
+                        alpha: 0.3,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            context.s.chatLoopAutoApproveHint,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );

@@ -1150,5 +1150,13 @@
   "olsUserSessionInfo": "{ip} · {minutes} min · {msgCount} messages",
   "@olsUserSessionInfo": {"placeholders": {"ip": {"type": "String"}, "minutes": {"type": "Object"}, "msgCount": {"type": "Object"}}},
   "olsWhitelistEmpty": "No whitelist set; all LAN IPs can connect",
-  "olsNicknameHint": "Username"
+  "olsNicknameHint": "Username",
+
+  "chatLoopTitle": "Loop Mode",
+  "chatLoopDesc": "When enabled, AI will autonomously iterate: plan → execute → verify → fix, until done or max iterations reached.",
+  "chatLoopHint": "Enable Loop autonomous mode",
+  "chatLoopEnabled": "Loop mode enabled",
+  "chatLoopRunning": "Loop running...",
+  "chatLoopMaxIter": "Max iterations",
+  "chatLoopAutoApproveHint": "In Loop mode, tool operations execute automatically without per-action confirmation."
 }

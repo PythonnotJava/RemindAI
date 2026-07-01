@@ -6288,6 +6288,48 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'用户名称'**
   String get olsNicknameHint;
+
+  /// No description provided for @chatLoopTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Loop 模式'**
+  String get chatLoopTitle;
+
+  /// No description provided for @chatLoopDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'开启后，AI 将自主迭代执行任务：计划 → 执行 → 验证 → 修复，直到完成或达到最大轮次。'**
+  String get chatLoopDesc;
+
+  /// No description provided for @chatLoopHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'开启 Loop 自治模式'**
+  String get chatLoopHint;
+
+  /// No description provided for @chatLoopEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'Loop 模式已开启'**
+  String get chatLoopEnabled;
+
+  /// No description provided for @chatLoopRunning.
+  ///
+  /// In zh, this message translates to:
+  /// **'Loop 正在运行中...'**
+  String get chatLoopRunning;
+
+  /// No description provided for @chatLoopMaxIter.
+  ///
+  /// In zh, this message translates to:
+  /// **'最大轮次'**
+  String get chatLoopMaxIter;
+
+  /// No description provided for @chatLoopAutoApproveHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Loop 模式下工具操作将自动执行，无需逐次确认。'**
+  String get chatLoopAutoApproveHint;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

@@ -3311,4 +3311,25 @@ class SZh extends S {
 
   @override
   String get olsNicknameHint => '用户名称';
+
+  @override
+  String get chatLoopTitle => 'Loop 模式';
+
+  @override
+  String get chatLoopDesc => '开启后，AI 将自主迭代执行任务：计划 → 执行 → 验证 → 修复，直到完成或达到最大轮次。';
+
+  @override
+  String get chatLoopHint => '开启 Loop 自治模式';
+
+  @override
+  String get chatLoopEnabled => 'Loop 模式已开启';
+
+  @override
+  String get chatLoopRunning => 'Loop 正在运行中...';
+
+  @override
+  String get chatLoopMaxIter => '最大轮次';
+
+  @override
+  String get chatLoopAutoApproveHint => 'Loop 模式下工具操作将自动执行，无需逐次确认。';
 }

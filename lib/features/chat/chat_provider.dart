@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/agent/agent_context.dart';
 import '../../core/agent/agent_hook.dart';
 import '../../core/db/daos/conversations_dao.dart';
+import '../../core/isolate/compute_service.dart';
+import '../../core/llm/llm_client.dart';
+import '../../core/llm/llm_provider.dart';
 import '../../core/llm/models.dart';
 import '../../core/models/file_attachment.dart';
 import '../../core/logger/app_logger.dart';
@@ -13,6 +16,9 @@ import '../../core/notification/notification_service.dart';
 import '../../core/pet/pet_economy.dart';
 import '../../core/pet/pet_chat_service.dart';
 import '../../core/toolshell/agent_loop.dart';
+import '../../core/toolshell/autonomous_loop.dart';
+import '../../core/toolshell/read_only_executor.dart';
+import '../../core/toolshell/sub_readers_orchestrator.dart';
 import '../../core/utils/file_processor.dart';
 import '../../core/pet/pet_observer.dart';
 import '../../providers/database_provider.dart';
@@ -47,6 +53,56 @@ class ToolCallDisplay {
 }
 
 enum ToolCallStatus { executing, done, error }
+
+/// `/sub-readers` 单个子任务的 UI 展示状态
+enum SubReaderStatus { planned, running, done, error }
+
+/// `/sub-readers` 单个子任务的 UI 展示信息
+class SubReaderDisplay {
+  final String id;
+  final String scope;
+  final SubReaderStatus status;
+  final String? preview;
+
+  const SubReaderDisplay({
+    required this.id,
+    required this.scope,
+    this.status = SubReaderStatus.planned,
+    this.preview,
+  });
+
+  SubReaderDisplay copyWith({SubReaderStatus? status, String? preview}) =>
+      SubReaderDisplay(
+        id: id,
+        scope: scope,
+        status: status ?? this.status,
+        preview: preview ?? this.preview,
+      );
+}
+
+/// `/sub-readers` 整体运行状态 — 展示在聊天流里的一张进度卡片
+class SubReadersRun {
+  final String description;
+  final List<SubReaderDisplay> subtasks;
+
+  /// 整体是否仍在跑（规划中 / 子任务并行执行中 / 合并中）
+  final bool inProgress;
+
+  const SubReadersRun({
+    required this.description,
+    required this.subtasks,
+    this.inProgress = true,
+  });
+
+  SubReadersRun copyWith({
+    List<SubReaderDisplay>? subtasks,
+    bool? inProgress,
+  }) => SubReadersRun(
+    description: description,
+    subtasks: subtasks ?? this.subtasks,
+    inProgress: inProgress ?? this.inProgress,
+  );
+}
 
 /// Chat 状态
 /// 待确认的权限请求
@@ -90,6 +146,15 @@ class ChatState {
   final List<FileAttachment> attachments;
   final PendingPermission? pendingPermission;
 
+  /// Loop 模式状态
+  final bool loopEnabled;
+  final int loopIteration;
+  final int loopMaxIterations;
+  final bool loopRunning;
+
+  /// `/sub-readers` 当前运行状态；null 表示当前没有正在展示的 sub-readers 卡片
+  final SubReadersRun? subReadersRun;
+
   const ChatState({
     this.messages = const [],
     this.isLoading = false,
@@ -100,6 +165,11 @@ class ChatState {
     this.currentConversationId,
     this.attachments = const [],
     this.pendingPermission,
+    this.loopEnabled = false,
+    this.loopIteration = 0,
+    this.loopMaxIterations = 10,
+    this.loopRunning = false,
+    this.subReadersRun,
   });
 
   ChatState copyWith({
@@ -114,6 +184,12 @@ class ChatState {
     List<FileAttachment>? attachments,
     PendingPermission? pendingPermission,
     bool clearPermission = false,
+    bool? loopEnabled,
+    int? loopIteration,
+    int? loopMaxIterations,
+    bool? loopRunning,
+    SubReadersRun? subReadersRun,
+    bool clearSubReadersRun = false,
   }) => ChatState(
     messages: messages ?? this.messages,
     isLoading: isLoading ?? this.isLoading,
@@ -128,6 +204,13 @@ class ChatState {
     pendingPermission: clearPermission
         ? null
         : (pendingPermission ?? this.pendingPermission),
+    loopEnabled: loopEnabled ?? this.loopEnabled,
+    loopIteration: loopIteration ?? this.loopIteration,
+    loopMaxIterations: loopMaxIterations ?? this.loopMaxIterations,
+    loopRunning: loopRunning ?? this.loopRunning,
+    subReadersRun: clearSubReadersRun
+        ? null
+        : (subReadersRun ?? this.subReadersRun),
   );
 }
 
@@ -141,7 +224,7 @@ final workingDirectoryProvider = StateProvider<String>((ref) => '');
 /// Chat StateNotifier
 class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
-  StreamSubscription<AgentEvent>? _subscription;
+  StreamSubscription? _subscription;
 
   /// 错误提示自动消失计时器
   Timer? _errorTimer;
@@ -336,6 +419,20 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   bool _sessionAutoApprove = false;
 
+  // ─── Loop 模式 ─────────────────────────────────────────────
+
+  /// 切换 Loop 模式开关
+  void toggleLoop() {
+    state = state.copyWith(loopEnabled: !state.loopEnabled);
+  }
+
+  /// 设置 Loop 最大迭代次数（10-100，步进 5）
+  void setLoopMaxIterations(int max) {
+    // 对齐到步进 5
+    final aligned = ((max / 5).round() * 5).clamp(10, 100);
+    state = state.copyWith(loopMaxIterations: aligned);
+  }
+
   /// 清除错误提示
   void clearError() {
     _errorTimer?.cancel();
@@ -357,6 +454,153 @@ class ChatNotifier extends StateNotifier<ChatState> {
         state = state.copyWith(error: null);
       }
     });
+  }
+
+  // ─── /sub-readers: 并行只读子 Agent 编排 ──────────────────────
+
+  /// 执行 `/sub-readers` 命令：把理解任务拆解为若干只读子任务，
+  /// 用同模型类型的多个独立子 Agent 并行处理，最后综合汇总为一份理解。
+  ///
+  /// 与 [sendMessage] 走完全不同的路径——不进入 [AgentLoop] 的单轮对话，
+  /// 而是驱动 [SubReadersOrchestrator] 的三阶段流程（规划→并行执行→合并），
+  /// 期间通过 [ChatState.subReadersRun] 把进度实时展示为一张聊天卡片，
+  /// 完成后把综合理解作为一条普通 assistant 消息追加到对话历史。
+  Future<void> runSubReaders(String description) async {
+    if (description.trim().isEmpty) return;
+
+    final modelCard = _ref.read(activeModelCardProvider);
+    if (modelCard == null) {
+      _setError('请先在「模型」页面添加并选择一个模型卡片', stopLoading: false);
+      return;
+    }
+
+    final workDir = _ref.read(workingDirectoryProvider);
+    if (workDir.isEmpty) {
+      _setError('/sub-readers 需要先选择工作目录', stopLoading: false);
+      return;
+    }
+
+    // 如果当前没有会话，创建一个（与 sendMessage 行为一致，保证历史可追溯）
+    int? conversationId = state.currentConversationId;
+    if (conversationId == null) {
+      final title =
+          '/sub-readers ${description.length > 16 ? '${description.substring(0, 16)}...' : description}';
+      final conversation = await _conversationsDao.create(
+        title: title,
+        modelCardId: modelCard.id,
+      );
+      conversationId = conversation.id;
+      state = state.copyWith(currentConversationId: conversationId);
+      _ref.read(conversationsProvider.notifier).refresh();
+    }
+
+    // 用户这条消息按普通消息展示 + 持久化，保证对话历史完整可读
+    final userMsg = ChatMessage.user('/sub-readers $description');
+    state = state.copyWith(
+      messages: [...state.messages, userMsg],
+      isLoading: true,
+      error: null,
+      subReadersRun: SubReadersRun(
+        description: description,
+        subtasks: const [],
+      ),
+    );
+    await _conversationsDao.saveMessage(conversationId, userMsg);
+
+    final provider = LlmProviderX.fromId(modelCard.provider);
+    final orchestrator = SubReadersOrchestrator(
+      createLlm: () => LlmClient(
+        baseUrl: modelCard.baseUrl,
+        apiKey: modelCard.apiKey,
+        model: modelCard.model,
+        provider: provider,
+      ),
+      // 每个子任务独立一份只读 Executor 实例，互不共享可变状态；
+      // 因为只读，即使多个子 Agent 同时指向同一 workDir 也不会产生写冲突。
+      createReadOnlyExecutor: () => ReadOnlyExecutor(projectRoot: workDir),
+      readOnlyTools: ReadOnlyExecutor.toolDefinitions,
+    );
+
+    try {
+      await for (final event in orchestrator.run(description)) {
+        _handleSubReadersEvent(event, conversationId);
+      }
+    } catch (e) {
+      AppLogger.instance.log('[SubReaders] 未捕获异常: $e');
+      state = state.copyWith(isLoading: false, clearSubReadersRun: true);
+      _setError('/sub-readers 执行失败: $e');
+    }
+  }
+
+  void _handleSubReadersEvent(SubReadersEvent event, int conversationId) {
+    final run = state.subReadersRun;
+    switch (event) {
+      case SubReadersPlanned(tasks: final tasks):
+        state = state.copyWith(
+          subReadersRun: SubReadersRun(
+            description: run?.description ?? '',
+            subtasks: tasks
+                .map((t) => SubReaderDisplay(id: t.id, scope: t.scope))
+                .toList(),
+          ),
+        );
+      case SubReaderStarted(taskId: final id):
+        if (run == null) return;
+        state = state.copyWith(
+          subReadersRun: run.copyWith(
+            subtasks: run.subtasks
+                .map(
+                  (s) => s.id == id
+                      ? s.copyWith(status: SubReaderStatus.running)
+                      : s,
+                )
+                .toList(),
+          ),
+        );
+      case SubReaderFinished(
+        taskId: final id,
+        preview: final preview,
+        success: final ok,
+      ):
+        if (run == null) return;
+        state = state.copyWith(
+          subReadersRun: run.copyWith(
+            subtasks: run.subtasks
+                .map(
+                  (s) => s.id == id
+                      ? s.copyWith(
+                          status: ok
+                              ? SubReaderStatus.done
+                              : SubReaderStatus.error,
+                          preview: preview,
+                        )
+                      : s,
+                )
+                .toList(),
+          ),
+        );
+      case SubReadersMerged(finalContent: final content):
+        final assistantMsg = ChatMessage.assistant(content);
+        state = state.copyWith(
+          messages: [...state.messages, assistantMsg],
+          isLoading: false,
+          subReadersRun: run?.copyWith(inProgress: false),
+        );
+        _conversationsDao.saveMessage(conversationId, assistantMsg);
+        // 卡片保留展示已完成状态一小段时间，再自动收起，避免长期占据聊天流。
+        // 用描述文本粗略确认这仍是同一次 run（用户没有立刻发起新的 /sub-readers）。
+        final finishedDescription = run?.description;
+        Timer(const Duration(seconds: 4), () {
+          if (finishedDescription != null &&
+              state.subReadersRun?.description == finishedDescription &&
+              state.subReadersRun?.inProgress == false) {
+            state = state.copyWith(clearSubReadersRun: true);
+          }
+        });
+      case SubReadersError(message: final message):
+        state = state.copyWith(isLoading: false, clearSubReadersRun: true);
+        _setError('/sub-readers: $message');
+    }
   }
 
   /// 发送消息
@@ -437,6 +681,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       existingMessages: _agentMessages,
       sessionAutoApprove: _sessionAutoApprove,
       onPermissionRequest: _onPermissionRequest,
+      userInput: input,
     );
 
     // 保存 hooks 引用 (AgentDone 后触发)
@@ -480,35 +725,150 @@ class ChatNotifier extends StateNotifier<ChatState> {
       }
     }
 
-    // 启动 AgentLoop
+    // 启动 AgentLoop 或 AutonomousLoop
     // hooks: onBeforeUserMessage
     for (final hook in agentContext.hooks) {
       await hook.onBeforeUserMessage(input, _agentMessages);
     }
 
-    final agentLoop = agentContext.createLoop();
-
     // 监听事件流
     _subscription?.cancel();
     _currentTokenCount = 0;
     PetObserver.instance.notifyAiGenerating();
-    _subscription = agentLoop
-        .chat(input, contentParts: contentParts)
-        .listen(
-          (event) => _handleEvent(event, conversationId!),
-          onError: (e, stackTrace) {
-            AppLogger.instance.log('[ChatProvider] Stream error: $e');
-            AppLogger.instance.log('[ChatProvider] StackTrace: $stackTrace');
-            PetObserver.instance.notifyAiError(error: e.toString());
-            _setError(e.toString());
-          },
+
+    if (state.loopEnabled) {
+      // ─── Loop 模式 ───
+      state = state.copyWith(loopRunning: true, loopIteration: 0);
+      final loopConfig = LoopConfig(
+        maxIterations: state.loopMaxIterations,
+        autoApprove: true,
+      );
+      final autonomousLoop = AutonomousLoop(
+        llm: agentContext.llm,
+        executor: agentContext.executor,
+        tools: agentContext.tools,
+        messages: _agentMessages,
+        config: loopConfig,
+        messagePipeline: agentContext.messagePipeline,
+        hooks: agentContext.hooks,
+      );
+      _subscription = autonomousLoop
+          .run(input)
+          .listen(
+            (event) => _handleLoopEvent(event, conversationId!),
+            onError: (e, stackTrace) {
+              AppLogger.instance.log('[ChatProvider] Loop stream error: $e');
+              PetObserver.instance.notifyAiError(error: e.toString());
+              state = state.copyWith(loopRunning: false);
+              _setError(e.toString());
+            },
+          );
+    } else {
+      // ─── 普通模式 ───
+      final agentLoop = agentContext.createLoop();
+      _subscription = agentLoop
+          .chat(input, contentParts: contentParts)
+          .listen(
+            (event) => _handleEvent(event, conversationId!),
+            onError: (e, stackTrace) {
+              AppLogger.instance.log('[ChatProvider] Stream error: $e');
+              AppLogger.instance.log('[ChatProvider] StackTrace: $stackTrace');
+              PetObserver.instance.notifyAiError(error: e.toString());
+              _setError(e.toString());
+            },
+          );
+    }
+  }
+
+  /// 处理 Loop 模式事件
+  void _handleLoopEvent(LoopEvent event, int conversationId) {
+    switch (event) {
+      case LoopIterStart(iteration: final iter, maxIterations: final max):
+        state = state.copyWith(loopIteration: iter);
+        // 添加一条分隔消息到 UI
+        final iterMsg = ChatMessage.assistant('─── Loop 第 $iter/$max 轮 ───');
+        state = state.copyWith(messages: [...state.messages, iterMsg]);
+      case LoopAgentEvent(event: final agentEvent):
+        // 透传给普通事件处理
+        _handleEvent(agentEvent, conversationId);
+      case LoopDone(totalIterations: final iters, summary: final summary):
+        _flushStreamBuffer();
+        final doneMsg = ChatMessage.assistant(
+          '─── ✅ Loop 完成 ($iters 轮) ───\n\n$summary',
         );
+        state = state.copyWith(
+          messages: [...state.messages, doneMsg],
+          isLoading: false,
+          streamingText: '',
+          activeToolCalls: [],
+          loopRunning: false,
+          loopIteration: 0,
+        );
+        _conversationsDao.saveMessage(conversationId, doneMsg);
+        PetObserver.instance.notifyAiCompleted(summary: 'Loop 完成: $iters 轮');
+        // 宠物奖励
+        if (_currentTokenCount > 0) {
+          PetEconomy.instance.rewardForTokens(_currentTokenCount).then((
+            reward,
+          ) {
+            if (reward > 0) PetChatService.instance.showCoinReward(reward);
+          });
+          _currentTokenCount = 0;
+        }
+      case LoopExhausted(maxIterations: final max, lastOutput: final output):
+        _flushStreamBuffer();
+        final exhaustedMsg = ChatMessage.assistant(
+          '─── ⚠️ Loop 达到最大轮次 ($max 轮)，自动停止 ───\n\n'
+          '最后输出：${output.length > 300 ? '${output.substring(0, 300)}...' : output}',
+        );
+        state = state.copyWith(
+          messages: [...state.messages, exhaustedMsg],
+          isLoading: false,
+          streamingText: '',
+          activeToolCalls: [],
+          loopRunning: false,
+          loopIteration: 0,
+        );
+        _conversationsDao.saveMessage(conversationId, exhaustedMsg);
+      case LoopAbort(iteration: final iter, reason: final reason):
+        _flushStreamBuffer();
+        final abortMsg = ChatMessage.assistant(
+          '─── ❌ Loop 放弃 (第 $iter 轮) ───\n\n原因：$reason',
+        );
+        state = state.copyWith(
+          messages: [...state.messages, abortMsg],
+          isLoading: false,
+          streamingText: '',
+          activeToolCalls: [],
+          loopRunning: false,
+          loopIteration: 0,
+        );
+        _conversationsDao.saveMessage(conversationId, abortMsg);
+      case LoopError(iteration: final iter, message: final msg):
+        state = state.copyWith(loopRunning: false, loopIteration: 0);
+        _setError('Loop 第 $iter 轮出错: $msg');
+      case LoopStalled(iteration: final iter):
+        _flushStreamBuffer();
+        final stalledMsg = ChatMessage.assistant(
+          '─── ⚠️ Loop 检测到无进展 (第 $iter 轮)，自动停止 ───\n\n'
+          '连续两轮操作高度相似，可能陷入循环。请调整任务描述后重试。',
+        );
+        state = state.copyWith(
+          messages: [...state.messages, stalledMsg],
+          isLoading: false,
+          streamingText: '',
+          activeToolCalls: [],
+          loopRunning: false,
+          loopIteration: 0,
+        );
+        _conversationsDao.saveMessage(conversationId, stalledMsg);
+    }
   }
 
   void _handleEvent(AgentEvent event, int conversationId) {
     switch (event) {
       case AgentToken(text: final text):
-        _currentTokenCount += text.length ~/ 4; // 粗略估算: 4字符≈1 token
+        _currentTokenCount += ComputeService.estimateTokens(text);
         // 合并写入缓冲，由计时器周期性刷新到 state，避免每 token 一次全量 rebuild
         _streamBuffer.write(text);
         _flushTimer ??= Timer(_flushInterval, _flushStreamBuffer);

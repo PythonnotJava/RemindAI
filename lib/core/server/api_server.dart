@@ -299,10 +299,11 @@ class ApiServer {
 
     final ServerSession session;
     try {
-      session = await ServerSessionBuilder(
-        _ref,
-        _config,
-      ).build(history: history, requestedModel: requestedModel);
+      session = await ServerSessionBuilder(_ref, _config).build(
+        history: history,
+        requestedModel: requestedModel,
+        userInput: userInput,
+      );
     } catch (e) {
       await _error(req.response, HttpStatus.serviceUnavailable, e.toString());
       return;
@@ -480,10 +481,11 @@ class ApiServer {
 
     final ServerSession session;
     try {
-      session = await ServerSessionBuilder(
-        _ref,
-        _config,
-      ).build(history: history, requestedModel: requestedModel);
+      session = await ServerSessionBuilder(_ref, _config).build(
+        history: history,
+        requestedModel: requestedModel,
+        userInput: userInput,
+      );
     } catch (e) {
       await _anthropicError(
         req.response,

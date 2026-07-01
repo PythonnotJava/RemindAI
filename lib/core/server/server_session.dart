@@ -17,6 +17,7 @@ import '../memory/memory_manager.dart';
 import '../memory/project_config.dart';
 import '../memory/qdrant_service.dart';
 import '../search/search_capability.dart';
+import '../skill/skill_injector.dart';
 import '../toolshell/agent_loop.dart';
 import '../toolshell/executor.dart';
 import '../../providers/database_provider.dart';
@@ -139,9 +140,11 @@ class ServerSessionBuilder {
   /// 构建一次会话。
   ///
   /// [requestedModel] 为客户端请求体里携带的 model 字段, 用于路由到对应模型卡。
+  /// [userInput] 当前请求的用户输入（用于 SkillInjector 相关性匹配）。
   Future<ServerSession> build({
     List<Map<String, dynamic>>? history,
     String? requestedModel,
+    String userInput = '',
   }) async {
     final card = resolveModelCard(requestedModel: requestedModel);
     if (card == null) {
@@ -200,22 +203,27 @@ class ServerSessionBuilder {
     final sourceMapping = <String, String>{};
     final customHandlers = <String, CustomToolHandler>{};
 
-    // 用户技能 (仅 config 选中的)
-    final skillPromptParts = <String>[];
-    final registry = _ref.read(skillRegistryProvider);
+    // 用户技能 — 通过 SkillInjector 按相关性注入
+    String skillPromptSection = '';
     final allSkills = _ref.read(skillsProvider).valueOrNull ?? const [];
-    for (final skill in allSkills) {
-      if (!_config.skillIds.contains(skill.id)) continue;
-      final skillTools = await registry.loadSkillTools(skill);
-      for (final t in skillTools) {
-        sourceMapping[(t['function'] as Map)['name'] as String] =
-            '技能:${skill.name}';
-      }
-      tools.addAll(skillTools);
-      final prompt = await registry.loadSkillPrompt(skill);
-      if (prompt.isNotEmpty) {
-        skillPromptParts.add('\n\n---\n# 技能: ${skill.name}\n\n$prompt');
-      }
+    final configuredSkills = allSkills
+        .where((s) => _config.skillIds.contains(s.id))
+        .toList();
+
+    if (configuredSkills.isNotEmpty) {
+      final injector = SkillInjector(
+        registry: _ref.read(skillRegistryProvider),
+        memoryManager: memoryManager,
+        source: 'ApiServer',
+      );
+      final injection = await injector.inject(
+        userInput: userInput,
+        skillPool: configuredSkills,
+        context: _extractHistoryContext(history),
+      );
+      tools.addAll(injection.tools);
+      sourceMapping.addAll(injection.sourceMapping);
+      skillPromptSection = injection.systemPrompt;
     }
 
     // MCP 工具 (仅 config 选中的已连接 server)
@@ -258,7 +266,7 @@ class ServerSessionBuilder {
         '你是通过 RemindAI 对外 API 提供服务的智能助手。'
         '可使用已挂载的技能、MCP 工具与搜索能力回答问题。'
         '当前为无工作目录的服务模式, 不具备本地文件读写能力。'
-        '${skillPromptParts.join()}';
+        '$skillPromptSection';
 
     final messages = history != null && history.isNotEmpty
         ? List<Map<String, dynamic>>.from(history)
@@ -335,5 +343,24 @@ class ServerSessionBuilder {
       modelId: card.modelId,
       messagePipeline: msgPipeline,
     );
+  }
+
+  /// 从 history 中提取最近的用户/助手文本作为辅助上下文
+  List<String> _extractHistoryContext(List<Map<String, dynamic>>? history) {
+    if (history == null || history.isEmpty) return [];
+    final recent = <String>[];
+    final userAssistant = history
+        .where((m) => m['role'] == 'user' || m['role'] == 'assistant')
+        .toList();
+    final tail = userAssistant.length > 4
+        ? userAssistant.sublist(userAssistant.length - 4)
+        : userAssistant;
+    for (final msg in tail) {
+      final content = msg['content'];
+      if (content is String && content.isNotEmpty) {
+        recent.add(content.length > 200 ? content.substring(0, 200) : content);
+      }
+    }
+    return recent;
   }
 }

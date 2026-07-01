@@ -52,6 +52,59 @@ class ProjectConfig {
 
   /// 是否需要 Qdrant (嵌入模型启用时需要)
   bool get needsQdrant => embeddings;
+
+  ProjectConfig copyWith({
+    bool? embeddings,
+    bool? longTermStore,
+    bool? longTermRecall,
+    PermissionMode? mode,
+  }) {
+    return ProjectConfig(
+      embeddings: embeddings ?? this.embeddings,
+      longTermStore: longTermStore ?? this.longTermStore,
+      longTermRecall: longTermRecall ?? this.longTermRecall,
+      mode: mode ?? this.mode,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'embeddings': embeddings,
+    'long_term_store': longTermStore,
+    'long_term_recall': longTermRecall,
+    'mode': mode == PermissionMode.auto ? 'auto' : 'normal',
+  };
+
+  /// 把当前配置写回工作目录下的 memory.json。
+  ///
+  /// 若文件已存在，会先读出原始内容并只覆盖本类识别的 4 个已知字段，
+  /// 尽量保留文件中可能存在的其它自定义字段，不做破坏性覆盖。
+  /// 工作目录不存在时会自动创建，保证"纯对话"场景 (默认落在
+  /// `.RemindAI/workspace`) 也能持久化开关状态。
+  Future<void> save(String workspacePath) async {
+    final dir = Directory(workspacePath);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    final file = File(p.join(workspacePath, 'memory.json'));
+    Map<String, dynamic> merged = {};
+    if (await file.exists()) {
+      try {
+        final content = await file.readAsString();
+        final existing = jsonDecode(content);
+        if (existing is Map<String, dynamic>) {
+          merged = existing;
+        }
+      } catch (_) {
+        // 原文件损坏/非法 JSON，直接用新内容覆盖，不阻塞保存操作
+      }
+    }
+
+    merged.addAll(toJson());
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(merged),
+    );
+  }
 }
 
 /// 权限模式

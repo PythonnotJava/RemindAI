@@ -1,11 +1,16 @@
-// Slash 命令 — 预设提示词模板
+// Slash 命令 — 预设提示词模板 / 编排动作
 //
-// Slash 命令的本质是"把一段固定意图的指令模板化"：
-// 用户点击命令按钮，命令文本被插入输入框；用户补充描述后发送。
+// Slash 命令分两类：
+// 1. 模板类（默认）：把"命令 + 用户描述"展开为一段完整指令，
+//    再作为普通消息发给当前 AgentLoop，由主模型顺序处理。
+// 2. 动作类（[isAction] = true）：不发消息给主模型，而是触发一段独立的
+//    编排逻辑（如 `/sub-readers` 派生多个只读子 Agent 并行处理）。
+//
 // 发送时调用 [parseSlashCommand] 解析输入文本，决定如何处理：
 // - 输入不以任何已注册命令开头（或命令已被用户删除）→ 按普通消息发送
 // - 命中命令但描述为空 → 阻止发送并提示用户补充描述
-// - 命中命令且有描述 → 展开为发给模型的完整指令后发送
+// - 命中模板类命令且有描述 → 展开为发给模型的完整指令后发送
+// - 命中动作类命令且有描述 → 返回原始描述，交给专属编排逻辑处理
 
 /// 单个 Slash 命令定义
 class SlashCommand {
@@ -25,17 +30,23 @@ class SlashCommand {
   /// 为 false 时，无描述也可直接发送（命令自身即完整意图）。
   final bool requiresDescription;
 
-  /// 把"命令 + 用户描述"展开为发给模型的完整指令
-  final String Function(String description) expand;
+  /// 把"命令 + 用户描述"展开为发给模型的完整指令。
+  /// 动作类命令（[isAction] = true）不使用此字段，可为 null。
+  final String Function(String description)? expand;
+
+  /// 是否为动作类命令：不走"展开为消息发给主 Agent"的路径，
+  /// 而是由 UI 层触发专属的编排流程（见 [SlashAction]）。
+  final bool isAction;
 
   const SlashCommand({
     required this.command,
     required this.title,
     required this.subtitle,
     required this.requiresWorkspace,
-    required this.expand,
+    this.expand,
     this.requiresDescription = true,
-  });
+    this.isAction = false,
+  }) : assert(isAction || expand != null, '模板类命令 (isAction=false) 必须提供 expand');
 }
 
 /// 已注册的 Slash 命令表
@@ -53,6 +64,13 @@ const List<SlashCommand> kSlashCommands = [
     subtitle: '在当前工作目录创建项目级技能（不装全局）',
     requiresWorkspace: true,
     expand: _expandSkillTemp,
+  ),
+  SlashCommand(
+    command: '/sub-readers',
+    title: '/sub-readers',
+    subtitle: '并行派生多个只读子 Agent 理解大量内容（如多篇文章、大型项目）',
+    requiresWorkspace: true,
+    isAction: true,
   ),
 ];
 
@@ -80,6 +98,14 @@ class SlashExpanded extends SlashParseResult {
   const SlashExpanded(this.command, this.expandedText);
 }
 
+/// 命中动作类命令（[SlashCommand.isAction] = true）且有描述：
+/// 不发消息给主 Agent，交给专属编排逻辑处理，[rawDescription] 是原始描述文本。
+class SlashAction extends SlashParseResult {
+  final SlashCommand command;
+  final String rawDescription;
+  const SlashAction(this.command, this.rawDescription);
+}
+
 /// 解析输入文本。
 ///
 /// 命令必须位于文本开头才会被识别；命令后须以空白分隔描述。
@@ -96,7 +122,10 @@ SlashParseResult parseSlashCommand(String rawText) {
       if (description.isEmpty && cmd.requiresDescription) {
         return SlashNeedsDescription(cmd);
       }
-      return SlashExpanded(cmd, cmd.expand(description));
+      if (cmd.isAction) {
+        return SlashAction(cmd, description);
+      }
+      return SlashExpanded(cmd, cmd.expand!(description));
     }
   }
   return PlainMessage(text);

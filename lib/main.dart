@@ -12,6 +12,7 @@ import 'core/shortcuts/shortcut_config.dart';
 import 'core/memory/qdrant_service.dart';
 import 'core/notification/notification_service.dart';
 import 'core/pet/pet_economy.dart';
+import 'core/isolate/isolate_pool.dart';
 import 'core/tools/tool_bootstrap.dart';
 import 'core/tools/tool_registry.dart';
 
@@ -82,13 +83,14 @@ Future<void> main() async {
         FlutterError.presentError(details);
       };
 
-      // 初始化工具注册表 + 通知服务 + 字体 + 快捷键 + 宠物经济（互相独立，并行执行）
+      // 初始化工具注册表 + 通知服务 + 字体 + 快捷键 + 宠物经济 + Isolate 池（互相独立，并行执行）
       final results = await Future.wait([
         createToolRegistry(),
         NotificationService.instance.init(),
         CustomFontLoader.instance.loadAll(),
         ShortcutConfig.instance.load(),
         PetEconomy.instance.load(),
+        IsolatePool.instance.init(),
       ]);
       final toolRegistry = results[0] as ToolRegistry;
 

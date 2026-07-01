@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../isolate/compute_service.dart';
+import '../isolate/tasks/export_task.dart';
 import '../l10n/l10n_ext.dart';
 import '../llm/models.dart';
 import '../logger/app_logger.dart';
@@ -71,7 +73,43 @@ class ConversationExporter {
     required ExportFormat format,
     required String pandocPath,
   }) async {
-    final markdown = _buildConversationMarkdown(messages, title);
+    // 长对话通过 Isolate 构建 Markdown，避免阻塞 UI
+    final String markdown;
+    if (messages.length > 30) {
+      final exportMessages = messages
+          .where((m) => m.role != ChatRole.system && m.role != ChatRole.tool)
+          .where(
+            (m) =>
+                !(m.role == ChatRole.assistant &&
+                    m.toolCalls != null &&
+                    m.toolCalls!.isNotEmpty &&
+                    (m.content == null || m.content!.startsWith('[工具调用]'))),
+          )
+          .map(
+            (m) => ExportMessage(
+              role: m.role.name,
+              content: m.content,
+              attachments: m.attachments
+                  .map(
+                    (a) => ExportAttachment(
+                      name: a.name,
+                      path: a.path,
+                      isImage: a.type == FileAttachmentType.image,
+                    ),
+                  )
+                  .toList(),
+              toolCalls: m.toolCalls?.map((tc) => tc.toMap()).toList(),
+              timestamp: m.timestamp,
+            ),
+          )
+          .toList();
+      markdown = await ComputeService.buildExportMarkdown(
+        exportMessages,
+        title,
+      );
+    } else {
+      markdown = _buildConversationMarkdown(messages, title);
+    }
     return _exportWithFormat(
       markdown: markdown,
       fileName: title,

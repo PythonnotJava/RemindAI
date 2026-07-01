@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import '../../isolate/compute_service.dart';
 import '../../llm/llm_client.dart';
 import '../../logger/app_logger.dart';
 import '../../memory/memory_manager.dart';
@@ -41,8 +42,8 @@ class ContextCompactor extends MessageTransformer {
 
   /// 基于模型 context window 计算动态阈值的比例。
   /// 触发压缩 = contextWindow * ratio。
-  /// 预留 40% 给 system prompt + 工具定义 + 保真区 + LLM 回复空间。
-  static const double _thresholdRatio = 0.6;
+  /// 预留 25% 给 system prompt + 工具定义 + 保真区 + LLM 回复空间。
+  static const double _thresholdRatio = 0.75;
 
   /// 动态计算出的实际阈值
   int get effectiveThreshold {
@@ -172,14 +173,7 @@ class ContextCompactor extends MessageTransformer {
 
   int _estimateStringTokens(String text) {
     if (text.isEmpty) return 0;
-    // 混合语言估算：统计中文字符占比，加权计算
-    int cjk = 0;
-    for (final c in text.runes) {
-      if (c >= 0x4E00 && c <= 0x9FFF) cjk++;
-    }
-    final ratio = cjk / max(1, text.length);
-    // 中文 ~1.5 token/字, 英文 ~0.25 token/字符 (≈4 chars/token)
-    return ((text.length * (ratio * 1.5 + (1 - ratio) * 0.25)) + 1).toInt();
+    return ComputeService.estimateTokens(text);
   }
 
   /// 找到保真区的起始位置：保留最近 keepRecentTurns 轮完整对话

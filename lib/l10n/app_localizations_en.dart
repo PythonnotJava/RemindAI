@@ -3396,4 +3396,27 @@ class SEn extends S {
 
   @override
   String get olsNicknameHint => 'Username';
+
+  @override
+  String get chatLoopTitle => 'Loop Mode';
+
+  @override
+  String get chatLoopDesc =>
+      'When enabled, AI will autonomously iterate: plan → execute → verify → fix, until done or max iterations reached.';
+
+  @override
+  String get chatLoopHint => 'Enable Loop autonomous mode';
+
+  @override
+  String get chatLoopEnabled => 'Loop mode enabled';
+
+  @override
+  String get chatLoopRunning => 'Loop running...';
+
+  @override
+  String get chatLoopMaxIter => 'Max iterations';
+
+  @override
+  String get chatLoopAutoApproveHint =>
+      'In Loop mode, tool operations execute automatically without per-action confirmation.';
 }

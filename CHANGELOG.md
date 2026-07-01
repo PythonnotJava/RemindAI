@@ -3,7 +3,13 @@
 ## zh
 
 - 优化了长对话思考时途中可能产生卡顿的问题
+- 优化了"软失效过滤"，避免过时记忆和新记忆同权重混在检索结果里
+- 编排多Agent对大量文档进行并行理解的命令
 
+## en
+- Optimized the issue of potential stuttering during long conversations.
+- Optimized the "soft failure filter" to prevent outdated and new memories from being mixed with the same weight in search results.
+- Orchestrated commands for multi-agent parallel understanding of large amounts of documents.
 
 # V1.0.3
 

@@ -86,11 +86,11 @@ RemindAI's Skill System uses a **four-layer architecture**, each with independen
 | Schedule Meta-Skill | ✅ | 7 tools CRUD + review + archive |
 | System Meta-Skill | ✅ | Env probe + sanitized env vars |
 | MCP Multi-Transport | ✅ | stdio / SSE / Streamable HTTP |
-| Vector Memory | ✅ | Qdrant + SQLite dual-write + auto failover |
+| Vector Memory | ✅ | Qdrant + SQLite dual-write + auto failover + soft-failure filtering |
 | Pluggable Capability | ✅ | Search landed, framework extensible |
 | Four-Layer Skill System | ✅ | L1 default meta + L2 user global + L3 workspace temp, L4 planned |
 | Model Card Management | ✅ | CRUD + logo + drag-sort |
-| Multi-Agent Collaboration | ⚡ | Framework built, execution loop ongoing |
+| Multi-Agent Collaboration | ⚡ | Framework complete + parallel doc comprehension orchestration, ongoing |
 | Domain Experts | ✅ | Preset/custom roles + skill binding |
 | Conversation Export | ✅ | MD / PDF / Word / HTML |
 | Desktop Experience | ✅ | Tray / notifications / splash / theme animation |
@@ -109,7 +109,7 @@ RemindAI's Skill System uses a **four-layer architecture**, each with independen
 | 🌐 API Server | Built-in HTTP server with three endpoints: OpenAI aggregation, Claude Agent (runs RemindAI's own agent loop), and Claude proxy (pass-through) |
 | 🔌 MCP Protocol | stdio/SSE/Streamable HTTP + auto-discovery + drag-and-drop management |
 | 🧠 Vector Memory | Qdrant semantic search + SQLite backup + auto-ops + index rebuild |
-| 🤝 Multi-Agent | Commander/Worker/Reviewer roles + permission isolation + auto-routing |
+| 🤝 Multi-Agent | Commander/Worker/Reviewer roles + permission isolation + auto-routing + parallel doc comprehension |
 | 🎨 Multi-Model | OpenAI/Anthropic/Gemini native + streaming reasoning chain + multimodal |
 | 🧩 Capability | Pluggable architecture, Custom → MCP → ToolShell three-tier routing |
 | 📦 Skills | Four-layer architecture (L1 meta / L2 global / L3 temp / L4 self-gen planned), SKILL.md + tools.json format, one-click ZIP import, command-based creation |
@@ -188,6 +188,14 @@ flutter build macos --release --tree-shake-icons --split-debug-info=./debug-info
 ## 🙏 Acknowledgments
 
 Thanks to **Yu** for designing the delightful logo that brings life and personality to RemindAI.
+
+---
+
+## Optimization Reference
+- [https://arxiv.org/pdf/2606.24775](https://arxiv.org/pdf/2606.24775) — Thanks to this paper for pinpointing a known weakness in memory architectures: the lack of version management leads to retrieval of stale facts.
+
+## Optimization Thoughts
+- Is it possible to design a tool paradigm like this: tool name, brief description, version, and documentation URL (so the model can look up unfamiliar tool commands on the fly), allowing the Agent to auto-inject them when relevant?
 
 ---
 

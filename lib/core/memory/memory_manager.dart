@@ -163,6 +163,12 @@ class MemoryManager {
 
   // ─── 嵌入 ─────────────────────────────────────────────────
 
+  /// 调用嵌入模型获取向量（公开接口）。
+  ///
+  /// 供外部模块（如 SkillRouter 语义匹配）使用。
+  /// 内部自带重试机制（3 次，指数退避）。
+  Future<List<double>> embed(String text) => _embed(text);
+
   /// 调用嵌入模型获取向量。
   ///
   /// 针对 TLS 握手中断 / 连接被重置等瞬时网络故障做有限次重试，
@@ -217,6 +223,9 @@ class MemoryManager {
   /// [collectionName]: 目标 collection (全局/项目)
   /// [metadata]: 额外元数据 (source, timestamp 等)
   /// [useQdrant]: 是否同时写入 Qdrant 向量库
+  /// [supersedeThreshold]: 软失效检测的相似度阈值。写入前会以该阈值检索
+  /// 语义高度重合的旧记忆并标记 superseded=true（不物理删除，只降权），
+  /// 避免新旧事实同权重共存导致检索到过时信息。设为 null/<=0 可关闭该检测。
   ///
   /// 返回 point id
   Future<String> store({
@@ -224,12 +233,14 @@ class MemoryManager {
     required String collectionName,
     Map<String, dynamic>? metadata,
     bool useQdrant = true,
+    double? supersedeThreshold = 0.85,
   }) async {
     final pointId = _nextId().toString();
 
     final payload = <String, dynamic>{
       'text': text,
       'timestamp': DateTime.now().toIso8601String(),
+      'superseded': false,
       ...?metadata,
     };
 
@@ -250,6 +261,16 @@ class MemoryManager {
       try {
         final vector = await _embed(text);
         await ensureCollection(collectionName, vectorSize: vector.length);
+
+        // ─── 软失效检测: 写入前标记语义高度重合的旧记忆为 superseded ───
+        if (supersedeThreshold != null && supersedeThreshold > 0) {
+          await _supersedeSimilar(
+            collectionName: collectionName,
+            vector: vector,
+            threshold: supersedeThreshold,
+          );
+        }
+
         await _dio.put(
           '/collections/$collectionName/points',
           data: {
@@ -273,6 +294,66 @@ class MemoryManager {
     return pointId;
   }
 
+  /// 软失效检测: 查找与新记忆语义高度重合的旧记忆，标记为 superseded。
+  ///
+  /// 不物理删除旧记忆（保留可追溯性，符合保守维护原则），仅打标记降权，
+  /// 使其在 [recall] 时被过滤掉。典型场景: 用户先说"用 pnpm"，后来说
+  /// "改用 npm 了"——若不处理，两条记忆会以同等相关性被召回，模型可能
+  /// 读到过时结论。
+  Future<void> _supersedeSimilar({
+    required String collectionName,
+    required List<double> vector,
+    required double threshold,
+  }) async {
+    try {
+      final resp = await _dio.post(
+        '/collections/$collectionName/points/search',
+        data: {
+          'vector': vector,
+          'limit': 3,
+          'score_threshold': threshold,
+          'with_payload': true,
+        },
+      );
+      final hits = resp.data['result'] as List;
+      if (hits.isEmpty) return;
+
+      final idsToSupersede = <dynamic>[];
+      for (final hit in hits) {
+        final payload = hit['payload'] as Map<String, dynamic>?;
+        if (payload?['superseded'] == true) continue; // 已标记过，跳过
+        idsToSupersede.add(hit['id']);
+      }
+      if (idsToSupersede.isEmpty) return;
+
+      // Qdrant: 更新 payload 标记 (不改动向量，只改 payload)
+      await _dio.post(
+        '/collections/$collectionName/points/payload',
+        data: {
+          'payload': {'superseded': true},
+          'points': idsToSupersede,
+        },
+      );
+
+      // SQLite: 同步标记 (尽力而为，失败不影响主流程)
+      if (memoryDao != null) {
+        for (final id in idsToSupersede) {
+          try {
+            await memoryDao!.markSuperseded(collectionName, id as int);
+          } catch (_) {}
+        }
+      }
+
+      AppLogger.instance.log(
+        '[Memory] 软失效: 已标记 ${idsToSupersede.length} 条旧记忆为 superseded '
+        '(collection=$collectionName, threshold=$threshold)',
+      );
+    } catch (e) {
+      // 软失效检测失败不影响主流程，新记忆仍会正常写入
+      AppLogger.instance.log('[Memory] 软失效检测失败 (不影响写入): $e');
+    }
+  }
+
   // ─── 召回 ─────────────────────────────────────────────────
 
   /// 召回记忆
@@ -282,6 +363,9 @@ class MemoryManager {
   /// [topK]: 返回最相似的 K 条
   /// [scoreThreshold]: 最低相似度阈值 (仅 Qdrant 模式有效)
   /// [useQdrant]: 是否使用 Qdrant 语义搜索 (false 则降级 SQLite 关键词)
+  ///
+  /// 已被标记 superseded (软失效，通常因为有更新的记忆覆盖了它) 的记忆
+  /// 默认不会被召回，避免模型读到过时结论。
   ///
   /// 返回: [{text, score, timestamp, ...metadata}]
   Future<List<Map<String, dynamic>>> recall({
@@ -305,6 +389,15 @@ class MemoryManager {
             'limit': topK,
             'score_threshold': scoreThreshold,
             'with_payload': true,
+            // 过滤掉被软失效标记的旧记忆，避免过时结论污染检索结果
+            'filter': {
+              'must_not': [
+                {
+                  'key': 'superseded',
+                  'match': {'value': true},
+                },
+              ],
+            },
           },
         );
 

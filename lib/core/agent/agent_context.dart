@@ -15,6 +15,7 @@ import '../memory/memory_manager.dart';
 import '../memory/project_config.dart';
 import '../memory/qdrant_service.dart';
 import '../search/search_capability.dart';
+import '../skill/skill_injector.dart';
 import '../skill/skill_model.dart';
 import '../skill/skill_registry.dart';
 import '../toolshell/agent_loop.dart';
@@ -33,6 +34,8 @@ import 'tool_middleware.dart';
 import 'tool_pipeline.dart';
 import 'hooks/memory_recall_hook.dart';
 import 'hooks/memory_store_hook.dart';
+import 'hooks/schedule_hook.dart';
+import 'hooks/system_probe_hook.dart';
 import 'middleware/logging_middleware.dart';
 import 'middleware/permission_middleware.dart';
 import 'transformers/context_compactor.dart';
@@ -79,6 +82,9 @@ class AgentContext {
     messagePipeline: messagePipeline,
     hooks: hooks,
   );
+
+  /// 获取 Executor 实例（用于 AutonomousLoop 等外部消费）
+  Executor get executor => _PipelineAsExecutor(pipeline);
 }
 
 /// 适配器: 让 ToolPipeline 满足 AgentLoop 要求的 Executor 接口
@@ -99,6 +105,9 @@ class _PipelineAsExecutor extends Executor {
 class AgentContextBuilder {
   final Ref _ref;
 
+  /// 技能注入器 — 跨轮次复用以维护 pin 状态和 prompt 缓存
+  SkillInjector? _skillInjector;
+
   AgentContextBuilder(this._ref);
 
   /// 构建 AgentContext
@@ -107,11 +116,13 @@ class AgentContextBuilder {
   /// [existingMessages] 已有的 agent 消息历史 (续对话时传入)
   /// [sessionAutoApprove] 本次会话是否已切换为 auto 模式
   /// [onPermissionRequest] 权限确认回调
+  /// [userInput] 当前用户输入（用于 SkillRouter 相关性匹配）
   Future<AgentContext> build({
     required ModelCard modelCard,
     required List<Map<String, dynamic>> existingMessages,
     required bool sessionAutoApprove,
     Future<bool> Function(String, Map<String, dynamic>)? onPermissionRequest,
+    String userInput = '',
   }) async {
     // ─── 工作目录 ───
     var workDir = _ref.read(workingDirectoryProvider);
@@ -207,7 +218,11 @@ class AgentContextBuilder {
     // 拆成稳定前缀（专家+元技能）与用户技能区两段，
     // 便于会话中途技能变化时只刷新技能区，保护 prompt cache。
     final systemPromptPrefix = await _buildSystemPromptPrefix();
-    final skillsSection = await _buildSkillsSection();
+    final skillsSection = await _buildSkillsSection(
+      userInput: userInput,
+      existingMessages: existingMessages,
+      memoryManager: memoryManager,
+    );
     final systemPrompt = '$systemPromptPrefix$skillsSection';
 
     // ─── 初始化消息历史 ───
@@ -255,6 +270,7 @@ class AgentContextBuilder {
     );
 
     // ─── Hooks ───
+    final hasWorkDir = _ref.read(workingDirectoryProvider).isNotEmpty;
     final hooks = <AgentHook>[
       if (effectiveRecall && memoryManager != null && memoryCollection != null)
         MemoryRecallHook(
@@ -270,6 +286,10 @@ class AgentContextBuilder {
           messages: existingMessages,
           useQdrant: useQdrant,
         ),
+      // Schedule 元技能 Hook — 强制驱动计划回顾
+      if (hasWorkDir) ScheduleHook(projectRoot: workDir),
+      // System 元技能 Hook — 首次会话自动探测开发环境
+      if (hasWorkDir) SystemProbeHook(),
       // 来自 Capabilities 的 hooks
       for (final cap in capabilities)
         if (cap.isActive) ...cap.hooks,
@@ -490,9 +510,12 @@ class AgentContextBuilder {
   }
 
   /// 公开方法: 构建系统提示词 (供 loadConversation 等外部场景使用)
-  Future<String> buildSystemPrompt() async {
+  ///
+  /// [userInput] 可选的用户输入，用于 SkillRouter 相关性匹配。
+  /// 不传时退回全量注入所有激活技能。
+  Future<String> buildSystemPrompt({String userInput = ''}) async {
     final prefix = await _buildSystemPromptPrefix();
-    final skills = await _buildSkillsSection();
+    final skills = await _buildSkillsSection(userInput: userInput);
     return '$prefix$skills';
   }
 
@@ -550,24 +573,59 @@ class AgentContextBuilder {
     return parts.join();
   }
 
-  /// 构建 system prompt 的用户技能区。会话中途可能因启用/停用技能而变化。
-  Future<String> _buildSkillsSection() async {
-    final parts = <String>[];
+  /// 构建 system prompt 的用户技能区（基于 SkillInjector 相关性路由）。
+  ///
+  /// 使用统一的 [SkillInjector] API 对当前用户输入进行相关性匹配，
+  /// 只注入相关的 skill（最多 10 个），避免 token 浪费。
+  /// 每次载入的 skill 会打印到终端方便调试验证。
+  Future<String> _buildSkillsSection({
+    String userInput = '',
+    List<Map<String, dynamic>>? existingMessages,
+    MemoryManager? memoryManager,
+  }) async {
     final registry = _ref.read(skillRegistryProvider);
-    final skills = _collectAllSkills();
-    for (final skill in skills) {
-      if (!skill.isActive) continue;
-      final prompt = await registry.loadSkillPrompt(skill);
-      if (prompt.isNotEmpty) {
-        parts.add(
-          '\n\n---\n# 技能: ${skill.name}\n'
-          '> 技能目录: ${skill.path}\n'
-          '> 使用 toolshell_read 可直接读取该目录下的文件（绝对路径）\n\n'
-          '$prompt',
-        );
+    final skills = _collectAllSkills().where((s) => s.isActive).toList();
+
+    if (skills.isEmpty) return '';
+
+    // 初始化/复用 SkillInjector
+    _skillInjector ??= SkillInjector(
+      registry: registry,
+      memoryManager: memoryManager,
+      source: 'Chat',
+    );
+
+    // 提取最近上下文
+    final recentContext = _extractRecentContext(existingMessages);
+
+    // 统一调用 SkillInjector
+    final injection = await _skillInjector!.inject(
+      userInput: userInput,
+      skillPool: skills,
+      context: recentContext,
+      forceAll: userInput.isEmpty,
+    );
+
+    return injection.systemPrompt;
+  }
+
+  /// 从消息历史中提取最近 2 轮用户/助手内容作为辅助上下文
+  List<String> _extractRecentContext(List<Map<String, dynamic>>? messages) {
+    if (messages == null || messages.isEmpty) return [];
+    final recent = <String>[];
+    final userAssistant = messages
+        .where((m) => m['role'] == 'user' || m['role'] == 'assistant')
+        .toList();
+    final tail = userAssistant.length > 4
+        ? userAssistant.sublist(userAssistant.length - 4)
+        : userAssistant;
+    for (final msg in tail) {
+      final content = msg['content'];
+      if (content is String && content.isNotEmpty) {
+        recent.add(content.length > 200 ? content.substring(0, 200) : content);
       }
     }
-    return parts.join();
+    return recent;
   }
 
   // ─── Capabilities 收集 ───

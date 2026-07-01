@@ -10,6 +10,8 @@ import 'package:uuid/uuid.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import '../search/search_capability.dart';
+import '../skill/skill_injector.dart';
+import '../skill/skill_model.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/mcp_provider.dart';
 import '../../providers/search_provider.dart';
@@ -338,19 +340,20 @@ class OnlineServer {
         return;
       }
 
-      // 收集可用工具
-      final tools = await _collectTools(session);
+      // 收集可用工具 (非 skill 部分)
+      final tools = await _collectNonSkillTools(session);
       final toolHandlers = _collectToolHandlers(session);
 
-      // 注入 Skill 系统提示
-      final skillSystemPrompt = await _buildSkillSystemPrompt(session);
+      // 通过 SkillInjector 按相关性注入 Skill
+      final skillInjection = await _injectSkills(session, content);
+      tools.addAll(skillInjection.tools);
+      final skillSystemPrompt = skillInjection.systemPrompt;
 
       // 通知客户端当前激活的 Skill (用于调试终端)
-      final activeSkillNames = await _getActiveSkillNames(session);
-      if (activeSkillNames.isNotEmpty) {
+      if (skillInjection.isNotEmpty) {
         _wsSend(session.ws, {
           'type': 'debug_skills',
-          'skills': activeSkillNames,
+          'skills': skillInjection.matched.map((s) => s.skill.name).toList(),
           'toolCount': tools.length,
           'promptLength': skillSystemPrompt.length,
         });
@@ -474,7 +477,8 @@ class OnlineServer {
   // ─── 工具收集与执行 ────────────────────────────────────
 
   /// 收集当前 session 可用的工具定义 (OpenAI function format)
-  Future<List<Map<String, dynamic>>> _collectTools(
+  /// 收集非 Skill 工具（搜索 + MCP）
+  Future<List<Map<String, dynamic>>> _collectNonSkillTools(
     OnlineSession session,
   ) async {
     final tools = <Map<String, dynamic>>[];
@@ -497,23 +501,46 @@ class OnlineServer {
       }
     }
 
-    // 3) Skill 工具 (tools.json)
+    return tools;
+  }
+
+  /// 通过 SkillInjector 按相关性注入 Skill
+  Future<SkillInjection> _injectSkills(
+    OnlineSession session,
+    String userInput,
+  ) async {
     final skillIds = session.isAdmin
         ? session.activeSkillIds.toList()
         : (session.skillEnabled ? session.skillIds : <String>[]);
-    if (skillIds.isNotEmpty) {
-      final registry = _ref.read(skillRegistryProvider);
-      final allSkills = _ref.read(skillsProvider).valueOrNull ?? [];
-      for (final skillId in skillIds) {
-        final skill = allSkills.where((s) => s.id == skillId).firstOrNull;
-        if (skill != null) {
-          final skillTools = await registry.loadSkillTools(skill);
-          tools.addAll(skillTools);
-        }
-      }
-    }
+    if (skillIds.isEmpty) return SkillInjection.empty;
 
-    return tools;
+    final allSkills = _ref.read(skillsProvider).valueOrNull ?? [];
+    final skillPool = skillIds
+        .map((id) => allSkills.where((s) => s.id == id).firstOrNull)
+        .where((s) => s != null)
+        .cast<Skill>()
+        .toList();
+
+    if (skillPool.isEmpty) return SkillInjection.empty;
+
+    final registry = _ref.read(skillRegistryProvider);
+    final injector = SkillInjector(registry: registry, source: 'OnlineService');
+
+    // 提取最近对话作为上下文
+    final context = session.messages
+        .where((m) => m['role'] == 'user' || m['role'] == 'assistant')
+        .map((m) => m['content'] as String? ?? '')
+        .where((c) => c.isNotEmpty)
+        .toList();
+    final recentContext = context.length > 4
+        ? context.sublist(context.length - 4)
+        : context;
+
+    return injector.inject(
+      userInput: userInput,
+      skillPool: skillPool,
+      context: recentContext,
+    );
   }
 
   /// 收集工具处理器映射 (name -> handler)
@@ -587,56 +614,6 @@ class OnlineServer {
     if (!config.isConfigured) return null;
 
     return SearchCapability(provider: provider, apiKey: config.apiKey);
-  }
-
-  /// 构建 Skill 系统提示 (合并所有激活 skill 的 SKILL.md)
-  Future<String> _buildSkillSystemPrompt(OnlineSession session) async {
-    final skillIds = session.isAdmin
-        ? session.activeSkillIds.toList()
-        : (session.skillEnabled ? session.skillIds : <String>[]);
-    if (skillIds.isEmpty) return '';
-
-    final registry = _ref.read(skillRegistryProvider);
-    final allSkills = _ref.read(skillsProvider).valueOrNull ?? [];
-    final parts = <String>[];
-
-    for (final skillId in skillIds) {
-      final skill = allSkills.where((s) => s.id == skillId).firstOrNull;
-      if (skill != null) {
-        try {
-          final prompt = await registry.loadSkillPrompt(skill);
-          if (prompt.isNotEmpty) {
-            parts.add('## Skill: ${skill.name}\n$prompt');
-          } else {
-            _wsSend(session.ws, {
-              'type': 'debug_skills_warn',
-              'message':
-                  'Skill [${skill.name}] SKILL.md 为空, path=${skill.path}',
-            });
-          }
-        } catch (e) {
-          _wsSend(session.ws, {
-            'type': 'debug_skills_warn',
-            'message': 'Skill [${skill.name}] 读取失败: $e',
-          });
-        }
-      }
-    }
-    return parts.join('\n\n');
-  }
-
-  /// 获取当前激活的 Skill 名称列表 (用于调试输出)
-  Future<List<String>> _getActiveSkillNames(OnlineSession session) async {
-    final skillIds = session.isAdmin
-        ? session.activeSkillIds.toList()
-        : (session.skillEnabled ? session.skillIds : <String>[]);
-    if (skillIds.isEmpty) return [];
-    final allSkills = _ref.read(skillsProvider).valueOrNull ?? [];
-    return skillIds
-        .map((id) => allSkills.where((s) => s.id == id).firstOrNull?.name)
-        .where((n) => n != null)
-        .cast<String>()
-        .toList();
   }
 
   /// 管理员的搜索设置 (可动态切换)

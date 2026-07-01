@@ -33,6 +33,32 @@ class MemoryDao {
     );
   }
 
+  /// 标记一条记忆为 superseded (软失效)
+  ///
+  /// 不物理删除，只在 metadata 中打标记，配合 [search] 的过滤逻辑
+  /// 使其不再被召回。用于 Qdrant 侧软失效检测的 SQLite 侧同步。
+  Future<void> markSuperseded(String collection, int id) async {
+    final db = await _dbHelper.database;
+    final result = db.select(
+      'SELECT metadata FROM memory_entries WHERE id = ? AND collection = ?',
+      [id, collection],
+    );
+    if (result.isEmpty) return;
+
+    Map<String, dynamic> metadata = {};
+    try {
+      metadata =
+          jsonDecode(result.first['metadata'] as String)
+              as Map<String, dynamic>;
+    } catch (_) {}
+    metadata['superseded'] = true;
+
+    db.execute(
+      'UPDATE memory_entries SET metadata = ? WHERE id = ? AND collection = ?',
+      [jsonEncode(metadata), id, collection],
+    );
+  }
+
   /// 删除单条记忆
   Future<void> delete(String collection, int id) async {
     final db = await _dbHelper.database;
@@ -95,12 +121,14 @@ class MemoryDao {
     final keywords = _tokenize(query);
 
     if (keywords.isEmpty) {
-      // 无有效关键词，返回最近的几条
+      // 无有效关键词，返回最近的几条 (多取一些以补偿后续过滤掉的 superseded 条目)
       final result = db.select(
         'SELECT * FROM memory_entries WHERE collection = ? ORDER BY created_at DESC LIMIT ?',
-        [collection, limit],
+        [collection, limit * 2],
       );
-      return _rowsToResults(result, const []);
+      return _filterSuperseded(
+        _rowsToResults(result, const []),
+      ).take(limit).toList();
     }
 
     // 构建 LIKE 条件 (OR 连接)。多取一些候选 (limit*4)，
@@ -117,10 +145,17 @@ class MemoryDao {
       params,
     );
 
-    final rows = _rowsToResults(result, keywords);
+    final rows = _filterSuperseded(_rowsToResults(result, keywords));
     // 按 score 降序 (命中关键词比例)，分数相同保持时间倒序
     rows.sort((a, b) => (b['score'] as double).compareTo(a['score'] as double));
     return rows.take(limit).toList();
+  }
+
+  /// 过滤掉已标记 superseded (软失效) 的记忆，避免过时结论被召回。
+  List<Map<String, dynamic>> _filterSuperseded(
+    List<Map<String, dynamic>> rows,
+  ) {
+    return rows.where((r) => r['superseded'] != true).toList();
   }
 
   /// 中文友好分词:

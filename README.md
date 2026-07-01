@@ -86,11 +86,11 @@ RemindAI 的 Skill 系统采用**四层架构**，每一层都有独立的存储
 | Schedule 元技能 | ✅ | 7 工具 CRUD + 审查 + 归档 |
 | System 元技能 | ✅ | 环境探测 + 环境变量脱敏 |
 | MCP 多传输 | ✅ | stdio / SSE / Streamable HTTP |
-| 向量记忆系统 | ✅ | Qdrant + SQLite 双写 + 自动容灾 |
+| 向量记忆系统 | ✅ | Qdrant + SQLite 双写 + 自动容灾 + 软失效过滤 |
 | 可插拔 Capability | ✅ | 搜索能力已落地，框架可扩展 |
 | 四层技能系统 | ✅ | L1 默认元技能 + L2 用户全局 + L3 临时技能，L4 规划中 |
 | 模型 Card 管理 | ✅ | 增删改 + Logo + 拖拽排序 |
-| 多 Agent 协作 | ⚡ | 框架已搭建，执行链路持续完善中 |
+| 多 Agent 协作 | ⚡ | 框架搭建完成 + 并行文档理解编排，持续完善中 |
 | 领域专家系统 | ✅ | 预设/自定义角色 + 绑定技能 |
 | 对话导出 | ✅ | MD / PDF / Word / HTML |
 | 桌面体验 | ✅ | 托盘 / 通知 / 闪屏 / 主题动画 |
@@ -109,7 +109,7 @@ RemindAI 的 Skill 系统采用**四层架构**，每一层都有独立的存储
 | 🌐 对外 API 服务 | 内置 HTTP 服务器，三种端点：OpenAI 聚合、Claude Agent（运行 RemindAI 自身的 AgentLoop）、Claude 代理（纯透传） |
 | 🔌 MCP 协议 | stdio/SSE/Streamable HTTP 三传输 + 工具自动发现 + 拖拽管理 |
 | 🧠 向量记忆 | Qdrant 语义搜索 + SQLite 持久备份 + 自动运维 + 记忆重建 |
-| 🤝 多 Agent | 指挥部/工作者/审查员角色 + 权限隔离 + 自动路由 |
+| 🤝 多 Agent | 指挥部/工作者/审查员角色 + 权限隔离 + 自动路由 + 并行文档理解编排 |
 | 🎨 多模型 | OpenAI/Anthropic/Gemini 原生适配 + 流式推理链 + 多模态 |
 | 🧩 Capability | 可插拔能力架构，Custom → MCP → ToolShell 三级路由 |
 | 📦 技能系统 | 四层架构 (L1 元技能 / L2 全局 / L3 临时 / L4 自生成规划中)，SKILL.md + tools.json 格式，ZIP 一键导入，支持命令创建 |
@@ -191,6 +191,14 @@ flutter build macos --release --tree-shake-icons --split-debug-info=./debug-info
 
 ---
 
+## 优化参考
+- [https://arxiv.org/pdf/2606.24775](https://arxiv.org/pdf/2606.24775)，感谢该文章精确指出了记忆类架构的已知薄弱环节——缺乏版本管理导致检索到过时事实
+
+## 优化思考
+- 是否可以设计一种工具范式：大致这样，工具名字、工具的作用简介、工具的版本、工具的文档网站（以防模型不熟悉某工具的命令方便查阅），相关时Agent可以自动注入
+
+---
+
 ## ☕ 赞助
 
 如果 RemindAI 对你有帮助，欢迎选择性赞助支持开发 ~
@@ -205,6 +213,7 @@ flutter build macos --release --tree-shake-icons --split-debug-info=./debug-info
 </p>
 
 ---
+
 
 ## 📄 许可证
 
