@@ -625,6 +625,16 @@ class SZh extends S {
   }
 
   @override
+  String skillsImportBatchSummary(int success, int failed) {
+    return '导入完成：成功 $success 个，失败 $failed 个';
+  }
+
+  @override
+  String skillsImportBatchAllOk(int count) {
+    return '已成功导入 $count 个技能';
+  }
+
+  @override
   String get skillsEmpty => '暂无已安装技能';
 
   @override

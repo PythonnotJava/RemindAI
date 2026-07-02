@@ -1,0 +1,48 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// ignore_for_file: file_names, non_constant_identifier_names
+
+import 'package:highlight/highlight_core.dart' show HljsStyle;
+
+/// Highlight.js theme map for the `base16/icy-dark` theme.
+const base16IcyDarkTheme = <String, HljsStyle>{
+  'root': HljsStyle(color: '#095b67', backgroundColor: '#021012'),
+  'addition': HljsStyle(color: '#4dd0e1'),
+  'attr': HljsStyle(color: '#b3ebf2'),
+  'attribute': HljsStyle(color: '#00bcd4'),
+  'built_in': HljsStyle(color: '#26c6da'),
+  'bullet': HljsStyle(color: '#16c1d9'),
+  'code': HljsStyle(color: '#4dd0e1'),
+  'comment': HljsStyle(color: '#052e34'),
+  'deletion': HljsStyle(color: '#16c1d9'),
+  'doctag': HljsStyle(color: '#26c6da'),
+  'emphasis': HljsStyle(color: '#00acc1', italic: true),
+  'keyword': HljsStyle(color: '#00acc1'),
+  'link': HljsStyle(color: '#b3ebf2'),
+  'literal': HljsStyle(color: '#b3ebf2'),
+  'meta': HljsStyle(color: '#0097a7'),
+  'meta keyword': HljsStyle(color: '#0097a7', bold: true),
+  'meta string': HljsStyle(color: '#0097a7'),
+  'meta-keyword': HljsStyle(bold: true),
+  'name': HljsStyle(color: '#16c1d9'),
+  'number': HljsStyle(color: '#b3ebf2'),
+  'operator': HljsStyle(color: '#095b67'),
+  'punctuation': HljsStyle(color: '#095b67'),
+  'quote': HljsStyle(color: '#26c6da'),
+  'regexp': HljsStyle(color: '#26c6da'),
+  'section': HljsStyle(color: '#00bcd4'),
+  'selector-tag': HljsStyle(color: '#16c1d9'),
+  'string': HljsStyle(color: '#4dd0e1'),
+  'strong': HljsStyle(color: '#80deea', bold: true),
+  'subst': HljsStyle(color: '#095b67'),
+  'symbol': HljsStyle(color: '#b3ebf2'),
+  'tag': HljsStyle(color: '#064048'),
+  'template-tag': HljsStyle(color: '#00acc1'),
+  'template-variable': HljsStyle(color: '#16c1d9'),
+  'title': HljsStyle(color: '#80deea'),
+  'title.class': HljsStyle(color: '#80deea'),
+  'title.class.inherited': HljsStyle(color: '#4dd0e1'),
+  'title.function': HljsStyle(color: '#00bcd4'),
+  'type': HljsStyle(color: '#00acc1'),
+  'variable': HljsStyle(color: '#16c1d9'),
+  'variable.constant': HljsStyle(color: '#b3ebf2'),
+};

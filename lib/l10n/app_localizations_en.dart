@@ -642,6 +642,16 @@ class SEn extends S {
   }
 
   @override
+  String skillsImportBatchSummary(int success, int failed) {
+    return 'Import finished: $success succeeded, $failed failed';
+  }
+
+  @override
+  String skillsImportBatchAllOk(int count) {
+    return 'Successfully imported $count skills';
+  }
+
+  @override
   String get skillsEmpty => 'No skills installed';
 
   @override

@@ -1,0 +1,48 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// ignore_for_file: file_names, non_constant_identifier_names
+
+import 'package:highlight/highlight_core.dart' show HljsStyle;
+
+/// Highlight.js theme map for the `base16/gigavolt` theme.
+const base16GigavoltTheme = <String, HljsStyle>{
+  'root': HljsStyle(color: '#e9e7e1', backgroundColor: '#202126'),
+  'addition': HljsStyle(color: '#f2e6a9'),
+  'attr': HljsStyle(color: '#19f988'),
+  'attribute': HljsStyle(color: '#40bfff'),
+  'built_in': HljsStyle(color: '#fb6acb'),
+  'bullet': HljsStyle(color: '#ff661a'),
+  'code': HljsStyle(color: '#f2e6a9'),
+  'comment': HljsStyle(color: '#a1d2e6'),
+  'deletion': HljsStyle(color: '#ff661a'),
+  'doctag': HljsStyle(color: '#fb6acb'),
+  'emphasis': HljsStyle(color: '#ae94f9', italic: true),
+  'keyword': HljsStyle(color: '#ae94f9'),
+  'link': HljsStyle(color: '#19f988'),
+  'literal': HljsStyle(color: '#19f988'),
+  'meta': HljsStyle(color: '#6187ff'),
+  'meta keyword': HljsStyle(color: '#6187ff', bold: true),
+  'meta string': HljsStyle(color: '#6187ff'),
+  'meta-keyword': HljsStyle(bold: true),
+  'name': HljsStyle(color: '#ff661a'),
+  'number': HljsStyle(color: '#19f988'),
+  'operator': HljsStyle(color: '#e9e7e1'),
+  'punctuation': HljsStyle(color: '#e9e7e1'),
+  'quote': HljsStyle(color: '#fb6acb'),
+  'regexp': HljsStyle(color: '#fb6acb'),
+  'section': HljsStyle(color: '#40bfff'),
+  'selector-tag': HljsStyle(color: '#ff661a'),
+  'string': HljsStyle(color: '#f2e6a9'),
+  'strong': HljsStyle(color: '#ffdc2d', bold: true),
+  'subst': HljsStyle(color: '#e9e7e1'),
+  'symbol': HljsStyle(color: '#19f988'),
+  'tag': HljsStyle(color: '#cad3ff'),
+  'template-tag': HljsStyle(color: '#ae94f9'),
+  'template-variable': HljsStyle(color: '#ff661a'),
+  'title': HljsStyle(color: '#ffdc2d'),
+  'title.class': HljsStyle(color: '#ffdc2d'),
+  'title.class.inherited': HljsStyle(color: '#f2e6a9'),
+  'title.function': HljsStyle(color: '#40bfff'),
+  'type': HljsStyle(color: '#ae94f9'),
+  'variable': HljsStyle(color: '#ff661a'),
+  'variable.constant': HljsStyle(color: '#19f988'),
+};

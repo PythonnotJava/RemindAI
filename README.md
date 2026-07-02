@@ -1,7 +1,7 @@
 <div align="center">
   <img src="snapshots/logos/logo_egg.png" alt="RemindAI Logo" width="128" />
   <h1>🧠 RemindAI</h1>
-  <p><strong>开源桌面 AI 助手 — 不再只是对话</strong></p>
+  <p><strong>v1.0.4 — 开源桌面 AI 助手，不再只是对话</strong></p>
   <p>
     <a href="./README_EN.md">🌐 English</a> |
     <a href="https://github.com/PythonnotJava/RemindAI/releases">📦 下载</a> |
@@ -15,7 +15,8 @@
     <img src="https://img.shields.io/badge/Skill Support-purple.svg" alt="Skill" />
     <img src="https://img.shields.io/badge/API Server-green.svg" alt="API Server" />
     <img src="https://img.shields.io/badge/🐱 Global Pet Agent-orange.svg" alt="Pet Agent" />
-</p>
+    <img src="https://img.shields.io/badge/v1.0.4-latest-informational.svg" alt="Version" />
+  </p>
 </div>
 
 ---
@@ -23,6 +24,20 @@
 <p align="center">
   <img src="snapshots/results_promotion.png" alt="RemindAI 效果展示" width="900" />
 </p>
+
+---
+
+## 🆕 V1.0.4 更新
+
+| 更新项 | 说明 |
+|--------|------|
+| 🔄 长对话防卡顿优化 | 优化思考过程中途可能产生的卡顿问题 |
+| 🔍 软失效过滤优化 | 避免过时记忆与新记忆同权重混合在检索结果里 |
+| 🤝 多 Agent 并行编排 | 编排多 Agent 对大量文档进行并行理解的命令 |
+| 🛠️ 可控 AgentLoop 模式 | 从思考、编写、测试到验证的循环流水线 |
+| 📦 技能批量导入 | 技能现在可以批量导入 |
+| 🎨 代码高亮优化 | 优化了代码高亮文本渲染 |
+| 📊 Flowchart 总结 | 使用 [archify](https://github.com/tt-a1i/archify) 对对话进行流程图总结输出 |
 
 ---
 
@@ -38,10 +53,12 @@ RemindAI 是一个**开源桌面 AI 助手**，核心理念是为大模型提供
 |---|---|---|
 | 📁 文件操作 | ❌ 不支持或需插件 | ✅ 内置沙盒文件系统 |
 | 💻 代码执行 | ❌ 不支持 | ✅ 内置 Python/Shell/JS 执行器 |
-| 🧠 记忆 | ❌ 无或仅上下文 | ✅ 向量语义记忆 + SQLite 持久化 |
+| 🧠 记忆 | ❌ 无或仅上下文 | ✅ 向量语义记忆 + SQLite 持久化 + 软失效过滤 |
 | 🔌 工具扩展 | ⚠️ 有限 | ✅ MCP 协议 + 四层技能系统 + Capability 插件 |
-| 🤝 多 Agent | ⚠️ 多窗口并排 | ✅ 真协作：指挥部广播、权限隔离、自动路由 |
+| 🤝 多 Agent | ⚠️ 多窗口并排 | ✅ 真协作：指挥部广播、权限隔离、自动路由 + 并行文档理解 |
 | 🌐 对外服务 | ❌ 不支持 | ✅ 内置 HTTP API 服务器，三种端点对外暴露 |
+| 🔄 AgentLoop | ❌ 无 | ✅ 可控循环流水线：思考→编写→测试→验证 |
+| 📦 技能导入 | ⚠️ 单个导入 | ✅ ZIP 一键导入 + 批量导入 |
 | 🐱 全局陪伴 | ❌ 无 | ✅ 像素宠物 + TTS 语音 + 商店经济 + 成就系统 |
 
 ---
@@ -81,6 +98,7 @@ RemindAI 的 Skill 系统采用**四层架构**，每一层都有独立的存储
 | 模块 | 状态 | 说明 |
 |---|---|---|
 | AI 对话核心 (LLM + tool calling) | ✅ | AgentLoop 流式循环 + 事件驱动 UI |
+| 可控 AgentLoop 流水线 | ✅ | 思考 → 编写 → 测试 → 验证 循环模式 |
 | 三端 LLM 适配 (OpenAI/Anthropic/Gemini) | ✅ | 各自独立客户端，流式+tool_call+多模态 |
 | ToolShell 元技能 | ✅ | 读/写/删/搜索/exec/python/js + rg/fd/rtk |
 | Schedule 元技能 | ✅ | 7 工具 CRUD + 审查 + 归档 |
@@ -88,9 +106,9 @@ RemindAI 的 Skill 系统采用**四层架构**，每一层都有独立的存储
 | MCP 多传输 | ✅ | stdio / SSE / Streamable HTTP |
 | 向量记忆系统 | ✅ | Qdrant + SQLite 双写 + 自动容灾 + 软失效过滤 |
 | 可插拔 Capability | ✅ | 搜索能力已落地，框架可扩展 |
-| 四层技能系统 | ✅ | L1 默认元技能 + L2 用户全局 + L3 临时技能，L4 规划中 |
+| 四层技能系统 | ✅ | L1 默认元技能 + L2 用户全局 + L3 临时技能 + L4 规划中，支持批量导入 |
 | 模型 Card 管理 | ✅ | 增删改 + Logo + 拖拽排序 |
-| 多 Agent 协作 | ⚡ | 框架搭建完成 + 并行文档理解编排，持续完善中 |
+| 多 Agent 协作 | ✅ | 框架搭建完成 + 并行文档理解编排 + 可控 AgentLoop 流水线 |
 | 领域专家系统 | ✅ | 预设/自定义角色 + 绑定技能 |
 | 对话导出 | ✅ | MD / PDF / Word / HTML |
 | 桌面体验 | ✅ | 托盘 / 通知 / 闪屏 / 主题动画 |
@@ -98,6 +116,7 @@ RemindAI 的 Skill 系统采用**四层架构**，每一层都有独立的存储
 | 对外 API 服务 | ✅ | 内置 HTTP 服务器，三种端点：OpenAI 聚合 / Claude Agent / Claude 代理 |
 | 在线访问 Agent | ✅ | 通过浏览器远程访问 RemindAI Agent |
 | 上下文压缩 | ✅ | RTK Token 压缩 60-90% + 上下文管理优化 |
+| Flowchart 总结 | ✅ | 使用 [archify](https://github.com/tt-a1i/archify) 对对话进行流程图总结 |
 
 ---
 
@@ -108,15 +127,17 @@ RemindAI 的 Skill 系统采用**四层架构**，每一层都有独立的存储
 | 🐚 ToolShell | 文件沙盒 + Python/Shell/JS 执行 + rg/fd/rtk + RTK 压缩 60-90% token |
 | 🌐 对外 API 服务 | 内置 HTTP 服务器，三种端点：OpenAI 聚合、Claude Agent（运行 RemindAI 自身的 AgentLoop）、Claude 代理（纯透传） |
 | 🔌 MCP 协议 | stdio/SSE/Streamable HTTP 三传输 + 工具自动发现 + 拖拽管理 |
-| 🧠 向量记忆 | Qdrant 语义搜索 + SQLite 持久备份 + 自动运维 + 记忆重建 |
+| 🧠 向量记忆 | Qdrant 语义搜索 + SQLite 持久备份 + 自动运维 + 软失效过滤 + 记忆重建 |
 | 🤝 多 Agent | 指挥部/工作者/审查员角色 + 权限隔离 + 自动路由 + 并行文档理解编排 |
+| 🔄 可控 AgentLoop | 思考 → 编写 → 测试 → 验证 的循环流水线模式，长对话防卡顿优化 |
 | 🎨 多模型 | OpenAI/Anthropic/Gemini 原生适配 + 流式推理链 + 多模态 |
 | 🧩 Capability | 可插拔能力架构，Custom → MCP → ToolShell 三级路由 |
-| 📦 技能系统 | 四层架构 (L1 元技能 / L2 全局 / L3 临时 / L4 自生成规划中)，SKILL.md + tools.json 格式，ZIP 一键导入，支持命令创建 |
+| 📦 技能系统 | 四层架构 (L1 元技能 / L2 全局 / L3 临时 / L4 自生成规划中)，SKILL.md + tools.json 格式，ZIP 一键导入 + 批量导入，支持命令创建 |
 | 🔍 Web 搜索 | Tavily / Brave / 百度智能搜索，会话级开关 |
 | 📋 Schedule | SCHEDULE.md 驱动，P0/P1/P2 优先级，AI 主动回顾 |
 | 👤 领域专家 | 预设/自定义角色 + 独立 system prompt |
 | 🖼️ 内置工具 | Gemini 文生图 / 公式 OCR / PaddleOCR / 流程图 / 富文本 |
+| 📊 Flowchart | 使用 [archify](https://github.com/tt-a1i/archify) 对对话进行流程图总结输出 |
 | 📤 导出 | Markdown / PDF / Word / HTML |
 | 🌍 国际化 | 完整中英双语 |
 | 🎨 主题 | Material 3 亮/暗 + 涟漪切换动画 |

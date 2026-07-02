@@ -4,11 +4,18 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_highlight/themes/atom-one-dark.dart';
-import 'package:flutter_highlight/themes/atom-one-light.dart';
+import 'package:flutter_highlight/flutter_highlight.dart';
+import 'package:flutter_highlight/themes/atom_one_dark.dart';
+import 'package:flutter_highlight/themes/atom_one_light.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
-import 'package:highlight/highlight.dart' show highlight, Node;
+// 用 highlight.dart（而非 highlight_core.dart）导入，
+// 并显式调用 ensureInitialized() 触发全部语言（190+）注册到 hljs 全局实例——
+// 该包的自动注册是懒初始化的顶层 final 变量，不主动访问就不会执行，
+// 否则 HighlightView 默认新建的空 Highlight() 实例会因未注册语言而抛
+// "Unknown language" 异常。
+import 'package:highlight/highlight.dart'
+    show HljsStyle, hljs, ensureInitialized;
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_windows/webview_windows.dart' as wv;
@@ -207,72 +214,34 @@ class _SafeCodeFieldState extends State<_SafeCodeField> {
           if (_showPreview && _isHtml)
             _HtmlPreview(html: widget.codes, colorScheme: widget.colorScheme)
           else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.all(16),
-              child: _buildHighlightedCode(theme),
-            ),
+            // HighlightView 内部已自带横向 SingleChildScrollView，无需外层再包一层
+            _buildHighlightedCode(theme),
         ],
       ),
     );
   }
 
   /// 构建语法高亮的代码 widget。
-  /// 如果语言无法识别则 fallback 到自动检测或纯文本。
-  Widget _buildHighlightedCode(Map<String, TextStyle> theme) {
-    final language = widget.name.toLowerCase().trim();
-    final defaultStyle =
-        theme['root'] ??
-        const TextStyle(fontFamily: 'JetBrainsMono', fontSize: 13);
-
-    try {
-      // 尝试使用指定语言解析；空字符串则自动检测
-      final result = language.isNotEmpty
-          ? highlight.parse(widget.codes, language: language)
-          : highlight.parse(widget.codes, autoDetection: true);
-
-      final spans = _buildSpans(result.nodes ?? [], theme, defaultStyle);
-      return RichText(
-        text: TextSpan(style: defaultStyle, children: spans),
-      );
-    } catch (_) {
-      // 解析失败时 fallback 到纯文本
-      return Text(widget.codes, style: defaultStyle);
-    }
-  }
-
-  /// 递归遍历 highlight.js 的节点树，构建 TextSpan 列表。
-  List<TextSpan> _buildSpans(
-    List<Node> nodes,
-    Map<String, TextStyle> theme,
-    TextStyle defaultStyle,
-  ) {
-    final spans = <TextSpan>[];
-    for (final node in nodes) {
-      if (node.value != null) {
-        // 文本叶子节点
-        spans.add(
-          TextSpan(
-            text: node.value,
-            style: node.className != null
-                ? theme[node.className] ?? defaultStyle
-                : defaultStyle,
-          ),
-        );
-      } else if (node.children != null) {
-        // 嵌套节点
-        final childStyle = node.className != null
-            ? theme[node.className] ?? defaultStyle
-            : defaultStyle;
-        spans.add(
-          TextSpan(
-            style: childStyle,
-            children: _buildSpans(node.children!, theme, defaultStyle),
-          ),
-        );
-      }
-    }
-    return spans;
+  /// 语言名为空、或不是 hljs 已注册的合法语言（含别名）时交给 HighlightView
+  /// 自动检测——AI 输出的代码块围栏语言标注偶尔会混入异常内容（如把链接、
+  /// 未闭合围栏之后的文本误当成语言名），若不做校验就直传给精确匹配模式，
+  /// highlight 引擎会直接 throw ArgumentError('Unknown language') 炸整个消息气泡。
+  Widget _buildHighlightedCode(Map<String, HljsStyle> theme) {
+    ensureInitialized(); // 确保 hljs 已注册全部语言，重复调用无副作用
+    final rawLanguage = widget.name.toLowerCase().trim();
+    final language =
+        rawLanguage.isNotEmpty && hljs.hasLanguage(rawLanguage)
+        ? rawLanguage
+        : null;
+    return HighlightView(
+      widget.codes,
+      language: language,
+      theme: theme,
+      padding: const EdgeInsets.all(16),
+      textStyle: const TextStyle(fontFamily: 'JetBrainsMono', fontSize: 13),
+      // 复用已注册全部语言的全局单例，避免每次新建空引擎导致语言识别失败
+      highlighter: hljs,
+    );
   }
 
   Future<void> _copy() async {
@@ -355,6 +324,7 @@ class _HtmlPreviewState extends State<_HtmlPreview> {
   final _controller = wv.WebviewController();
   bool _ready = false;
   bool _failed = false;
+  String? _error;
   double _height = 450;
 
   @override
@@ -378,7 +348,16 @@ class _HtmlPreviewState extends State<_HtmlPreview> {
 
       if (mounted) setState(() => _ready = true);
     } catch (e) {
-      if (mounted) setState(() => _failed = true);
+      // 打日志而非静默吞掉——WebView2 初始化失败的真实原因（Runtime 缺失/
+      // 版本不兼容/user data 目录权限/进程冲突等）差异很大，
+      // 只有把 e 落到日志文件里才能事后排查，UI 上的固定文案帮不上排障。
+      print('[HtmlPreview] WebView2 初始化失败: $e');
+      if (mounted) {
+        setState(() {
+          _failed = true;
+          _error = e.toString();
+        });
+      }
     }
   }
 
@@ -408,6 +387,7 @@ class _HtmlPreviewState extends State<_HtmlPreview> {
       return Container(
         height: 120,
         alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -420,7 +400,23 @@ class _HtmlPreviewState extends State<_HtmlPreview> {
             Text(
               'WebView2 不可用，请安装 Microsoft Edge WebView2 Runtime',
               style: TextStyle(color: widget.colorScheme.error, fontSize: 12),
+              textAlign: TextAlign.center,
             ),
+            // 附带具体异常信息，方便排查（Runtime 已安装但仍失败的场景，
+            // 常见原因是 user data 目录被占用/权限问题/版本不兼容）。
+            if (_error != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                _error!,
+                style: TextStyle(
+                  color: widget.colorScheme.error.withValues(alpha: 0.7),
+                  fontSize: 10,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ],
         ),
       );

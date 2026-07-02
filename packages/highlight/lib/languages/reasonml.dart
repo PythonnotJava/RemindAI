@@ -1,0 +1,162 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// ignore_for_file: file_names, non_constant_identifier_names
+
+import '../highlight_core.dart';
+
+/// Highlight.js language definition for `reasonml`.
+Mode reasonml(Highlight hljs) {
+  final Mode mode0 = Mode();
+  mode0.begin = r'\\[\s\S]';
+  mode0.relevance = 0;
+  return Mode(
+    name: r'ReasonML',
+    aliases: [r're'],
+    keywords: {
+      r'$pattern': r'[a-z_]\w*!?',
+      r'keyword': [
+        r'and',
+        r'as',
+        r'asr',
+        r'assert',
+        r'begin',
+        r'class',
+        r'constraint',
+        r'do',
+        r'done',
+        r'downto',
+        r'else',
+        r'end',
+        r'esfun',
+        r'exception',
+        r'external',
+        r'for',
+        r'fun',
+        r'function',
+        r'functor',
+        r'if',
+        r'in',
+        r'include',
+        r'inherit',
+        r'initializer',
+        r'land',
+        r'lazy',
+        r'let',
+        r'lor',
+        r'lsl',
+        r'lsr',
+        r'lxor',
+        r'mod',
+        r'module',
+        r'mutable',
+        r'new',
+        r'nonrec',
+        r'object',
+        r'of',
+        r'open',
+        r'or',
+        r'pri',
+        r'pub',
+        r'rec',
+        r'sig',
+        r'struct',
+        r'switch',
+        r'then',
+        r'to',
+        r'try',
+        r'type',
+        r'val',
+        r'virtual',
+        r'when',
+        r'while',
+        r'with',
+      ],
+      r'built_in': [
+        r'array',
+        r'bool',
+        r'bytes',
+        r'char',
+        r'exn|5',
+        r'float',
+        r'int',
+        r'int32',
+        r'int64',
+        r'list',
+        r'lazy_t|5',
+        r'nativeint|5',
+        r'ref',
+        r'string',
+        r'unit',
+      ],
+      r'literal': [r'true', r'false'],
+    },
+    illegal: r'(:-|:=|\$\{|\+=)',
+    contains: [
+      Mode(scope: r'literal', match: r'\[(\|\|)?\]|\(\)', relevance: 0),
+      Mode(
+        scope: r'comment',
+        begin: r'//',
+        end: r'$',
+        contains: [
+          Mode(
+            scope: r'doctag',
+            begin: r'[ ]*(?=(TODO|FIXME|NOTE|BUG|OPTIMIZE|HACK|XXX):)',
+            end: r'(TODO|FIXME|NOTE|BUG|OPTIMIZE|HACK|XXX):',
+            excludeBegin: true,
+            relevance: 0,
+          ),
+          Mode(
+            begin:
+                r"[ ]+((?:I|a|is|so|us|to|at|if|in|it|on|[A-Za-z]+['](d|ve|re|ll|t|s|n)|[A-Za-z]+[-][a-z]+|[A-Za-z][a-z]{2,})[.]?[:]?([.][ ]|[ ])){3}",
+          ),
+        ],
+      ),
+      Mode(
+        scope: r'comment',
+        begin: r'\/\*',
+        end: r'\*\/',
+        contains: [
+          Mode(
+            scope: r'doctag',
+            begin: r'[ ]*(?=(TODO|FIXME|NOTE|BUG|OPTIMIZE|HACK|XXX):)',
+            end: r'(TODO|FIXME|NOTE|BUG|OPTIMIZE|HACK|XXX):',
+            excludeBegin: true,
+            relevance: 0,
+          ),
+          Mode(
+            begin:
+                r"[ ]+((?:I|a|is|so|us|to|at|if|in|it|on|[A-Za-z]+['](d|ve|re|ll|t|s|n)|[A-Za-z]+[-][a-z]+|[A-Za-z][a-z]{2,})[.]?[:]?([.][ ]|[ ])){3}",
+          ),
+        ],
+        illegal: r'^(#,\/\/)',
+      ),
+      Mode(scope: r'symbol', match: r"\'[A-Za-z_](?!\')[\w\']*"),
+      Mode(scope: r'type', match: r"`[A-Z][\w\']*"),
+      Mode(scope: r'type', match: r"\b[A-Z][\w\']*", relevance: 0),
+      Mode(match: r"[a-z_]\w*\'[\w\']*", relevance: 0),
+      Mode(
+        scope: r'operator',
+        match: r'\s+(\|\||\+[\+\.]?|\*[\*\/\.]?|\/[\.]?|\.\.\.|\|>|&&|===?)\s+',
+        relevance: 0,
+      ),
+      Mode(
+        scope: r'string',
+        begin: r"'",
+        end: r"'",
+        illegal: r'\n',
+        contains: [mode0],
+        relevance: 0,
+      ),
+      Mode(scope: r'string', begin: r'"', end: r'"', contains: [mode0]),
+      Mode(
+        scope: r'number',
+        variants: [
+          Mode(match: r'\b0[xX][a-fA-F0-9_]+[Lln]?'),
+          Mode(match: r'\b0[oO][0-7_]+[Lln]?'),
+          Mode(match: r'\b0[bB][01_]+[Lln]?'),
+          Mode(match: r'\b[0-9][0-9_]*([Lln]|(\.[0-9_]*)?([eE][-+]?[0-9_]+)?)'),
+        ],
+        relevance: 0,
+      ),
+    ],
+  );
+}

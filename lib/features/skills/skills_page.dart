@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/l10n/l10n_ext.dart';
@@ -39,38 +40,74 @@ class SkillsPageBody extends ConsumerWidget {
       type: FileType.custom,
       allowedExtensions: ['zip'],
       dialogTitle: '选择技能 ZIP 包',
+      allowMultiple: true,
     );
 
     if (result == null || result.files.isEmpty) return;
 
-    final path = result.files.single.path;
-    if (path == null) return;
+    final paths = result.files.map((f) => f.path).whereType<String>().toList();
+    if (paths.isEmpty) return;
 
-    try {
-      final skill = await ref.read(skillsProvider.notifier).importFromZip(path);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.s.skillsImportSuccess(skill.name, skill.toolCount),
+    // 单个文件时保持原有的"成功/失败"单条提示；多个文件时汇总统计，
+    // 避免逐个弹 SnackBar 互相打断，也不会因为其中一个失败就整体中断。
+    if (paths.length == 1) {
+      try {
+        final skill = await ref
+            .read(skillsProvider.notifier)
+            .importFromZip(paths.single);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                context.s.skillsImportSuccess(skill.name, skill.toolCount),
+              ),
             ),
-          ),
-        );
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          final detail = e is Exception
+              ? e.toString().replaceFirst('Exception: ', '')
+              : e.toString();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.s.skillsImportFailed(detail)),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        }
       }
-    } catch (e) {
-      if (context.mounted) {
-        final detail = e is Exception
-            ? e.toString().replaceFirst('Exception: ', '')
-            : e.toString();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.s.skillsImportFailed(detail)),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 6),
+      return;
+    }
+
+    final results = await ref
+        .read(skillsProvider.notifier)
+        .importFromZips(paths);
+    if (!context.mounted) return;
+
+    final successCount = results.where((r) => r.isSuccess).length;
+    final failedResults = results.where((r) => !r.isSuccess).toList();
+
+    if (failedResults.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.s.skillsImportBatchAllOk(successCount))),
+      );
+    } else {
+      final detail = failedResults
+          .map((r) => '${p.basenameWithoutExtension(r.zipPath)}: ${r.error}')
+          .join('\n');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${context.s.skillsImportBatchSummary(successCount, failedResults.length)}\n$detail',
           ),
-        );
-      }
+          backgroundColor: successCount == 0 ? Colors.red : Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 8),
+        ),
+      );
     }
   }
 

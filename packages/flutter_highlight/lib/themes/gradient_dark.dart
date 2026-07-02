@@ -1,0 +1,46 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// ignore_for_file: file_names, non_constant_identifier_names
+
+import 'package:highlight/highlight_core.dart' show HljsStyle;
+
+/// Highlight.js theme map for the `gradient-dark` theme.
+const gradientDarkTheme = <String, HljsStyle>{
+  'root': HljsStyle(color: '#e7e4eb', backgroundColor: '#652487'),
+  'addition': HljsStyle(color: '#e7ff9f'),
+  'attr': HljsStyle(color: '#aefbff'),
+  'attribute': HljsStyle(color: '#e7ff9f'),
+  'built_in': HljsStyle(color: '#ffc800'),
+  'bullet': HljsStyle(color: '#f19fff'),
+  'class': HljsStyle(color: '#ffc800'),
+  'comment': HljsStyle(color: '#af8dd9'),
+  'deletion': HljsStyle(color: '#ff9e44'),
+  'doctag': HljsStyle(color: '#af8dd9'),
+  'emphasis': HljsStyle(italic: true),
+  'formula': HljsStyle(color: '#ffc800'),
+  'function': HljsStyle(color: '#ffc800'),
+  'keyword': HljsStyle(color: '#17fc95', bold: true),
+  'link': HljsStyle(color: '#c5fe00'),
+  'literal': HljsStyle(color: '#ff9e44'),
+  'meta': HljsStyle(color: '#af8dd9'),
+  'meta keyword': HljsStyle(color: '#17fc95'),
+  'name': HljsStyle(color: '#ffc800'),
+  'number': HljsStyle(color: '#c5fe00'),
+  'params': HljsStyle(color: '#f19fff', bold: true),
+  'quote': HljsStyle(color: '#af8dd9', italic: true),
+  'regexp': HljsStyle(color: '#aefbff'),
+  'section': HljsStyle(color: '#17fc95', bold: true),
+  'selector-class': HljsStyle(color: '#f19fff', bold: true),
+  'selector-id': HljsStyle(color: '#aefbff', bold: true),
+  'selector-pseudo': HljsStyle(color: '#ff9e44'),
+  'selector-tag': HljsStyle(color: '#aefbff', bold: true),
+  'string': HljsStyle(color: '#38c0ff'),
+  'strong': HljsStyle(bold: true),
+  'subtr': HljsStyle(color: '#e7e4eb'),
+  'symbol': HljsStyle(color: '#17fc95'),
+  'tag': HljsStyle(color: '#aefbff'),
+  'template-tag': HljsStyle(color: '#aefbff', bold: true),
+  'template-variable': HljsStyle(color: '#e447ff'),
+  'title': HljsStyle(color: '#ffc800'),
+  'type': HljsStyle(color: '#17fc95'),
+  'variable': HljsStyle(color: '#e447ff'),
+};

@@ -1,0 +1,47 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// ignore_for_file: file_names, non_constant_identifier_names
+
+import 'package:highlight/highlight_core.dart' show HljsStyle;
+
+/// Highlight.js theme map for the `nord` theme.
+const nordTheme = <String, HljsStyle>{
+  'root': HljsStyle(color: '#d8dee9', backgroundColor: '#2e3440'),
+  'attr': HljsStyle(color: '#8fbcbb'),
+  'attribute': HljsStyle(color: '#d8dee9'),
+  'built_in': HljsStyle(color: '#8fbcbb'),
+  'bullet': HljsStyle(color: '#81a1c1'),
+  'class': HljsStyle(color: '#8fbcbb'),
+  'code': HljsStyle(color: '#8fbcbb'),
+  'comment': HljsStyle(color: '#4c566a'),
+  'doctag': HljsStyle(color: '#8fbcbb'),
+  'emphasis': HljsStyle(italic: true),
+  'formula': HljsStyle(color: '#8fbcbb'),
+  'function': HljsStyle(color: '#88c0d0'),
+  'keyword': HljsStyle(color: '#81a1c1'),
+  'literal': HljsStyle(color: '#81a1c1'),
+  'meta': HljsStyle(color: '#5e81ac'),
+  'meta keyword': HljsStyle(color: '#5e81ac'),
+  'meta string': HljsStyle(color: '#a3be8c'),
+  'name': HljsStyle(color: '#81a1c1'),
+  'number': HljsStyle(color: '#b48ead'),
+  'params': HljsStyle(color: '#d8dee9'),
+  'property': HljsStyle(color: '#88c0d0'),
+  'quote': HljsStyle(color: '#4c566a'),
+  'regexp': HljsStyle(color: '#ebcb8b'),
+  'section': HljsStyle(color: '#88c0d0'),
+  'selector-attr': HljsStyle(color: '#8fbcbb'),
+  'selector-class': HljsStyle(color: '#8fbcbb'),
+  'selector-id': HljsStyle(color: '#8fbcbb', bold: true),
+  'selector-pseudo': HljsStyle(color: '#88c0d0'),
+  'selector-tag': HljsStyle(color: '#81a1c1'),
+  'string': HljsStyle(color: '#a3be8c'),
+  'strong': HljsStyle(bold: true),
+  'subst': HljsStyle(color: '#d8dee9'),
+  'symbol': HljsStyle(color: '#81a1c1'),
+  'tag': HljsStyle(color: '#81a1c1'),
+  'template-tag': HljsStyle(color: '#5e81ac'),
+  'template-variable': HljsStyle(color: '#d8dee9'),
+  'title': HljsStyle(color: '#8fbcbb'),
+  'type': HljsStyle(color: '#8fbcbb'),
+  'variable': HljsStyle(color: '#d8dee9'),
+};

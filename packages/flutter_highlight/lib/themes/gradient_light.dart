@@ -1,0 +1,46 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// ignore_for_file: file_names, non_constant_identifier_names
+
+import 'package:highlight/highlight_core.dart' show HljsStyle;
+
+/// Highlight.js theme map for the `gradient-light` theme.
+const gradientLightTheme = <String, HljsStyle>{
+  'root': HljsStyle(color: '#250482', backgroundColor: '#f9ccff'),
+  'addition': HljsStyle(color: '#296562'),
+  'attr': HljsStyle(color: '#07bd5f'),
+  'attribute': HljsStyle(color: '#296562'),
+  'built_in': HljsStyle(color: '#529117'),
+  'bullet': HljsStyle(color: '#43449f'),
+  'class': HljsStyle(color: '#529117'),
+  'comment': HljsStyle(color: '#cb7200'),
+  'deletion': HljsStyle(color: '#ad13ff'),
+  'doctag': HljsStyle(color: '#cb7200'),
+  'emphasis': HljsStyle(italic: true),
+  'formula': HljsStyle(color: '#529117'),
+  'function': HljsStyle(color: '#529117'),
+  'keyword': HljsStyle(color: '#7d2801', bold: true),
+  'link': HljsStyle(color: '#7f0096'),
+  'literal': HljsStyle(color: '#ad13ff'),
+  'meta': HljsStyle(color: '#cb7200'),
+  'meta keyword': HljsStyle(color: '#7d2801'),
+  'name': HljsStyle(color: '#529117'),
+  'number': HljsStyle(color: '#7f0096'),
+  'params': HljsStyle(color: '#43449f', bold: true),
+  'quote': HljsStyle(color: '#cb7200', italic: true),
+  'regexp': HljsStyle(color: '#07bd5f'),
+  'section': HljsStyle(color: '#7d2801', bold: true),
+  'selector-class': HljsStyle(color: '#43449f', bold: true),
+  'selector-id': HljsStyle(color: '#07bd5f', bold: true),
+  'selector-pseudo': HljsStyle(color: '#ad13ff'),
+  'selector-tag': HljsStyle(color: '#07bd5f', bold: true),
+  'string': HljsStyle(color: '#2681ab'),
+  'strong': HljsStyle(bold: true),
+  'subtr': HljsStyle(color: '#01958b'),
+  'symbol': HljsStyle(color: '#7d2801'),
+  'tag': HljsStyle(color: '#07bd5f'),
+  'template-tag': HljsStyle(color: '#07bd5f', bold: true),
+  'template-variable': HljsStyle(color: '#025c8f'),
+  'title': HljsStyle(color: '#529117'),
+  'type': HljsStyle(color: '#7d2801'),
+  'variable': HljsStyle(color: '#025c8f'),
+};

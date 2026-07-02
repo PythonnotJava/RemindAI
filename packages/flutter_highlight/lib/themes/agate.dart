@@ -1,0 +1,46 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// ignore_for_file: file_names, non_constant_identifier_names
+
+import 'package:highlight/highlight_core.dart' show HljsStyle;
+
+/// Highlight.js theme map for the `agate` theme.
+const agateTheme = <String, HljsStyle>{
+  'root': HljsStyle(color: '#ffffff', backgroundColor: '#333333'),
+  'addition': HljsStyle(color: '#333333', backgroundColor: '#a2fca2'),
+  'attr': HljsStyle(color: '#7bd694'),
+  'attribute': HljsStyle(color: '#ffffaa'),
+  'built_in': HljsStyle(color: '#fcc28c'),
+  'bullet': HljsStyle(color: '#b8d8a2'),
+  'code': HljsStyle(color: '#888888', italic: true),
+  'comment': HljsStyle(color: '#888888'),
+  'deletion': HljsStyle(color: '#333333', backgroundColor: '#fc9b9b'),
+  'doctag': HljsStyle(bold: true),
+  'emphasis': HljsStyle(italic: true),
+  'formula': HljsStyle(color: '#888888'),
+  'keyword': HljsStyle(color: '#fcc28c'),
+  'link': HljsStyle(color: '#c6b4f0'),
+  'literal': HljsStyle(color: '#fcc28c'),
+  'meta': HljsStyle(color: '#fc9b9b'),
+  'meta-keyword': HljsStyle(bold: true),
+  'meta-string': HljsStyle(color: '#a2fca2'),
+  'name': HljsStyle(bold: true),
+  'number': HljsStyle(color: '#d36363'),
+  'quote': HljsStyle(color: '#7bd694'),
+  'regexp': HljsStyle(color: '#c6b4f0'),
+  'section': HljsStyle(color: '#62c8f3'),
+  'selector-attr': HljsStyle(color: '#7bd694'),
+  'selector-class': HljsStyle(color: '#ade5fc'),
+  'selector-id': HljsStyle(color: '#ade5fc'),
+  'selector-pseudo': HljsStyle(color: '#c6b4f0'),
+  'selector-tag': HljsStyle(color: '#fcc28c'),
+  'string': HljsStyle(color: '#a2fca2'),
+  'strong': HljsStyle(bold: true),
+  'subst': HljsStyle(color: '#ffffff'),
+  'symbol': HljsStyle(color: '#d36363'),
+  'tag': HljsStyle(color: '#62c8f3'),
+  'template-tag': HljsStyle(color: '#b8d8a2'),
+  'template-variable': HljsStyle(color: '#ade5fc'),
+  'title': HljsStyle(color: '#ffffaa'),
+  'type': HljsStyle(color: '#ffffaa'),
+  'variable': HljsStyle(color: '#ade5fc'),
+};

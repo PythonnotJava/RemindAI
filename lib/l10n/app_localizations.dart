@@ -1285,6 +1285,18 @@ abstract class S {
   /// **'导入失败：{detail}'**
   String skillsImportFailed(String detail);
 
+  /// No description provided for @skillsImportBatchSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'导入完成：成功 {success} 个，失败 {failed} 个'**
+  String skillsImportBatchSummary(int success, int failed);
+
+  /// No description provided for @skillsImportBatchAllOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'已成功导入 {count} 个技能'**
+  String skillsImportBatchAllOk(int count);
+
   /// No description provided for @skillsEmpty.
   ///
   /// In zh, this message translates to:

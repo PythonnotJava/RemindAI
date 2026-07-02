@@ -1,0 +1,24 @@
+name: flutter_highlight
+description: >-
+  Flutter widget for syntax highlighting powered by a Dart port of highlight.js.
+  Renders code as a native TextSpan tree with theme support and line numbers.
+version: 0.7.1
+homepage: https://github.com/pd4d10/highlight.dart
+repository: https://github.com/pd4d10/highlight.dart
+issue_tracker: https://github.com/pd4d10/highlight.dart/issues
+publish_to: 'none'
+
+environment:
+  sdk: ^3.8.0
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  highlight:
+    path: ../highlight
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  lints: ^6.1.0

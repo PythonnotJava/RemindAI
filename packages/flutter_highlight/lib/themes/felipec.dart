@@ -1,0 +1,47 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// ignore_for_file: file_names, non_constant_identifier_names
+
+import 'package:highlight/highlight_core.dart' show HljsStyle;
+
+/// Highlight.js theme map for the `felipec` theme.
+const felipecTheme = <String, HljsStyle>{
+  'root': HljsStyle(color: '#dedde4', backgroundColor: '#1d1c21'),
+  'addition': HljsStyle(color: '#93e4a4'),
+  'attr': HljsStyle(color: '#d991d2'),
+  'attribute': HljsStyle(color: '#d991d2'),
+  'built_in': HljsStyle(color: '#5fb8f2'),
+  'bullet': HljsStyle(color: '#90aafa'),
+  'class': HljsStyle(color: '#65e7d1'),
+  'code': HljsStyle(color: '#9e9da4'),
+  'comment': HljsStyle(color: '#9e9da4'),
+  'deletion': HljsStyle(color: '#f09080'),
+  'doctag': HljsStyle(color: '#ffbb7b'),
+  'emphasis': HljsStyle(italic: true),
+  'keyword': HljsStyle(color: '#5fb8f2'),
+  'link': HljsStyle(color: '#ec8dab'),
+  'literal': HljsStyle(color: '#f09080', bold: true),
+  'meta': HljsStyle(color: '#ffbb7b'),
+  'name': HljsStyle(color: '#30c2d8'),
+  'number': HljsStyle(color: '#f09080'),
+  'operator': HljsStyle(color: '#ffbb7b'),
+  'params': HljsStyle(color: '#d991d2'),
+  'property': HljsStyle(color: '#65e7d1'),
+  'punctuation': HljsStyle(color: '#ffbb7b'),
+  'quote': HljsStyle(color: '#9e9da4'),
+  'regexp': HljsStyle(color: '#93e4a4'),
+  'section': HljsStyle(color: '#90aafa'),
+  'selector-attr': HljsStyle(color: '#ffbb7b'),
+  'selector-class': HljsStyle(color: '#c4da7d'),
+  'selector-id': HljsStyle(color: '#c4da7d'),
+  'selector-pseudo': HljsStyle(color: '#ba9cef'),
+  'selector-tag': HljsStyle(color: '#30c2d8'),
+  'string': HljsStyle(color: '#93e4a4'),
+  'strong': HljsStyle(bold: true),
+  'subst': HljsStyle(color: '#ffbb7b'),
+  'symbol': HljsStyle(color: '#ec8dab'),
+  'tag': HljsStyle(color: '#c4da7d'),
+  'template-variable': HljsStyle(color: '#ffbb7b'),
+  'title': HljsStyle(color: '#c4da7d', bold: true),
+  'type': HljsStyle(color: '#fddb7c'),
+  'variable': HljsStyle(color: '#d991d2'),
+};

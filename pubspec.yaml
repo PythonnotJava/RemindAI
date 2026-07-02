@@ -1,7 +1,7 @@
 name: remind_ai
 description: "RemindAI - AI Assistant with ToolShell, Skills, MCP and Memory"
 publish_to: 'none'
-version: 1.0.3+1
+version: 1.0.4+1
 
 environment:
   sdk: ^3.12.1
@@ -27,8 +27,10 @@ dependencies:
   # UI
   gpt_markdown:
     path: packages/gpt_markdown
-  flutter_highlight: ^0.7.0
-  highlight: ^0.7.0
+  flutter_highlight:
+    path: packages/flutter_highlight
+  highlight:
+    path: packages/highlight
   dock_panel:
     path: packages/dock_panel
 
@@ -79,5 +81,18 @@ flutter:
     - assets/icons/
     - assets/scripts/paddle_ocr/
     - assets/scripts/volcano_tts/
+    # archify (draw architecture/workflow/sequence/etc diagrams,
+    # invoked by the /archify-draw slash command via toolshell_exec).
+    # Flutter's asset dir declarations do not recurse, list each level.
+    - assets/scripts/archify/
+    - assets/scripts/archify/assets/
+    - assets/scripts/archify/examples/
+    - assets/scripts/archify/schemas/
+    - assets/scripts/archify/renderers/architecture/
+    - assets/scripts/archify/renderers/dataflow/
+    - assets/scripts/archify/renderers/lifecycle/
+    - assets/scripts/archify/renderers/sequence/
+    - assets/scripts/archify/renderers/shared/
+    - assets/scripts/archify/renderers/workflow/
     - assets/pets/Cat/
     - assets/pets/Food/

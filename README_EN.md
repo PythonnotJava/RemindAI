@@ -1,7 +1,7 @@
 <div align="center">
   <img src="snapshots/logos/logo_egg.png" alt="RemindAI Logo" width="128" />
   <h1>🧠 RemindAI</h1>
-  <p><strong>Open-source Desktop AI Assistant — Beyond just chat</strong></p>
+  <p><strong>v1.0.4 — Open-source Desktop AI Assistant — Beyond just chat</strong></p>
   <p>
     <a href="./README.md">🌐 中文</a> |
     <a href="https://github.com/PythonnotJava/RemindAI/releases">📦 Download</a> |
@@ -15,7 +15,8 @@
     <img src="https://img.shields.io/badge/Skill Support-purple.svg" alt="Skill" />
     <img src="https://img.shields.io/badge/API Server-green.svg" alt="API Server" />
     <img src="https://img.shields.io/badge/🐱 Global Pet Agent-orange.svg" alt="Pet Agent" />
-</p>
+    <img src="https://img.shields.io/badge/v1.0.4-latest-informational.svg" alt="Version" />
+  </p>
 </div>
 
 ---
@@ -23,6 +24,20 @@
 <p align="center">
   <img src="snapshots/results_promotion.png" alt="RemindAI Showcase" width="900" />
 </p>
+
+---
+
+## 🆕 V1.0.4 Updates
+
+| Update | Description |
+|--------|-------------|
+| 🔄 Long-conversation stutter prevention | Optimized potential stuttering during long conversations |
+| 🔍 Soft-failure filter optimization | Prevents outdated and fresh memories from mixing with equal weight in search results |
+| 🤝 Multi-agent parallel orchestration | Orchestrates multi-agent commands for parallel understanding of large amounts of documents |
+| 🛠️ Controllable AgentLoop pipeline | Cyclic pipeline: Think → Write → Test → Verify |
+| 📦 Batch skill import | Skills now support batch import via ZIP |
+| 🎨 Code highlighting improvement | Optimized code highlighting text rendering |
+| 📊 Flowchart summary | Use [archify](https://github.com/tt-a1i/archify) to summarize conversations as flowcharts |
 
 ---
 
@@ -38,9 +53,11 @@ RemindAI is an **open-source desktop AI assistant** built around a complete **To
 |---|---|---|
 | 📁 File Ops | ❌ Not supported | ✅ Built-in sandboxed filesystem |
 | 💻 Code Exec | ❌ Not supported | ✅ Built-in Python/Shell/JS executor |
-| 🧠 Memory | ❌ None or context-only | ✅ Vector semantic memory + SQLite |
+| 🧠 Memory | ❌ None or context-only | ✅ Vector semantic memory + SQLite + soft-failure filter |
 | 🔌 Extensions | ⚠️ Limited | ✅ MCP + four-layer Skills + Capability plugins |
-| 🤝 Multi-Agent | ⚠️ Side-by-side windows | ✅ Real collaboration with routing & permission isolation |
+| 🤝 Multi-Agent | ⚠️ Side-by-side windows | ✅ Real collaboration with routing & permission isolation + parallel doc comprehension |
+| 🔄 AgentLoop | ❌ None | ✅ Controllable cyclic pipeline: Think→Write→Test→Verify |
+| 📦 Skill Import | ⚠️ Single import | ✅ One-click ZIP import + batch import |
 | 🌐 External API | ❌ Not supported | ✅ Built-in HTTP API server with three endpoint types |
 | 🐱 Desktop Companion | ❌ None | ✅ Pixel pet + TTS voice + shop economy + achievements |
 
@@ -80,7 +97,8 @@ RemindAI's Skill System uses a **four-layer architecture**, each with independen
 
 | Module | Status | Notes |
 |---|---|---|
-| AI Chat Core (LLM + tool calling) | ✅ | AgentLoop streaming + event-driven UI |
+| AI Chat Core (LLM + tool calling) | ✅ | AgentLoop streaming cycle + event-driven UI |
+| Controllable AgentLoop Pipeline | ✅ | Think → Write → Test → Verify cyclic pipeline |
 | Three LLM Protocols (OpenAI/Anthropic/Gemini) | ✅ | Independent clients, streaming+tools+multimodal |
 | ToolShell Meta-Skill | ✅ | read/write/delete/search/exec/python/js + rg/fd/rtk |
 | Schedule Meta-Skill | ✅ | 7 tools CRUD + review + archive |
@@ -88,9 +106,9 @@ RemindAI's Skill System uses a **four-layer architecture**, each with independen
 | MCP Multi-Transport | ✅ | stdio / SSE / Streamable HTTP |
 | Vector Memory | ✅ | Qdrant + SQLite dual-write + auto failover + soft-failure filtering |
 | Pluggable Capability | ✅ | Search landed, framework extensible |
-| Four-Layer Skill System | ✅ | L1 default meta + L2 user global + L3 workspace temp, L4 planned |
+| Four-Layer Skill System | ✅ | L1 default meta + L2 user global + L3 workspace temp + L4 planned, batch import support |
 | Model Card Management | ✅ | CRUD + logo + drag-sort |
-| Multi-Agent Collaboration | ⚡ | Framework complete + parallel doc comprehension orchestration, ongoing |
+| Multi-Agent Collaboration | ✅ | Framework complete + parallel doc comprehension orchestration + controllable AgentLoop pipeline |
 | Domain Experts | ✅ | Preset/custom roles + skill binding |
 | Conversation Export | ✅ | MD / PDF / Word / HTML |
 | Desktop Experience | ✅ | Tray / notifications / splash / theme animation |
@@ -98,6 +116,7 @@ RemindAI's Skill System uses a **four-layer architecture**, each with independen
 | External API Server | ✅ | Built-in HTTP server, three endpoints: OpenAI aggregation / Claude Agent / Claude proxy |
 | Online Agent Access | ✅ | Remote access to RemindAI Agent via browser |
 | Context Compression | ✅ | RTK Token compression 60-90% + context management optimization |
+| Flowchart Summary | ✅ | Use [archify](https://github.com/tt-a1i/archify) to summarize conversations as flowcharts |
 
 ---
 
@@ -108,15 +127,17 @@ RemindAI's Skill System uses a **four-layer architecture**, each with independen
 | 🐚 ToolShell | File sandbox + Python/Shell/JS exec + rg/fd/rtk + RTK compression 60-90% token savings |
 | 🌐 API Server | Built-in HTTP server with three endpoints: OpenAI aggregation, Claude Agent (runs RemindAI's own agent loop), and Claude proxy (pass-through) |
 | 🔌 MCP Protocol | stdio/SSE/Streamable HTTP + auto-discovery + drag-and-drop management |
-| 🧠 Vector Memory | Qdrant semantic search + SQLite backup + auto-ops + index rebuild |
+| 🧠 Vector Memory | Qdrant semantic search + SQLite backup + auto-ops + soft-failure filtering + index rebuild |
 | 🤝 Multi-Agent | Commander/Worker/Reviewer roles + permission isolation + auto-routing + parallel doc comprehension |
+| 🔄 Controllable AgentLoop | Think → Write → Test → Verify cyclic pipeline with long-conversation stutter prevention |
 | 🎨 Multi-Model | OpenAI/Anthropic/Gemini native + streaming reasoning chain + multimodal |
 | 🧩 Capability | Pluggable architecture, Custom → MCP → ToolShell three-tier routing |
-| 📦 Skills | Four-layer architecture (L1 meta / L2 global / L3 temp / L4 self-gen planned), SKILL.md + tools.json format, one-click ZIP import, command-based creation |
+| 📦 Skills | Four-layer architecture (L1 meta / L2 global / L3 temp / L4 self-gen planned), SKILL.md + tools.json format, one-click ZIP import + batch import, command-based creation |
 | 🔍 Web Search | Tavily / Brave / Baidu AI Search, session-level toggle |
 | 📋 Schedule | SCHEDULE.md driven, P0/P1/P2 priority, AI proactive review |
 | 👤 Domain Experts | Preset/custom roles + dedicated system prompts |
 | 🖼️ Built-in Tools | Gemini image gen / Formula OCR / PaddleOCR / Flowchart / Rich-text |
+| 📊 Flowchart | Use [archify](https://github.com/tt-a1i/archify) to summarize conversations as flowcharts |
 | 📤 Export | Markdown / PDF / Word / HTML |
 | 🌍 i18n | Full Chinese and English |
 | 🎨 Themes | Material 3 light/dark + ripple transition animation |
@@ -213,6 +234,7 @@ If RemindAI helps you, feel free to support development ~
 </p>
 
 ---
+
 
 ## 📄 License
 

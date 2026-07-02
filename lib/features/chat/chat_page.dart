@@ -555,6 +555,7 @@ class _AutoDismissBanner extends StatefulWidget {
 class _AutoDismissBannerState extends State<_AutoDismissBanner>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  bool _copied = false;
 
   @override
   void initState() {
@@ -579,6 +580,15 @@ class _AutoDismissBannerState extends State<_AutoDismissBanner>
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.message));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+    setState(() => _copied = false);
   }
 
   @override
@@ -607,6 +617,18 @@ class _AutoDismissBannerState extends State<_AutoDismissBanner>
                   ),
                 ),
               ),
+              IconButton(
+                icon: Icon(
+                  _copied ? Icons.done : Icons.copy,
+                  size: 15,
+                  color: widget.colorScheme.error,
+                ),
+                tooltip: context.s.msgCopied,
+                onPressed: _copy,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 4),
               IconButton(
                 icon: Icon(
                   Icons.close,
@@ -938,11 +960,27 @@ class _AttachmentChipsRow extends ConsumerWidget {
 /// Slash 命令按钮 — 弹出命令菜单，点击命令插入输入框
 ///
 /// 工作目录专属命令（[SlashCommand.requiresWorkspace]）在纯对话模式下禁用并置灰。
+///
+/// 每个命令用彩色圆形 emoji 头像 + 标题 + 副标题的卡片式菜单项呈现，
+/// 不可用时头像置灰并叠加锁形提示，替代纯文字的朴素列表。
 class _SlashCommandButton extends ConsumerWidget {
   final bool enabled;
   final void Function(SlashCommand) onInsert;
 
   const _SlashCommandButton({required this.enabled, required this.onInsert});
+
+  /// 按命令名哈希出一个柔和的头像底色，让不同命令在列表里一眼区分。
+  Color _avatarColor(ColorScheme colorScheme, String command) {
+    const palette = [
+      Color(0xFF6366F1), // indigo
+      Color(0xFF0EA5E9), // sky
+      Color(0xFFF59E0B), // amber
+      Color(0xFF10B981), // emerald
+      Color(0xFFEC4899), // pink
+      Color(0xFF8B5CF6), // violet
+    ];
+    return palette[command.hashCode.abs() % palette.length];
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -950,8 +988,14 @@ class _SlashCommandButton extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return MenuAnchor(
+      style: MenuStyle(
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
+      ),
       builder: (context, controller, _) => ActionChip(
-        avatar: const Icon(Icons.terminal, size: 16),
+        avatar: const Text('⚡', style: TextStyle(fontSize: 14)),
         label: Text(
           context.s.chatSlashCommands,
           style: const TextStyle(fontSize: 12),
@@ -962,36 +1006,83 @@ class _SlashCommandButton extends ConsumerWidget {
       ),
       menuChildren: [
         for (final cmd in kSlashCommands)
-          MenuItemButton(
-            onPressed: (cmd.requiresWorkspace && !hasWorkspace)
-                ? null
-                : () => onInsert(cmd),
-            child: SizedBox(
-              width: 280,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    cmd.title,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+          Builder(
+            builder: (context) {
+              final locked = cmd.requiresWorkspace && !hasWorkspace;
+              final avatarColor = _avatarColor(colorScheme, cmd.command);
+              return MenuItemButton(
+                onPressed: locked ? null : () => onInsert(cmd),
+                style: ButtonStyle(
+                  shape: const WidgetStatePropertyAll(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    (cmd.requiresWorkspace && !hasWorkspace)
-                        ? '${cmd.subtitle}（${context.s.chatSlashRequiresWorkspace}）'
-                        : cmd.subtitle,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                  padding: const WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   ),
-                ],
-              ),
-            ),
+                ),
+                leadingIcon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: locked
+                          ? colorScheme.surfaceContainerHighest
+                          : avatarColor.withValues(alpha: 0.18),
+                      child: Text(
+                        cmd.emoji,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: locked ? colorScheme.outline : null,
+                        ),
+                      ),
+                    ),
+                    if (locked)
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Icon(
+                          Icons.lock,
+                          size: 12,
+                          color: colorScheme.outline,
+                        ),
+                      ),
+                  ],
+                ),
+                child: SizedBox(
+                  width: 260,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        cmd.title,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: locked ? colorScheme.outline : null,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        locked
+                            ? '${cmd.subtitle} · ${context.s.chatSlashRequiresWorkspace}'
+                            : cmd.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: locked
+                              ? colorScheme.outline
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
       ],
     );

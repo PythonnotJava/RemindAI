@@ -5,6 +5,23 @@ import '../core/skill/skill_registry.dart';
 import '../features/chat/chat_provider.dart';
 import 'settings_provider.dart';
 
+/// 单个 ZIP 的批量导入结果 —— 成功时携带 [skill]，失败时携带 [error]。
+class SkillImportResult {
+  final String zipPath;
+  final Skill? skill;
+  final String? error;
+
+  const SkillImportResult._(this.zipPath, this.skill, this.error);
+
+  factory SkillImportResult.success(String zipPath, Skill skill) =>
+      SkillImportResult._(zipPath, skill, null);
+
+  factory SkillImportResult.failure(String zipPath, String error) =>
+      SkillImportResult._(zipPath, null, error);
+
+  bool get isSuccess => skill != null;
+}
+
 /// 技能注册表 Provider
 final skillRegistryProvider = Provider<SkillRegistry>((ref) {
   // 跟随设置中的技能目录；设置未就绪时回退到旧默认位置
@@ -37,6 +54,29 @@ class SkillsNotifier extends AsyncNotifier<List<Skill>> {
     final skill = await _registry.importFromZip(zipPath);
     ref.invalidateSelf();
     return skill;
+  }
+
+  /// 批量从多个 ZIP 导入技能。
+  ///
+  /// 逐个调用 [importFromZip] 的底层逻辑，但只在全部完成后统一
+  /// `invalidateSelf()` 一次（而不是每个文件都触发一次列表刷新），
+  /// 单个 ZIP 导入失败不影响其余文件继续导入。
+  /// 返回每个路径对应的结果：成功为 [Skill]，失败为错误信息字符串。
+  Future<List<SkillImportResult>> importFromZips(List<String> zipPaths) async {
+    final results = <SkillImportResult>[];
+    for (final path in zipPaths) {
+      try {
+        final skill = await _registry.importFromZip(path);
+        results.add(SkillImportResult.success(path, skill));
+      } catch (e) {
+        final detail = e is Exception
+            ? e.toString().replaceFirst('Exception: ', '')
+            : e.toString();
+        results.add(SkillImportResult.failure(path, detail));
+      }
+    }
+    ref.invalidateSelf();
+    return results;
   }
 
   /// 删除技能

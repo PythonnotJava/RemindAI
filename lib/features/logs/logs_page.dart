@@ -6,6 +6,17 @@ import 'package:path/path.dart' as p;
 import '../../core/l10n/l10n_ext.dart';
 import '../../core/logger/app_logger.dart';
 
+/// 把日志内容按行倒序，使最新写入的一行排在最前面（顶部）。
+/// 日志文件本身是旧行在前、新行追加在末尾（见 AppLogger.log），
+/// 这里只在展示层倒序，不改动底层文件的实际存储顺序。
+/// 提取为顶层函数以便单元测试覆盖，不依赖 State/BuildContext。
+String reverseLogLines(String content) {
+  if (content.isEmpty) return content;
+  // 保留末尾可能存在的空行语义：先按换行拆分再整体反转。
+  final lines = content.split('\n');
+  return lines.reversed.join('\n');
+}
+
 /// 日志管理页面 — 查看 / 切换日期 / 清空
 class LogsPage extends StatefulWidget {
   const LogsPage({super.key});
@@ -20,18 +31,11 @@ class _LogsPageState extends State<LogsPage> {
   String _content = '';
   bool _loading = true;
   int _totalSize = 0;
-  final _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadFiles();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadFiles() async {
@@ -63,12 +67,6 @@ class _LogsPageState extends State<LogsPage> {
     setState(() {
       _selectedFileName = fileName;
       _content = content;
-    });
-    // 滚到底部查看最新日志
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
     });
   }
 
@@ -200,7 +198,9 @@ class _LogsPageState extends State<LogsPage> {
                           ),
                         )
                       : SelectableText(
-                          _content,
+                          // 新日志在前：文件内是旧→新追加写入，这里展示时倒序，
+                          // 打开页面即看到最新记录，无需滚动到底部。
+                          reverseLogLines(_content),
                           scrollPhysics: const ClampingScrollPhysics(),
                           style: TextStyle(
                             fontFamily: 'JetBrainsMono',

@@ -1,0 +1,46 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// ignore_for_file: file_names, non_constant_identifier_names
+
+import 'package:highlight/highlight_core.dart' show HljsStyle;
+
+/// Highlight.js theme map for the `intellij-light` theme.
+const intellijLightTheme = <String, HljsStyle>{
+  'root': HljsStyle(color: '#000000', backgroundColor: '#ffffff'),
+  'addition': HljsStyle(backgroundColor: '#bee6be'),
+  'attr': HljsStyle(color: '#871094'),
+  'attribute': HljsStyle(color: '#174ad4'),
+  'built_in': HljsStyle(color: '#0033b3'),
+  'char.escape': HljsStyle(color: '#0037a6'),
+  'code': HljsStyle(color: '#8c8c8c', italic: true),
+  'comment': HljsStyle(color: '#8c8c8c', italic: true),
+  'deletion': HljsStyle(backgroundColor: '#d6d6d6'),
+  'doctag': HljsStyle(underline: true),
+  'emphasis': HljsStyle(italic: true),
+  'keyword': HljsStyle(color: '#0033b3'),
+  'link': HljsStyle(color: '#006dcc', underline: true),
+  'literal': HljsStyle(color: '#0033b3'),
+  'meta': HljsStyle(color: '#9e880d'),
+  'meta keyword': HljsStyle(color: '#0033b3'),
+  'meta string': HljsStyle(color: '#067d17'),
+  'name': HljsStyle(color: '#0033b3'),
+  'number': HljsStyle(color: '#1750eb'),
+  'property': HljsStyle(color: '#871094'),
+  'quote': HljsStyle(color: '#8c8c8c', italic: true),
+  'regexp': HljsStyle(color: '#264eff'),
+  'section': HljsStyle(color: '#871094'),
+  'selector-attr': HljsStyle(color: '#0033b3'),
+  'selector-class': HljsStyle(color: '#0033b3'),
+  'selector-id': HljsStyle(color: '#0033b3'),
+  'selector-pseudo': HljsStyle(color: '#0033b3'),
+  'selector-tag': HljsStyle(color: '#0033b3'),
+  'string': HljsStyle(color: '#067d17'),
+  'strong': HljsStyle(bold: true),
+  'subst': HljsStyle(color: '#000000'),
+  'symbol': HljsStyle(color: '#0033b3'),
+  'template-tag': HljsStyle(color: '#0033b3'),
+  'template-variable': HljsStyle(color: '#248f8f'),
+  'title': HljsStyle(color: '#000000'),
+  'title.function': HljsStyle(color: '#7a7a43'),
+  'type': HljsStyle(color: '#0033b3'),
+  'variable.language': HljsStyle(color: '#0033b3'),
+};
