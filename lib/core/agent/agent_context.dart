@@ -20,6 +20,7 @@ import '../skill/skill_model.dart';
 import '../skill/skill_registry.dart';
 import '../toolshell/agent_loop.dart';
 import '../toolshell/executor.dart';
+import '../toolshell/worktree_manager.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/experts_provider.dart';
 import '../../providers/mcp_provider.dart';
@@ -126,9 +127,34 @@ class AgentContextBuilder {
   }) async {
     // ─── 工作目录 ───
     var workDir = _ref.read(workingDirectoryProvider);
+    final hasRealWorkDir = workDir.isNotEmpty;
     if (workDir.isEmpty) {
       final documentsDir = await getApplicationDocumentsDirectory();
       workDir = p.join(documentsDir.path, '.RemindAI', 'workspace');
+    }
+
+    // ─── Worktree 隔离: 若存在有效的活跃隔离工作树，Executor 的实际
+    // 根目录重定向到那里，而不是 workDir。这是唯一的重定向点——
+    // 是否"进入/离开隔离"完全由 LLM 通过 toolshell_worktree_start/finish
+    // 工具决定，框架这里只负责在每次构建上下文时校验并生效。
+    // 只在真正有工作目录时才可能生效 (纯对话模式没有 .toolshell，也没有该功能)。
+    var effectiveRoot = workDir;
+    if (hasRealWorkDir) {
+      final activeWorktree = _ref.read(activeWorktreeProvider);
+      if (activeWorktree.isNotEmpty) {
+        final worktreesRoot = p.join(workDir, '.toolshell', 'worktrees');
+        final normalized = p.normalize(activeWorktree);
+        final stillValid =
+            p.isWithin(worktreesRoot, normalized) &&
+            await Directory(normalized).exists();
+        if (stillValid) {
+          effectiveRoot = normalized;
+        } else {
+          // 工作树已被移除(finish 完成或被手动删除)，清掉失效状态，
+          // 避免下一轮继续错误地定向到一个不存在的目录。
+          _ref.read(activeWorktreeProvider.notifier).state = '';
+        }
+      }
     }
 
     // ─── 项目配置 ───
@@ -194,11 +220,21 @@ class AgentContextBuilder {
 
     // 技能安装工具 (toolshell_install_skill): 把工作目录里临时做好的技能
     // 提升到全局技能库。仅在工作目录模式注册 (其工具定义也只在 toolshell/tools.json)。
-    if (_ref.read(workingDirectoryProvider).isNotEmpty) {
+    if (hasRealWorkDir) {
       final registry = _ref.read(skillRegistryProvider);
       customHandlers['toolshell_install_skill'] = (args) =>
           _installSkill(registry, args);
       toolSourceMapping['toolshell_install_skill'] = '元技能:ToolShell';
+
+      // Worktree 隔离工具: 是否/何时使用完全由 LLM 判断，框架不做自动触发。
+      // 始终针对真实的主工作目录 workDir 操作 (而不是可能已被重定向的
+      // effectiveRoot)，因为 git 仓库根在主工作目录，隔离工作树是从它派生的。
+      customHandlers['toolshell_worktree_start'] = (args) =>
+          _worktreeStart(workDir, args);
+      toolSourceMapping['toolshell_worktree_start'] = '元技能:ToolShell';
+      customHandlers['toolshell_worktree_finish'] = (args) =>
+          _worktreeFinish(workDir, args);
+      toolSourceMapping['toolshell_worktree_finish'] = '元技能:ToolShell';
     }
 
     for (final cap in capabilities) {
@@ -247,7 +283,7 @@ class AgentContextBuilder {
     final pythonPath = _ref.read(sessionPythonProvider);
     final npmPath = _ref.read(sessionNpmProvider);
     final executor = Executor(
-      projectRoot: workDir,
+      projectRoot: effectiveRoot,
       pythonPath: pythonPath,
       npmPath: npmPath,
       permissionMode: PermissionMode.auto, // 权限由中间件管理
@@ -377,6 +413,80 @@ class AgentContextBuilder {
       AppLogger.instance.log('[AgentContext] 技能安装失败: $e');
       return jsonEncode({'status': 'error', 'message': '安装失败: $e'});
     }
+  }
+
+  /// 自定义工具 `toolshell_worktree_start` 的执行体。
+  ///
+  /// 在 `<工作目录>/.toolshell/worktrees/<name>_<时间戳>/` 创建一个基于当前
+  /// HEAD 的新分支+新工作树，成功后把 [activeWorktreeProvider] 指向它——
+  /// 下一次(以及本次调用之后同一轮内)构建 AgentContext 时，Executor 的
+  /// projectRoot 会重定向到这个工作树，后续文件操作/命令执行自动隔离。
+  ///
+  /// 触发时机完全由 LLM 判断，本方法不做任何"是否该隔离"的启发式判断。
+  Future<String> _worktreeStart(
+    String workDir,
+    Map<String, dynamic> args,
+  ) async {
+    final name = (args['name'] as String?)?.trim();
+    final manager = WorktreeManager(workDir: workDir);
+    final result = await manager.start(
+      name: (name?.isNotEmpty ?? false) ? name : null,
+    );
+
+    if (result['status'] == 'ok') {
+      _ref.read(activeWorktreeProvider.notifier).state =
+          result['worktree_path'] as String;
+      AppLogger.instance.log(
+        '[AgentContext] Worktree 隔离已启动: ${result['worktree_path']} '
+        '(分支 ${result['branch']})',
+      );
+    }
+    return jsonEncode(result);
+  }
+
+  /// 自定义工具 `toolshell_worktree_finish` 的执行体。
+  ///
+  /// [args.worktree_path] 可选：不传则使用当前活跃的隔离工作树。
+  /// [args.action] 必需："merge" 或 "discard"。
+  /// [args.commit_message] 可选：merge 前若有未提交改动，用它做提交信息。
+  ///
+  /// 成功后清空 [activeWorktreeProvider]，恢复对主工作目录的正常操作。
+  Future<String> _worktreeFinish(
+    String workDir,
+    Map<String, dynamic> args,
+  ) async {
+    final action = (args['action'] as String?)?.trim() ?? '';
+    final explicitPath = (args['worktree_path'] as String?)?.trim();
+    final worktreePath = (explicitPath != null && explicitPath.isNotEmpty)
+        ? explicitPath
+        : _ref.read(activeWorktreeProvider);
+
+    if (worktreePath.isEmpty) {
+      return jsonEncode({
+        'status': 'error',
+        'code': 'NO_ACTIVE_WORKTREE',
+        'detail': '当前没有活跃的隔离工作树，也未显式传入 worktree_path',
+      });
+    }
+
+    final manager = WorktreeManager(workDir: workDir);
+    final result = await manager.finish(
+      worktreePath: worktreePath,
+      action: action,
+      commitMessage: (args['commit_message'] as String?)?.trim(),
+    );
+
+    if (result['status'] == 'ok') {
+      // 只有在结束的是"当前活跃"的那个工作树时才清空全局状态；
+      // 若模型显式传了别的 worktree_path，不动当前活跃状态。
+      if (_ref.read(activeWorktreeProvider) == worktreePath) {
+        _ref.read(activeWorktreeProvider.notifier).state = '';
+      }
+      AppLogger.instance.log(
+        '[AgentContext] Worktree 隔离已结束: $worktreePath (${result['action']})',
+      );
+    }
+    return jsonEncode(result);
   }
 
   /// 若 [sourceDir] 位于当前工作目录的 `.toolshell/` 下，则删除它并返回 true；

@@ -156,5 +156,61 @@
         "required": ["code"]
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_run_parallel",
+      "description": "在一次决策内并行发起多个互不依赖的子工具调用，避免逐个串行等待。仅适用于只读/查询类调用(如同时读取多个文件、同时搜索多个模式)。子调用中若包含写文件、删除、执行命令、跑Python/JS代码等需要确认的操作，或再次嵌套 toolshell_run_parallel，整批会被直接拒绝——这类操作请改为逐个串行调用。单次最多8个子调用。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "calls": {
+            "type": "array",
+            "description": "子调用列表，每项包含 tool(工具名) 和 args(该工具的参数对象)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tool": {"type": "string", "description": "子调用的工具名，如 toolshell_read"},
+                "args": {"type": "object", "description": "该工具对应的参数"}
+              },
+              "required": ["tool"]
+            },
+            "maxItems": 8
+          }
+        },
+        "required": ["calls"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_worktree_start",
+      "description": "开启一个隔离的 Git 工作树，用于做实验性/风险较高的改动(如大范围重构、尝试性方案、升级可能不兼容的依赖)而不污染主工作目录。基于当前 HEAD 新建一个分支+独立工作目录，位于 <工作目录>/.toolshell/worktrees/ 下。调用成功后，你后续的文件读写/命令执行会自动定向到这个隔离工作树，直到你调用 toolshell_worktree_finish 结束隔离。要求工作目录是一个 git 仓库；不是的话会报错，可先用 toolshell_exec 执行 git init。何时使用完全由你判断，框架不会自动触发或提示。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string", "description": "可选：本次实验的简短描述性名称(会用于分支名和目录名，如 refactor-auth)，不传则用默认名"}
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_worktree_finish",
+      "description": "结束当前活跃的隔离工作树(由 toolshell_worktree_start 开启)。action=merge: 若工作树有未提交改动会自动提交，再合并回主分支并清理工作树(主工作目录若有未提交改动会拒绝合并以避免冲突，此时工作树的改动仍安全保留)。action=discard: 直接丢弃工作树和分支，不保留任何改动。结束后恢复对主工作目录的正常操作。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {"type": "string", "enum": ["merge", "discard"], "description": "merge=合并改动回主分支; discard=丢弃全部改动"},
+          "worktree_path": {"type": "string", "description": "可选：要结束的工作树绝对路径，不传则结束当前活跃的那个"},
+          "commit_message": {"type": "string", "description": "可选：action=merge 且有未提交改动时使用的提交信息"}
+        },
+        "required": ["action"]
+      }
+    }
   }
 ]

@@ -17,3 +17,14 @@ final sessionNpmProvider = StateProvider<String>((ref) => '');
 final sessionSearchProvider = StateProvider<SearchProvider>((ref) {
   return SearchProvider.none;
 });
+
+/// 当前活跃的隔离工作树绝对路径。空字符串 = 未处于隔离状态(正常操作主工作目录)。
+///
+/// 由 LLM 通过 `toolshell_worktree_start` / `toolshell_worktree_finish` 工具
+/// 读写，框架本身不做任何自动触发判断。非用户可见设置，纯内部会话状态——
+/// 不写入 memory.json，不出现在任何设置界面。
+///
+/// 构建 AgentContext 时若此值非空且校验通过(仍在当前工作目录的
+/// `.toolshell/worktrees/` 下、目录仍存在)，Executor 的 projectRoot 会被
+/// 重定向到这里，后续文件操作/命令执行自动落在隔离工作树内。
+final activeWorktreeProvider = StateProvider<String>((ref) => '');

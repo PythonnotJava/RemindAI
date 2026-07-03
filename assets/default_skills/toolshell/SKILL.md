@@ -252,3 +252,70 @@ toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<
 - 需要系统已安装 Python 及所需库（matplotlib 等）
 - 代码在项目根目录下执行
 - 执行需用户确认（normal 模式）
+
+## 并行子调用 (toolshell_run_parallel)
+
+当一次决策中需要发起**多个互不依赖**的只读/查询类调用时（例如同时读取几个不同文件、同时按不同模式搜索），使用 `toolshell_run_parallel` 一次性并发发起，而不是逐个串行调用等待。
+
+### 使用方式
+
+```json
+{
+  "calls": [
+    {"tool": "toolshell_read", "args": {"path": "a.txt"}},
+    {"tool": "toolshell_read", "args": {"path": "b.txt"}},
+    {"tool": "toolshell_search", "args": {"pattern": "*.dart"}}
+  ]
+}
+```
+
+### 限制（必须遵守）
+
+- 单批最多 8 个子调用，超出会被整体拒绝(`TOO_MANY_CALLS`)
+- **只用于只读/查询类工具**（如 `toolshell_read`、`toolshell_search`、`toolshell_memory_recall` 等）
+- 批次中若包含任意写/删/执行/跑代码类工具（`toolshell_write`/`toolshell_delete`/`toolshell_exec`/`toolshell_run_python`/`toolshell_run_js`），或再次嵌套 `toolshell_run_parallel`，整批会被直接拒绝(`PARALLEL_NOT_ALLOWED`)——这是因为并发写同一资源、并发弹出多个权限确认框存在竞态和体验问题。遇到这类需求，请改为逐个串行调用。
+- 参数缺失或格式不对（如 `calls` 不是数组、某项缺少 `tool` 字段）会被拒绝(`INVALID_ARGS`)
+
+### 返回格式
+
+```json
+{
+  "status": "ok",
+  "count": 3,
+  "results": [
+    {"tool": "toolshell_read", "args": {...}, "result": {...}},
+    {"tool": "toolshell_read", "args": {...}, "result": {...}},
+    {"tool": "toolshell_search", "args": {...}, "result": {...}}
+  ]
+}
+```
+
+单个子调用异常不会中断整批，会在对应结果项中以 `error` 字段体现。
+
+## Worktree 隔离 (实验性修改不污染主工作区)
+
+当你要做的改动**探索性强、可能失败、或影响面较大**（大范围重构、尝试一个不确定的实现方案、升级有兼容风险的依赖等），可以先开一个隔离的 Git 工作树，把改动限制在里面，验证通过再合并回主分支，不满意就直接丢弃——不会弄乱用户当前看到的主工作目录。
+
+**这是默认能力，不需要任何配置开启**。是否使用、什么时候用，完全由你自己判断；框架不会自动检测"风险操作"并强制你进入隔离模式，也不会在你没调用工具时静默切换目录。
+
+### 前提条件
+
+工作目录必须是一个 git 仓库(有 `.git`)。不是的话调用会返回 `NOT_GIT_REPO`，可先用 `toolshell_exec` 执行 `git init`（如果用户希望这么做）。
+
+### 使用方式
+
+1. **开始隔离**：调用 `toolshell_worktree_start(name="简短描述")`。成功后会新建分支 `toolshell-wt/<name>_<时间戳>`，工作树落在 `<工作目录>/.toolshell/worktrees/<name>_<时间戳>/`。**从这次调用之后，你的所有 `toolshell_read`/`toolshell_write`/`toolshell_exec` 等操作都会自动定向到这个隔离工作树**，不需要你手动拼接路径或切换 cwd。
+
+2. **正常工作**：在隔离状态下按平时的方式操作文件、跑命令、测试——效果和平时完全一样，只是发生在隔离的工作树里。
+
+3. **结束隔离**：
+   - 满意了 → `toolshell_worktree_finish(action="merge")`：自动提交工作树里的未保存改动，合并回主分支，清理工作树和分支。若主工作目录此时有未提交的改动，会拒绝合并(避免冲突)并提示你先处理，工作树内容不会丢失。
+   - 不满意 → `toolshell_worktree_finish(action="discard")`：直接丢弃工作树和分支，改动全部消失，主工作目录完全不受影响。
+
+结束后自动恢复对主工作目录的正常操作，不需要额外操作。
+
+### 注意事项
+
+- 同一时间只支持一个活跃的隔离工作树；开始新的隔离前应先结束上一个。
+- 隔离工作树位于 `.toolshell/worktrees/` 下，属于框架内部约定目录，不要把它当作可长期存放代码的地方——它是临时的，merge/discard 后就没了。
+- 隔离期间用户在界面上看到的"当前工作目录"不会改变(只是内部执行落点变了)；完成后主动告知用户你做了哪些改动、是否已合并。

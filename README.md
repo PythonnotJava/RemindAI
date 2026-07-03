@@ -1,7 +1,7 @@
 <div align="center">
   <img src="snapshots/logos/logo_egg.png" alt="RemindAI Logo" width="128" />
   <h1>🧠 RemindAI</h1>
-  <p><strong>v1.0.4 — 开源桌面 AI 助手，不再只是对话</strong></p>
+  <p><strong>开源桌面 AI 助手，不再只是对话</strong></p>
   <p>
     <a href="./README_EN.md">🌐 English</a> |
     <a href="https://github.com/PythonnotJava/RemindAI/releases">📦 下载</a> |
@@ -27,19 +27,6 @@
 
 ---
 
-## 🆕 V1.0.4 更新
-
-| 更新项 | 说明 |
-|--------|------|
-| 🔄 长对话防卡顿优化 | 优化思考过程中途可能产生的卡顿问题 |
-| 🔍 软失效过滤优化 | 避免过时记忆与新记忆同权重混合在检索结果里 |
-| 🤝 多 Agent 并行编排 | 编排多 Agent 对大量文档进行并行理解的命令 |
-| 🛠️ 可控 AgentLoop 模式 | 从思考、编写、测试到验证的循环流水线 |
-| 📦 技能批量导入 | 技能现在可以批量导入 |
-| 🎨 代码高亮优化 | 优化了代码高亮文本渲染 |
-| 📊 Flowchart 总结 | 使用 [archify](https://github.com/tt-a1i/archify) 对对话进行流程图总结输出 |
-
----
 
 ## 💡 这是什么
 

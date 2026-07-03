@@ -1,7 +1,7 @@
 <div align="center">
   <img src="snapshots/logos/logo_egg.png" alt="RemindAI Logo" width="128" />
   <h1>🧠 RemindAI</h1>
-  <p><strong>v1.0.4 — Open-source Desktop AI Assistant — Beyond just chat</strong></p>
+  <p><strong>Open-source Desktop AI Assistant — Beyond just chat</strong></p>
   <p>
     <a href="./README.md">🌐 中文</a> |
     <a href="https://github.com/PythonnotJava/RemindAI/releases">📦 Download</a> |
@@ -24,20 +24,6 @@
 <p align="center">
   <img src="snapshots/results_promotion.png" alt="RemindAI Showcase" width="900" />
 </p>
-
----
-
-## 🆕 V1.0.4 Updates
-
-| Update | Description |
-|--------|-------------|
-| 🔄 Long-conversation stutter prevention | Optimized potential stuttering during long conversations |
-| 🔍 Soft-failure filter optimization | Prevents outdated and fresh memories from mixing with equal weight in search results |
-| 🤝 Multi-agent parallel orchestration | Orchestrates multi-agent commands for parallel understanding of large amounts of documents |
-| 🛠️ Controllable AgentLoop pipeline | Cyclic pipeline: Think → Write → Test → Verify |
-| 📦 Batch skill import | Skills now support batch import via ZIP |
-| 🎨 Code highlighting improvement | Optimized code highlighting text rendering |
-| 📊 Flowchart summary | Use [archify](https://github.com/tt-a1i/archify) to summarize conversations as flowcharts |
 
 ---
 

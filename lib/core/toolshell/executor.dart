@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:fast_gbk/fast_gbk.dart';
 import 'package:path/path.dart' as p;
 
+import '../agent/tool_middleware.dart';
 import '../memory/memory_manager.dart';
 import '../memory/project_config.dart';
 import 'schedule_executor.dart';
@@ -122,12 +123,7 @@ class Executor {
 
       // 读/搜索/记忆 = 无需确认; 写/删/执行/Python = normal 模式需确认
       if (permissionMode == PermissionMode.normal) {
-        final needsApproval =
-            toolName == 'toolshell_write' ||
-            toolName == 'toolshell_delete' ||
-            toolName == 'toolshell_exec' ||
-            toolName == 'toolshell_run_python' ||
-            toolName == 'toolshell_run_js';
+        final needsApproval = kApprovalRequiredTools.contains(toolName);
         if (needsApproval && onPermissionRequest != null) {
           final approved = await onPermissionRequest!(toolName, args);
           if (!approved) {
@@ -337,12 +333,17 @@ class Executor {
           .take(maxResults)
           .toList();
 
+      // rg 输出格式为 path:line:content。Windows 下 path 本身含盘号冒号
+      // (如 C:\Users\...\user.js:10:text)，不能直接按第一个 ':' 分割，
+      // 否则盘号会被误判为分隔符。用正则匹配"路径 + 行号(纯数字) + 内容"，
+      // 行号两侧的冒号是唯一稳定锚点。
+      final lineRe = RegExp(r'^(.+):(\d+):(.*)$');
       final matches = lines.map((line) {
-        final parts = line.split(':');
-        if (parts.length >= 3) {
-          final filePath = parts[0];
-          final lineNo = parts[1];
-          final text = parts.sublist(2).join(':').trim();
+        final m = lineRe.firstMatch(line);
+        if (m != null) {
+          final filePath = m.group(1)!;
+          final lineNo = m.group(2)!;
+          final text = m.group(3)!.trim();
           return {
             'path': p.relative(filePath, from: projectRoot),
             'line': int.tryParse(lineNo),
