@@ -9,7 +9,7 @@
 - 技能现在可以批量导入.
 - 优化了代码高亮文本.
 - 使用[archify](https://github.com/tt-a1i/archify)对对话进行流程图总结输出.
-- 主动判断并且开启可并行的任务以及更为可靠的版本工作流.
+- 更为可靠的版本工作流.
 
 
 ## en
@@ -20,7 +20,7 @@
 - Skills can now be imported in batches.
 - Optimized code highlighting.
 - Use [archify](https://github.com/tt-a1i/archify) to summarize and output flowcharts of conversations.
-- Proactively identify and enable parallel tasks and more reliable version workflows.
+- More reliable version workflows.
 
 
 # V1.0.3
