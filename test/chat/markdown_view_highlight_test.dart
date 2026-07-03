@@ -77,9 +77,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('语言标注不是 hljs 已注册语言（如误粘的文件路径/URL）时自动降级为纯检测，不抛异常', (
-    tester,
-  ) async {
+  testWidgets('语言标注不是 hljs 已注册语言（如误粘的文件路径/URL）时自动降级为纯检测，不抛异常', (tester) async {
     // 复现真实故障：gpt_markdown 解析异常 Markdown 时，代码块围栏的语言标注
     // 位置混入了一段文件路径 + 残留反引号（而非真实语言名），
     // 旧实现会把它原样传给 hljs.highlight(language: ...) 精确匹配模式，

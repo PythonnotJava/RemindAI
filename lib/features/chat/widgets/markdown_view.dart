@@ -229,8 +229,7 @@ class _SafeCodeFieldState extends State<_SafeCodeField> {
   Widget _buildHighlightedCode(Map<String, HljsStyle> theme) {
     ensureInitialized(); // 确保 hljs 已注册全部语言，重复调用无副作用
     final rawLanguage = widget.name.toLowerCase().trim();
-    final language =
-        rawLanguage.isNotEmpty && hljs.hasLanguage(rawLanguage)
+    final language = rawLanguage.isNotEmpty && hljs.hasLanguage(rawLanguage)
         ? rawLanguage
         : null;
     return HighlightView(

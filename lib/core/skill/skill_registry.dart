@@ -90,13 +90,27 @@ class SkillRegistry {
 
       final name = p.basename(entity.path);
 
-      // 统计工具数量 (tools.json 可选)
+      // 统计工具数量（与 loadSkillTools 逻辑一致，支持多种格式）
       int toolCount = 0;
       final toolsJsonFile = File(p.join(entity.path, 'tools.json'));
       if (await toolsJsonFile.exists()) {
         try {
-          final tools = jsonDecode(await toolsJsonFile.readAsString()) as List;
-          toolCount = tools.length;
+          final content = await toolsJsonFile.readAsString();
+          if (content.trim().isNotEmpty) {
+            final decoded = jsonDecode(content);
+            if (decoded is List) {
+              toolCount = decoded.length;
+            } else if (decoded is Map<String, dynamic>) {
+              final inner = decoded['tools'];
+              if (inner is List) {
+                toolCount = inner.length;
+              } else if (decoded['function'] != null ||
+                  decoded['name'] != null ||
+                  decoded['type'] != null) {
+                toolCount = 1;
+              }
+            }
+          }
         } catch (_) {}
       }
 
@@ -462,13 +476,28 @@ class SkillRegistry {
       }
     }
 
-    // 统计工具数量
+    // 统计工具数量（与 loadSkillTools 逻辑一致，支持多种格式）
     int toolCount = 0;
-    try {
-      final toolsContent = await toolsJsonFile.readAsString();
-      final tools = jsonDecode(toolsContent) as List;
-      toolCount = tools.length;
-    } catch (_) {}
+    if (await toolsJsonFile.exists()) {
+      try {
+        final content = await toolsJsonFile.readAsString();
+        if (content.trim().isNotEmpty) {
+          final decoded = jsonDecode(content);
+          if (decoded is List) {
+            toolCount = decoded.length;
+          } else if (decoded is Map<String, dynamic>) {
+            final inner = decoded['tools'];
+            if (inner is List) {
+              toolCount = inner.length;
+            } else if (decoded['function'] != null ||
+                decoded['name'] != null ||
+                decoded['type'] != null) {
+              toolCount = 1;
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     return Skill(
       id: id,
