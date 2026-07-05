@@ -212,6 +212,43 @@ class SEn extends S {
   String get aboutPoweredBy => 'Powered by';
 
   @override
+  String get aboutCheckUpdate => 'Check for updates';
+
+  @override
+  String get aboutCheckingUpdate => 'Checking for updates…';
+
+  @override
+  String get updateDialogUpToDateTitle => 'You\'re up to date';
+
+  @override
+  String updateDialogUpToDateBody(String version) {
+    return 'Current version v$version is already the latest.';
+  }
+
+  @override
+  String get updateDialogAvailableTitle => 'Update available';
+
+  @override
+  String updateDialogAvailableSubtitle(String current, String latest) {
+    return 'v$current → v$latest';
+  }
+
+  @override
+  String get updateDialogChangelogTitle => 'What\'s new';
+
+  @override
+  String get updateDialogGoDownload => 'Go to download';
+
+  @override
+  String get updateDialogErrorTitle => 'Update check failed';
+
+  @override
+  String get updateDialogRetry => 'Retry';
+
+  @override
+  String get updateDialogClose => 'Got it';
+
+  @override
   String get trayShow => 'Show window';
 
   @override

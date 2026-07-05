@@ -963,6 +963,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
         AppLogger.instance.log('[ChatProvider] AgentError: $message');
         PetObserver.instance.notifyAiError(error: message);
         _setError(message);
+      case AgentLoopLimitReached(rounds: final rounds):
+        // 单轮对话内部工具调用轮次熔断：保留已生成的部分文本，明确提示原因，
+        // 与真正的 LLM/网络错误(AgentError)区分开，不走 _friendlyError 的
+        // 异常文案启发式匹配。
+        _flushStreamBuffer();
+        final message = '本次回复内部工具调用次数过多(已达上限 $rounds 次)，已自动中止';
+        AppLogger.instance.log('[ChatProvider] AgentLoopLimitReached: $rounds');
+        PetObserver.instance.notifyAiError(error: message);
+        _setError(message);
     }
   }
 

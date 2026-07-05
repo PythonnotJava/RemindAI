@@ -493,6 +493,72 @@ abstract class S {
   /// **'Powered by'**
   String get aboutPoweredBy;
 
+  /// No description provided for @aboutCheckUpdate.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查更新'**
+  String get aboutCheckUpdate;
+
+  /// No description provided for @aboutCheckingUpdate.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在检查更新…'**
+  String get aboutCheckingUpdate;
+
+  /// No description provided for @updateDialogUpToDateTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'已是最新版本'**
+  String get updateDialogUpToDateTitle;
+
+  /// No description provided for @updateDialogUpToDateBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前版本 v{version} 已是最新，无需更新。'**
+  String updateDialogUpToDateBody(String version);
+
+  /// No description provided for @updateDialogAvailableTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'发现新版本'**
+  String get updateDialogAvailableTitle;
+
+  /// No description provided for @updateDialogAvailableSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'v{current} → v{latest}'**
+  String updateDialogAvailableSubtitle(String current, String latest);
+
+  /// No description provided for @updateDialogChangelogTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'更新内容'**
+  String get updateDialogChangelogTitle;
+
+  /// No description provided for @updateDialogGoDownload.
+  ///
+  /// In zh, this message translates to:
+  /// **'前往下载'**
+  String get updateDialogGoDownload;
+
+  /// No description provided for @updateDialogErrorTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查更新失败'**
+  String get updateDialogErrorTitle;
+
+  /// No description provided for @updateDialogRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get updateDialogRetry;
+
+  /// No description provided for @updateDialogClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'知道了'**
+  String get updateDialogClose;
+
   /// No description provided for @trayShow.
   ///
   /// In zh, this message translates to:

@@ -340,6 +340,8 @@ class ApiServer {
           if (buf.isEmpty && c.isNotEmpty) buf.write(c);
         case AgentError(message: final m):
           errMsg = m;
+        case AgentLoopLimitReached(rounds: final rounds):
+          errMsg = '单轮对话内部工具调用次数达到上限($rounds)，未能收敛到最终回复';
         default:
           break;
       }
@@ -416,6 +418,10 @@ class ApiServer {
             }
           case AgentError(message: final m):
             sendChunk({'content': '\n[错误] $m'});
+          case AgentLoopLimitReached(rounds: final rounds):
+            sendChunk({
+              'content': '\n[错误] 单轮对话内部工具调用次数达到上限($rounds)，未能收敛到最终回复',
+            });
           case AgentDone():
             break;
         }
@@ -529,6 +535,8 @@ class ApiServer {
             if (buf.isEmpty && c.isNotEmpty) buf.write(c);
           case AgentError(message: final m):
             error = m;
+          case AgentLoopLimitReached(rounds: final rounds):
+            error = '单轮对话内部工具调用次数达到上限($rounds)，未能收敛到最终回复';
           default:
             break;
         }
@@ -618,6 +626,15 @@ class ApiServer {
               'type': 'content_block_delta',
               'index': 0,
               'delta': {'type': 'text_delta', 'text': '\n[错误] $m'},
+            });
+          case AgentLoopLimitReached(rounds: final rounds):
+            sendEvent('content_block_delta', {
+              'type': 'content_block_delta',
+              'index': 0,
+              'delta': {
+                'type': 'text_delta',
+                'text': '\n[错误] 单轮对话内部工具调用次数达到上限($rounds)，未能收敛到最终回复',
+              },
             });
           default:
             break;

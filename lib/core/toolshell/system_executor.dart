@@ -104,10 +104,16 @@ class SystemExecutor {
     }
 
     if (category == 'all') {
-      final allResults = <String, dynamic>{};
-      for (final entry in _toolCategories.entries) {
-        allResults[entry.key] = await _probeTools(entry.value);
-      }
+      // 类别之间同样互不依赖，一并并发探测 (而不是11个类别逐个串行、
+      // 每个类别内部再并发)，否则总耗时仍是"类别数 × 单类别耗时"。
+      final categories = _toolCategories.entries.toList();
+      final perCategoryResults = await Future.wait(
+        categories.map((entry) => _probeTools(entry.value)),
+      );
+      final allResults = <String, dynamic>{
+        for (var i = 0; i < categories.length; i++)
+          categories[i].key: perCategoryResults[i],
+      };
       // 附加系统基本信息
       allResults['system'] = {
         'os': Platform.operatingSystem,
@@ -135,13 +141,15 @@ class SystemExecutor {
     return _ok({'category': category, 'tools': results});
   }
 
-  /// 批量探测工具列表，返回每个工具的探测结果
+  /// 批量探测工具列表，返回每个工具的探测结果。
+  ///
+  /// 每个工具的探测都是独立的只读子进程调用 (where/which + --version)，
+  /// 互不依赖、无共享状态，因此并发执行是安全的——不存在资源竞态问题
+  /// (对照 toolshell_run_parallel 对写/删/执行类工具的顾虑，这里没有那种风险)。
+  /// 并发后 category=all 时(11个类别、五六十个工具)的总耗时约等于最慢的
+  /// 单个探测，而不是所有探测耗时之和。
   Future<List<Map<String, dynamic>>> _probeTools(List<String> tools) async {
-    final results = <Map<String, dynamic>>[];
-    for (final tool in tools) {
-      results.add(await _probeSingle(tool));
-    }
-    return results;
+    return Future.wait(tools.map(_probeSingle));
   }
 
   /// 探测单个工具: 查找路径 + 获取版本

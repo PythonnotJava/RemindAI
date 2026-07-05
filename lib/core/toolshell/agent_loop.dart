@@ -111,6 +111,19 @@ class AgentError extends AgentEvent {
   AgentError(this.message);
 }
 
+/// 单次 chat() 调用内，"LLM返回tool_calls → 执行 → 再问LLM"这个内层循环
+/// 达到轮次上限仍未收到最终回复(无tool_calls的回复)时触发。
+///
+/// 这与 AutonomousLoop.maxIterations(多轮"Loop模式"的外层熔断，管的是
+/// "调用几次 chat()")是完全不同粒度的保护——此事件管的是单次 chat()
+/// 内部可能无限转圈的情况(例如模型反复调用同一个工具、或工具结果又
+/// 诱导它继续调用另一个工具，一直不收敛到最终文本回复)。
+class AgentLoopLimitReached extends AgentEvent {
+  /// 触发熔断时已完成的 tool_call 轮次数
+  final int rounds;
+  AgentLoopLimitReached(this.rounds);
+}
+
 /// ToolShell Agent 循环 - Dart 原生实现 (流式版)
 ///
 /// 所有轮次均使用 [LlmClient.chatStreamFull] 进行流式调用：
@@ -124,6 +137,12 @@ class AgentLoop {
   final MessagePipeline messagePipeline;
   final List<AgentHook> hooks;
 
+  /// 单次 chat() 调用内允许的最大 tool_call 轮次数。超过后强制熔断，
+  /// yield [AgentLoopLimitReached] 并结束循环，防止 LLM 一直不给最终
+  /// 回复(反复调用工具)导致的无限循环。50轮对正常任务足够宽裕——
+  /// 真正卡死的场景通常在几轮内就会重复同一模式，50只是防止真的失控。
+  final int maxToolCallRounds;
+
   AgentLoop({
     required this.llm,
     required this.executor,
@@ -131,6 +150,7 @@ class AgentLoop {
     required this.messages,
     this.messagePipeline = const MessagePipeline(),
     this.hooks = const [],
+    this.maxToolCallRounds = 50,
   });
 
   /// 执行一轮对话 (用户输入 → 多轮 tool_call → 最终回复)
@@ -145,7 +165,17 @@ class AgentLoop {
       messages.add({'role': 'user', 'content': userInput});
     }
 
+    var round = 0;
     while (true) {
+      round++;
+      if (round > maxToolCallRounds) {
+        AppLogger.instance.log(
+          '[AgentLoop] 达到单轮对话最大tool_call轮次上限($maxToolCallRounds)，强制熔断',
+        );
+        yield AgentLoopLimitReached(maxToolCallRounds);
+        return;
+      }
+
       // ─── 消息变换管线：在发送给 LLM 前处理消息列表 ───
       final effectiveMessages = await messagePipeline.process(messages);
 

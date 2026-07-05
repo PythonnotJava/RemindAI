@@ -12,6 +12,8 @@ import 'system_executor.dart';
 
 /// ToolShell 工具执行器 (Dart 原生实现)
 /// 等价于 Python runtime/executor.py
+/// 源文件是我发布的https://github.com/PythonnotJava/SkillServer/tree/main/SKILLS/toolshell
+/// 目前完善版本是RemindAI自己的
 class Executor {
   final String projectRoot;
 

@@ -209,6 +209,43 @@ class SZh extends S {
   String get aboutPoweredBy => 'Powered by';
 
   @override
+  String get aboutCheckUpdate => '检查更新';
+
+  @override
+  String get aboutCheckingUpdate => '正在检查更新…';
+
+  @override
+  String get updateDialogUpToDateTitle => '已是最新版本';
+
+  @override
+  String updateDialogUpToDateBody(String version) {
+    return '当前版本 v$version 已是最新，无需更新。';
+  }
+
+  @override
+  String get updateDialogAvailableTitle => '发现新版本';
+
+  @override
+  String updateDialogAvailableSubtitle(String current, String latest) {
+    return 'v$current → v$latest';
+  }
+
+  @override
+  String get updateDialogChangelogTitle => '更新内容';
+
+  @override
+  String get updateDialogGoDownload => '前往下载';
+
+  @override
+  String get updateDialogErrorTitle => '检查更新失败';
+
+  @override
+  String get updateDialogRetry => '重试';
+
+  @override
+  String get updateDialogClose => '知道了';
+
+  @override
   String get trayShow => '显示窗口';
 
   @override

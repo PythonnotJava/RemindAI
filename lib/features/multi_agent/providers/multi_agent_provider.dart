@@ -680,6 +680,14 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
             runtime.status = AgentStatus.error;
             runtime.streamingText = '';
             _notifyUpdate();
+          case AgentLoopLimitReached(rounds: final rounds):
+            _addAssistantMessage(
+              agentId,
+              '⚠️ 本轮回复内部工具调用次数过多(已达上限 $rounds 次)，已中止，请换个方式重新提问',
+            );
+            runtime.status = AgentStatus.error;
+            runtime.streamingText = '';
+            _notifyUpdate();
         }
       }
     } catch (e) {

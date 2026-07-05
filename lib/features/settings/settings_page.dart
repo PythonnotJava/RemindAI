@@ -12,6 +12,7 @@ import 'widgets/custom_license_page.dart';
 import 'widgets/embedding_section.dart';
 import 'widgets/font_section.dart';
 import 'widgets/qdrant_path_tile.dart';
+import 'widgets/update_dialog.dart';
 import 'version.dart' show version, repo;
 
 class SettingsPage extends ConsumerWidget {
@@ -484,14 +485,15 @@ class _AboutCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
               children: [
                 OutlinedButton.icon(
                   onPressed: () => launchUrl(Uri.parse(repo)),
                   icon: const Icon(Icons.open_in_new, size: 16),
                   label: const Text('GitHub'),
                 ),
-                const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -500,6 +502,11 @@ class _AboutCard extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.description_outlined, size: 16),
                   label: Text(context.s.aboutLicense),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => showUpdateDialog(context),
+                  icon: const Icon(Icons.system_update_alt_rounded, size: 16),
+                  label: Text(context.s.aboutCheckUpdate),
                 ),
               ],
             ),

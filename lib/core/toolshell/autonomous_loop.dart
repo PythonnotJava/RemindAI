@@ -168,6 +168,15 @@ class AutonomousLoop {
             hasError = true;
             yield LoopError(iteration: iteration, message: msg);
             return;
+          case AgentLoopLimitReached(rounds: final rounds):
+            // 单次 chat() 内部的 tool_call 轮次熔断，等同于这一"迭代"内
+            // LLM 未能收敛 —— 按错误处理，终止整个 AutonomousLoop。
+            hasError = true;
+            yield LoopError(
+              iteration: iteration,
+              message: '单轮对话内 tool_call 轮次达到上限($rounds)，LLM 未能收敛到最终回复',
+            );
+            return;
         }
       }
 

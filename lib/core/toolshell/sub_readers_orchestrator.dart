@@ -276,6 +276,8 @@ class SubReadersOrchestrator {
         case AgentToolStart():
         case AgentToolResult():
           break;
+        case AgentLoopLimitReached(rounds: final rounds):
+          throw Exception('子 Agent 单轮 tool_call 轮次达到上限($rounds)，未能收敛');
       }
     }
     return buffer.toString();
