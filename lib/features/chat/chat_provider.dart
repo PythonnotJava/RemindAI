@@ -626,24 +626,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
       return;
     }
 
+    // ─── 防御性清理：上一轮被中断后 AgentLoop generator 可能在后续微任务
+    // 中继续往 _agentMessages 追加了 tool/assistant(tool_calls) 消息，
+    // 导致消息链不合法。在新一轮起步前再做一次 sanitize 确保干净。
+    _sanitizeAgentMessages();
+
     // 快照附件并立即清空 UI 中的附件列表
     final pendingAttachments = List<FileAttachment>.from(state.attachments);
 
-    // 如果当前没有会话，创建一个
-    int? conversationId = state.currentConversationId;
-    if (conversationId == null) {
-      final title = input.length > 20 ? '${input.substring(0, 20)}...' : input;
-      final conversation = await _conversationsDao.create(
-        title: title,
-        modelCardId: modelCard.id,
-      );
-      conversationId = conversation.id;
-      state = state.copyWith(currentConversationId: conversationId);
-      _ref.read(conversationsProvider.notifier).refresh();
-    }
-
+    // ─── 立即更新 UI 状态 → 让按钮点击有即时视觉反馈，消除卡顿感 ───
     final userMsg = ChatMessage.user(input, attachments: pendingAttachments);
-    // 新一轮开始前清理可能残留的流式缓冲/计时器
     _flushTimer?.cancel();
     _flushTimer = null;
     _streamBuffer.clear();
@@ -658,6 +650,24 @@ class ChatNotifier extends StateNotifier<ChatState> {
     PetObserver.instance.notifyUserMessage(
       preview: input.length > 30 ? '${input.substring(0, 30)}...' : input,
     );
+
+    // ─── 让出一帧给 UI 渲染 loading 状态，然后再执行重活 ───
+    // 这保证了上面 setState 的新状态能先被 Flutter 引擎处理并绘制，
+    // 用户看到的是"发送后立即进入 loading 动画"，而不是"按钮卡住不动"。
+    await Future<void>.delayed(Duration.zero);
+
+    // 如果当前没有会话，创建一个
+    int? conversationId = state.currentConversationId;
+    if (conversationId == null) {
+      final title = input.length > 20 ? '${input.substring(0, 20)}...' : input;
+      final conversation = await _conversationsDao.create(
+        title: title,
+        modelCardId: modelCard.id,
+      );
+      conversationId = conversation.id;
+      state = state.copyWith(currentConversationId: conversationId);
+      _ref.read(conversationsProvider.notifier).refresh();
+    }
 
     await _conversationsDao.saveMessage(conversationId, userMsg);
 
@@ -1042,6 +1052,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
         activeToolCalls: [],
       );
     }
+
+    // ─── 延迟防御清理 ───
+    // _subscription?.cancel() 只是调度了取消，AgentLoop 的 async* generator
+    // 在后续微任务中可能仍会往 _agentMessages 追加消息（比如 tool result 或
+    // assistant(tool_calls)），导致消息链再次进入不合法状态。
+    // 调度一个延迟微任务，在 generator 最终停止后做最后一遍 sanitize。
+    Future<void>.delayed(const Duration(milliseconds: 50)).then((_) {
+      if (mounted) _sanitizeAgentMessages();
+    });
   }
 
   /// 删除指定索引的消息
