@@ -184,7 +184,7 @@ class MemoryManager {
         );
         final data = resp.data as Map<String, dynamic>;
         final embedding = data['data'][0]['embedding'] as List;
-        return embedding.cast<double>();
+        return embedding.map((e) => (e as num).toDouble()).toList();
       } on DioException catch (e) {
         lastError = e;
         if (!_isTransient(e) || attempt == maxAttempts) rethrow;
@@ -354,6 +354,50 @@ class MemoryManager {
     }
   }
 
+  // ─── 知识库 (纯向量, 不走 SQLite/软失效) ──────────────────
+
+  /// 将一批文本块写入知识库 collection。
+  ///
+  /// 与 [store] 不同: 不写 SQLite (知识库有独立的 kb_documents 表管理元数据)，
+  /// 也不做软失效检测 (知识库文档相互独立，无"新事实覆盖旧事实"语义)。
+  /// 每个块携带相同的 [payloadBase] (通常含 document_id / filename)，
+  /// 并追加 text / chunk_index。返回实际写入的向量维度。
+  ///
+  /// [chunks] 为空则直接返回 0。任一块嵌入失败会抛出异常，由上层捕获后
+  /// 将该文档标记为 failed。
+  Future<int> addKnowledgeChunks({
+    required String collectionName,
+    required List<String> chunks,
+    Map<String, dynamic> payloadBase = const {},
+  }) async {
+    if (chunks.isEmpty) return 0;
+
+    int dimension = 0;
+    for (var i = 0; i < chunks.length; i++) {
+      final text = chunks[i];
+      final vector = await _embed(text);
+      dimension = vector.length;
+      await ensureCollection(collectionName, vectorSize: vector.length);
+
+      final pointId = _nextId();
+      final payload = <String, dynamic>{
+        ...payloadBase,
+        'text': text,
+        'chunk_index': i,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      await _dio.put(
+        '/collections/$collectionName/points',
+        data: {
+          'points': [
+            {'id': pointId, 'vector': vector, 'payload': payload},
+          ],
+        },
+      );
+    }
+    return dimension;
+  }
+
   // ─── 召回 ─────────────────────────────────────────────────
 
   /// 召回记忆
@@ -449,6 +493,44 @@ class MemoryManager {
     try {
       await memoryDao?.delete(collectionName, pointId);
     } catch (_) {}
+  }
+
+  /// 按 payload 字段值删除所有匹配的 point (Qdrant filter 删除)。
+  ///
+  /// 用于知识库按文档删除: 一份文档切成多块写入，删除时以
+  /// payload 中的 [key]=[value] (如 document_id) 一次性清除所有块。
+  Future<void> deletePointsByField(
+    String collectionName,
+    String key,
+    dynamic value,
+  ) async {
+    try {
+      await _dio.post(
+        '/collections/$collectionName/points/delete',
+        data: {
+          'filter': {
+            'must': [
+              {
+                'key': key,
+                'match': {'value': value},
+              },
+            ],
+          },
+        },
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 404) rethrow;
+    }
+  }
+
+  /// 读取指定 collection 的向量维度 (不存在返回 null)。
+  Future<int?> getVectorSize(String collectionName) async {
+    try {
+      final resp = await _dio.get('/collections/$collectionName');
+      return _extractVectorSize(resp.data);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 删除整个 collection

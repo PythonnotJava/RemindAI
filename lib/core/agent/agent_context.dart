@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
+import '../settings/app_settings.dart';
 import '../db/daos/memory_dao.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
@@ -23,6 +23,7 @@ import '../toolshell/executor.dart';
 import '../toolshell/worktree_manager.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/experts_provider.dart';
+import '../../providers/kb_provider.dart';
 import '../../providers/mcp_provider.dart';
 import '../../providers/search_provider.dart';
 import '../../providers/settings_provider.dart';
@@ -35,6 +36,7 @@ import 'tool_middleware.dart';
 import 'tool_pipeline.dart';
 import 'hooks/memory_recall_hook.dart';
 import 'hooks/memory_store_hook.dart';
+import 'hooks/kb_recall_hook.dart';
 import 'hooks/schedule_hook.dart';
 import 'hooks/system_probe_hook.dart';
 import 'middleware/logging_middleware.dart';
@@ -129,8 +131,8 @@ class AgentContextBuilder {
     var workDir = _ref.read(workingDirectoryProvider);
     final hasRealWorkDir = workDir.isNotEmpty;
     if (workDir.isEmpty) {
-      final documentsDir = await getApplicationDocumentsDirectory();
-      workDir = p.join(documentsDir.path, '.RemindAI', 'workspace');
+      final root = await AppSettings.getRootDir();
+      workDir = p.join(root, 'workspace');
     }
 
     // ─── Worktree 隔离: 若存在有效的活跃隔离工作树，Executor 的实际
@@ -253,7 +255,11 @@ class AgentContextBuilder {
     // ─── 系统提示词 ───
     // 拆成稳定前缀（专家+元技能）与用户技能区两段，
     // 便于会话中途技能变化时只刷新技能区，保护 prompt cache。
-    final systemPromptPrefix = await _buildSystemPromptPrefix();
+    // 传入 effectiveRoot（而非原始 workDir）确保 worktree 隔离生效时
+    // 模型看到的"当前工作目录"与 Executor 实际使用的根目录一致。
+    final systemPromptPrefix = await _buildSystemPromptPrefix(
+      workDirOverride: effectiveRoot,
+    );
     final skillsSection = await _buildSkillsSection(
       userInput: userInput,
       existingMessages: existingMessages,
@@ -307,6 +313,7 @@ class AgentContextBuilder {
 
     // ─── Hooks ───
     final hasWorkDir = _ref.read(workingDirectoryProvider).isNotEmpty;
+    final selectedKbIds = _ref.read(sessionKnowledgeBasesProvider);
     final hooks = <AgentHook>[
       if (effectiveRecall && memoryManager != null && memoryCollection != null)
         MemoryRecallHook(
@@ -314,6 +321,8 @@ class AgentContextBuilder {
           collection: memoryCollection,
           useQdrant: useQdrant,
         ),
+      if (selectedKbIds.isNotEmpty)
+        KbRecallHook(dao: _ref.read(kbDaoProvider), kbIds: selectedKbIds),
       if (effectiveStore && memoryManager != null && memoryCollection != null)
         MemoryStoreHook(
           manager: memoryManager,
@@ -645,9 +654,13 @@ class AgentContextBuilder {
 
   /// 构建 system prompt 的稳定前缀：领域专家 + 元技能（或全局模式提示）。
   /// 注意：领域专家为一次性消费（读取后置空），仅在新会话首次构建时注入。
-  Future<String> _buildSystemPromptPrefix() async {
+  /// [workDirOverride] 实际生效的根目录（考虑 worktree 隔离重定向后的值）。
+  /// 不传时回退到 workingDirectoryProvider 的原始值，用于外部无该上下文的调用场景。
+  Future<String> _buildSystemPromptPrefix({String? workDirOverride}) async {
     final parts = <String>[];
-    final hasWorkspace = _ref.read(workingDirectoryProvider).isNotEmpty;
+    final String currentWorkDir =
+        workDirOverride ?? _ref.read(workingDirectoryProvider);
+    final hasWorkspace = currentWorkDir.isNotEmpty;
 
     // 领域专家
     final activeExpert = _ref.read(activeExpertProvider);
@@ -658,6 +671,18 @@ class AgentContextBuilder {
     }
 
     if (hasWorkspace) {
+      // 显式把当前工作目录的绝对路径告知模型，作为 ground truth。
+      // 没有这一行，模型在用户未明确指定路径时只能自行猜测一个绝对路径，
+      // 而写入工具默认不做越界拦截（allowOutsideRoot=true），猜错就会
+      // 把文件写到工作目录之外。
+      parts.add(
+        '# 当前工作目录\n'
+        '$currentWorkDir\n\n'
+        '所有文件操作工具（读取/写入/搜索/删除等）的相对路径均基于此目录解析。'
+        '除非用户明确要求写到其他位置，否则新建、修改文件默认使用相对路径，'
+        '不要自行拼接其他绝对路径。\n\n---\n',
+      );
+
       final tsPrompt = await rootBundle.loadString(
         'assets/default_skills/toolshell/SKILL.md',
       );

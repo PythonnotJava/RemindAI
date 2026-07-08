@@ -3,7 +3,8 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import '../logger/app_logger.dart';
+import '../settings/app_settings.dart';
 
 /// Qdrant 进程管理器 (Singleton)
 ///
@@ -106,13 +107,38 @@ class QdrantService {
   ///   3. 复制到 .RemindAI/bin/ 作为兜底 (仅当上述都不可用)
   /// 若全部失败，_executablePath 为空，start() 会抛出可读错误提示。
   Future<void> _init() async {
-    // 与 app_settings.dart 保持一致：统一使用文档目录下的 .RemindAI
     final remindAiDir = await _rootDir();
     _storagePath = p.join(remindAiDir, 'memory', 'qdrant_storage');
     _storageInitialized = true;
     await Directory(_storagePath).create(recursive: true);
 
+    // 清理残留的 WAL 锁文件 (上次非正常退出可能留下)
+    // Qdrant 在 WAL 锁存在时会 PANIC，导致启动失败。
+    await _cleanWalLocks();
+
     _executablePath = await _resolveExecutable(remindAiDir);
+  }
+
+  /// 清理所有 collection shard 下的 .wal 锁文件。
+  /// Qdrant 上次未正常关闭时会残留此文件，导致下次启动 PANIC。
+  Future<void> _cleanWalLocks() async {
+    try {
+      final collectionsDir = Directory(p.join(_storagePath, 'collections'));
+      if (!await collectionsDir.exists()) return;
+      await for (final collection in collectionsDir.list()) {
+        if (collection is! Directory) continue;
+        await for (final shard in collection.list()) {
+          if (shard is! Directory) continue;
+          final walLock = File(p.join(shard.path, 'wal', '.wal'));
+          if (await walLock.exists()) {
+            await walLock.delete();
+            AppLogger.instance.log('[Qdrant] 清理残留 WAL 锁: ${walLock.path}');
+          }
+        }
+      }
+    } catch (e) {
+      AppLogger.instance.log('[Qdrant] 清理 WAL 锁时出错 (继续): $e');
+    }
   }
 
   /// 解析 qdrant 可执行文件路径，按优先级尝试。
@@ -228,10 +254,9 @@ class QdrantService {
     return null;
   }
 
-  /// 存储根目录: 文档目录下的 .RemindAI (与 AppSettings.defaultRootDir 一致)
+  /// 存储根目录: 从 AppSettings 全局根目录获取
   Future<String> _rootDir() async {
-    final documentsDir = await getApplicationDocumentsDirectory();
-    return p.join(documentsDir.path, '.RemindAI');
+    return await AppSettings.getRootDir();
   }
 
   /// 启动 Qdrant (幂等: 已运行则跳过)
@@ -262,6 +287,10 @@ class QdrantService {
 
   /// spawn 进程
   Future<void> _spawn() async {
+    AppLogger.instance.log('[Qdrant] 启动: $_executablePath');
+    AppLogger.instance.log('[Qdrant] 存储路径: $_storagePath');
+    AppLogger.instance.log('[Qdrant] 端口: $defaultPort');
+
     _process = await Process.start(
       _executablePath,
       [],
@@ -271,8 +300,20 @@ class QdrantService {
       },
     );
 
+    // 捕获 stderr 便于诊断启动失败
+    _process!.stderr.transform(systemEncoding.decoder).listen((data) {
+      AppLogger.instance.log('[Qdrant stderr] $data');
+    });
+    _process!.stdout.transform(systemEncoding.decoder).listen((data) {
+      // 仅在启动阶段输出前几行方便诊断
+      if (!_isRunning) {
+        AppLogger.instance.log('[Qdrant stdout] $data');
+      }
+    });
+
     // 监听进程退出
     _process!.exitCode.then((code) {
+      AppLogger.instance.log('[Qdrant] 进程退出, code=$code');
       _isRunning = false;
       if (!_shuttingDown && _restartCount < _maxRestarts) {
         _restartCount++;
@@ -286,6 +327,7 @@ class QdrantService {
       _isRunning = true;
       _startHealthCheck();
     } else {
+      AppLogger.instance.log('[Qdrant] 启动超时! 进程是否仍在运行: ${_process != null}');
       throw Exception('Qdrant 启动超时 (${_startupTimeout.inSeconds}s)');
     }
   }

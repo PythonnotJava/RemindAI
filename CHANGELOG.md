@@ -10,7 +10,10 @@
 - 优化了代码高亮文本.
 - 使用[archify](https://github.com/tt-a1i/archify)对对话进行流程图总结输出.
 - 更为可靠的版本工作流.
-
+- 知识库功能.
+- 优化了MCP服务器的载入和启动.
+- 优化了Agent自主生成文件默认在工作目录下.
+- 
 
 ## en
 - Optimized the issue of potential stuttering during long conversations.

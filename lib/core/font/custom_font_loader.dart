@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import '../settings/app_settings.dart';
 
 /// 自定义字体加载器 — 扫描 .RemindAI/fonts/ 目录，注册本地字体文件。
 class CustomFontLoader {
@@ -18,8 +18,8 @@ class CustomFontLoader {
   /// 获取 fonts 目录路径
   Future<String> get fontsDir async {
     if (_fontsDir != null) return _fontsDir!;
-    final docs = await getApplicationDocumentsDirectory();
-    _fontsDir = p.join(docs.path, '.RemindAI', 'fonts');
+    final root = await AppSettings.getRootDir();
+    _fontsDir = p.join(root, 'fonts');
     return _fontsDir!;
   }
 

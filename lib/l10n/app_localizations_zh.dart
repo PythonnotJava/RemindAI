@@ -1466,6 +1466,16 @@ class SZh extends S {
   String get mcpStreamableHint => '如: http://localhost:3000/mcp';
 
   @override
+  String get mcpFormCommandOptional => '启动命令 (可选)';
+
+  @override
+  String get mcpLocalProcessSectionTitle => '本地进程 (可选)';
+
+  @override
+  String get mcpLocalProcessSectionHint =>
+      '若该服务需要先手动启动一个本地进程才能连接，可在此填写启动命令，应用会自动拉起并等待端口就绪后再连接；留空则视为纯远程连接，行为与之前一致。';
+
+  @override
   String get skillsEmptyHint => '点击下方按钮导入 ZIP 技能包';
 
   @override
@@ -3379,4 +3389,149 @@ class SZh extends S {
 
   @override
   String get chatLoopAutoApproveHint => 'Loop 模式下工具操作将自动执行，无需逐次确认。';
+
+  @override
+  String get servicesKbTab => '知识库';
+
+  @override
+  String get kbSectionHint =>
+      '按主题/项目组织的文档知识库。导入文档后由指定嵌入模型解析入库（炼丹），可在对话或工作目录中检索。每个知识库的嵌入模型创建后不可修改。';
+
+  @override
+  String get kbEmpty => '还没有知识库';
+
+  @override
+  String get kbEmptyHint => '新建一个知识库，导入文档开始构建你的专属知识';
+
+  @override
+  String get kbCreate => '新建知识库';
+
+  @override
+  String get kbCreateTitle => '新建知识库';
+
+  @override
+  String get kbEditTitle => '编辑知识库';
+
+  @override
+  String get kbNameLabel => '名称';
+
+  @override
+  String get kbNameHint => '例如：Flutter 开发知识库';
+
+  @override
+  String get kbDescLabel => '描述（可选）';
+
+  @override
+  String get kbDescHint => '这个知识库收录了什么内容';
+
+  @override
+  String get kbEmbeddingLabel => '嵌入模型';
+
+  @override
+  String get kbEmbeddingLocked => '嵌入模型创建后不可修改';
+
+  @override
+  String get kbEmbeddingPickHint => '请选择一个嵌入模型';
+
+  @override
+  String get kbNoEmbeddingConfigured => '尚未配置任何嵌入模型，请先到「嵌入模型」设置中添加';
+
+  @override
+  String get kbNameRequired => '请填写知识库名称';
+
+  @override
+  String get kbEmbeddingRequired => '请选择嵌入模型';
+
+  @override
+  String get kbDeleteTitle => '删除知识库';
+
+  @override
+  String kbDeleteConfirm(String name) {
+    return '确定要删除知识库「$name」吗？其所有文档与已入库的向量都会被清除，此操作不可撤销。';
+  }
+
+  @override
+  String kbDocCount(Object count) {
+    return '$count 篇文档';
+  }
+
+  @override
+  String get kbManageDocs => '管理文档';
+
+  @override
+  String get kbImportDocs => '导入文档';
+
+  @override
+  String kbDocsTitle(String name) {
+    return '「$name」的文档';
+  }
+
+  @override
+  String get kbDocsEmpty => '还没有文档，点击「导入文档」添加';
+
+  @override
+  String get kbDocStatusPending => '待解析';
+
+  @override
+  String get kbDocStatusIndexing => '解析中';
+
+  @override
+  String get kbDocStatusDone => '已入库';
+
+  @override
+  String get kbDocStatusFailed => '失败';
+
+  @override
+  String kbDocChunks(Object count) {
+    return '$count 块';
+  }
+
+  @override
+  String get kbDocRetry => '重试';
+
+  @override
+  String get kbDocDelete => '删除';
+
+  @override
+  String kbDocDeleteConfirm(String name) {
+    return '确定删除文档「$name」？其向量块会一并清除。';
+  }
+
+  @override
+  String get kbImportPickTitle => '选择要导入的文档';
+
+  @override
+  String get kbQdrantHint => '知识库需要向量库(Qdrant)运行，导入时会自动启动。';
+
+  @override
+  String kbDimension(Object dim) {
+    return '$dim 维';
+  }
+
+  @override
+  String get kbImporting => '解析中…';
+
+  @override
+  String get kbStartIndex => '开始解析';
+
+  @override
+  String get kbCloseBackground => '后台加载并关闭';
+
+  @override
+  String get kbImportDir => '导入目录';
+
+  @override
+  String get kbImportDirPick => '选择要导入的文件夹';
+
+  @override
+  String get kbImportDirEmpty => '该目录下没有找到可导入的文档文件';
+
+  @override
+  String get settingsKbPathTitle => '知识库存储目录';
+
+  @override
+  String get settingsKbPathDesc => '知识库导入的文档副本存放位置。修改后已有文档会迁移到新目录。';
+
+  @override
+  String get settingsRootPath => '数据根目录 (.RemindAI)';
 }

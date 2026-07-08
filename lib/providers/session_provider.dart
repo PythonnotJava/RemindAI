@@ -18,6 +18,9 @@ final sessionSearchProvider = StateProvider<SearchProvider>((ref) {
   return SearchProvider.none;
 });
 
+/// 本次对话选中的知识库 ID 列表 (多选，空列表 = 未接入知识库)
+final sessionKnowledgeBasesProvider = StateProvider<List<String>>((ref) => []);
+
 /// 当前活跃的隔离工作树绝对路径。空字符串 = 未处于隔离状态(正常操作主工作目录)。
 ///
 /// 由 LLM 通过 `toolshell_worktree_start` / `toolshell_worktree_finish` 工具

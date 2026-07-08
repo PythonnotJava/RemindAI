@@ -20,11 +20,11 @@
     "type": "function",
     "function": {
       "name": "toolshell_write",
-      "description": "写入文件。支持新建、覆盖、追加。自动创建父目录。",
+      "description": "写入文件。支持新建、覆盖、追加。自动创建父目录。除非用户明确要求写到其他位置，否则默认使用相对于项目根目录的路径，不要自行拼接绝对路径。",
       "parameters": {
         "type": "object",
         "properties": {
-          "path": {"type": "string", "description": "目标文件路径"},
+          "path": {"type": "string", "description": "目标文件路径(相对于项目根目录；无特殊要求时不要使用绝对路径)"},
           "content": {"type": "string", "description": "写入内容"},
           "mode": {"type": "string", "enum": ["create", "overwrite", "append"]}
         },
@@ -40,7 +40,7 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "path": {"type": "string", "description": "目标路径"},
+          "path": {"type": "string", "description": "目标路径(相对于项目根目录)"},
           "recursive": {"type": "boolean", "default": false}
         },
         "required": ["path"]

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/l10n/l10n_ext.dart';
 import '../../core/utils/directory_picker.dart';
@@ -49,27 +50,11 @@ class SettingsPage extends ConsumerWidget {
               _SectionHeader(title: s.settingsStorage),
               const SizedBox(height: 12),
               _PathSettingTile(
-                label: s.settingsDatabasePath,
-                currentPath: settings.databasePath,
-                onChangePressed: () => _pickDatabasePath(context, ref),
-              ),
-              const SizedBox(height: 12),
-              _PathSettingTile(
-                label: s.settingsHistoryPath,
-                currentPath: settings.historyPath,
-                onChangePressed: () => _pickHistoryPath(context, ref),
-              ),
-              const SizedBox(height: 12),
-              _PathSettingTile(
-                label: s.settingsSkillsPath,
-                currentPath: settings.skillsPath,
-                onChangePressed: () => _pickSkillsPath(context, ref),
-              ),
-              const SizedBox(height: 12),
-              _PathSettingTile(
-                label: s.settingsLogsPath,
-                currentPath: settings.logsPath,
-                onChangePressed: () => _pickLogsPath(context, ref),
+                label: s.settingsRootPath,
+                currentPath: settings.databasePath.isNotEmpty
+                    ? _extractRootDir(settings.databasePath)
+                    : '',
+                onChangePressed: () => _pickRootDir(context, ref),
               ),
               const SizedBox(height: 32),
               _SectionHeader(title: s.settingsToolPaths),
@@ -103,59 +88,45 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _pickDatabasePath(BuildContext context, WidgetRef ref) async {
-    final result = await FilePicker.platform.saveFile(
-      dialogTitle: '选择数据库保存位置',
-      fileName: 'remind_ai.db',
-      type: FileType.any,
-    );
-    if (result == null) return;
-    if (!context.mounted) return;
-
-    _showMigrationDialog(context);
-    try {
-      await ref.read(settingsProvider.notifier).updateDatabasePath(result);
-    } finally {
-      if (context.mounted) Navigator.of(context).pop();
-    }
+  /// 从数据库路径中解析 .RemindAI 的父目录
+  /// (数据库路径形如 `<parent>/.RemindAI/sqlite/remind_ai.db`)
+  static String _extractRootDir(String dbPath) {
+    // 向上三级: sqlite/remind_ai.db → .RemindAI → parent
+    return p.dirname(p.dirname(p.dirname(dbPath)));
   }
 
-  Future<void> _pickHistoryPath(BuildContext context, WidgetRef ref) async {
-    final result = await pickDirectory(dialogTitle: '选择历史记录保存目录');
+  Future<void> _pickRootDir(BuildContext context, WidgetRef ref) async {
+    final result = await pickDirectory(dialogTitle: '选择 .RemindAI 数据根目录');
     if (result == null) return;
     if (!context.mounted) return;
 
     _showMigrationDialog(context);
     try {
-      await ref.read(settingsProvider.notifier).updateHistoryPath(result);
-    } finally {
-      if (context.mounted) Navigator.of(context).pop();
-    }
-  }
-
-  Future<void> _pickSkillsPath(BuildContext context, WidgetRef ref) async {
-    final result = await pickDirectory(dialogTitle: '选择技能存放目录');
-    if (result == null) return;
-    if (!context.mounted) return;
-
-    _showMigrationDialog(context);
-    try {
-      await ref.read(settingsProvider.notifier).updateSkillsPath(result);
-      // 迁移后刷新技能列表
+      await ref.read(settingsProvider.notifier).updateRootDir(result);
       ref.invalidate(skillsProvider);
-    } finally {
-      if (context.mounted) Navigator.of(context).pop();
-    }
-  }
-
-  Future<void> _pickLogsPath(BuildContext context, WidgetRef ref) async {
-    final result = await pickDirectory(dialogTitle: '选择日志存放目录');
-    if (result == null) return;
-    if (!context.mounted) return;
-
-    _showMigrationDialog(context);
-    try {
-      await ref.read(settingsProvider.notifier).updateLogsPath(result);
+    } on MigrationException catch (e) {
+      // 迁移失败已回退，提示用户
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 8),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('迁移失败: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
     } finally {
       if (context.mounted) Navigator.of(context).pop();
     }
@@ -175,41 +146,77 @@ class SettingsPage extends ConsumerWidget {
   }
 
   void _showMigrationDialog(BuildContext context) {
-    final s = context.s;
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: Dialog(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 24),
-                Text(
-                  s.settingsMigrating,
-                  style: Theme.of(ctx).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  s.settingsMigratingHint,
-                  style: TextStyle(
-                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      builder: (ctx) =>
+          PopScope(canPop: false, child: const _MigrationProgressDialog()),
     );
   }
 }
 
 // --- Private widgets ---
+
+/// 迁移进度对话框 — 实时显示文件复制进度
+class _MigrationProgressDialog extends ConsumerWidget {
+  const _MigrationProgressDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref.watch(migrationProgressProvider);
+    final s = context.s;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Dialog(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              s.settingsMigrating,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress.total > 0 ? progress.fraction : null,
+                minHeight: 8,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (progress.total > 0)
+              Text(
+                '${progress.completed} / ${progress.total}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            if (progress.currentFile.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                progress.currentFile,
+                style: TextStyle(fontSize: 12, color: colorScheme.outline),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              s.settingsMigratingHint,
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _SectionHeader extends StatelessWidget {
   final String title;

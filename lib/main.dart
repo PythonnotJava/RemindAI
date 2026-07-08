@@ -48,6 +48,7 @@ Future<void> main() async {
 
       // 配置数据库和 Qdrant 路径
       if (settings != null) {
+        AppSettings.initRootDir(settings);
         if (settings.databasePath.isNotEmpty) {
           DatabaseHelper.configurePath(settings.databasePath);
         }

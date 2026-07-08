@@ -74,6 +74,37 @@ final chatFontSizeProvider = StateProvider<double>((ref) {
   return settings?.chatFontSize ?? 14.0;
 });
 
+/// 迁移进度状态 (settings_page 迁移对话框 watch)
+class MigrationProgress {
+  final int total; // 总文件数
+  final int completed; // 已复制文件数
+  final String currentFile; // 当前正在复制的文件名
+  final bool running;
+
+  const MigrationProgress({
+    this.total = 0,
+    this.completed = 0,
+    this.currentFile = '',
+    this.running = false,
+  });
+
+  double get fraction => total > 0 ? completed / total : 0;
+}
+
+/// 迁移进度 Provider — 由 SettingsNotifier.updateRootDir 驱动
+final migrationProgressProvider = StateProvider<MigrationProgress>((ref) {
+  return const MigrationProgress();
+});
+
+/// 迁移失败异常 — 已自动回退，携带可读错误信息供 UI 展示
+class MigrationException implements Exception {
+  final String message;
+  MigrationException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 final settingsProvider = AsyncNotifierProvider<SettingsNotifier, AppSettings>(
   SettingsNotifier.new,
 );
@@ -137,6 +168,76 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     }
   }
 
+  /// 整体迁移 .RemindAI 根目录。
+  ///
+  /// [newParent] 是用户选择的父目录，实际数据存放在 `<newParent>/.RemindAI` 下。
+  /// 将旧根目录整体复制到新位置，然后重新计算各子目录路径并保存。
+  /// 同时重连数据库到新路径。迁移期间驱动 [migrationProgressProvider]。
+  ///
+  /// 迁移策略:
+  /// - 复制阶段任何文件失败 → 清除已复制内容(回退) → 抛 [MigrationException]
+  /// - 复制成功后先关闭 DB、切换路径、保存设置，最后再删旧目录
+  /// - 删旧目录失败(文件被占用等) → 不影响迁移结果，仅日志警告
+  Future<void> updateRootDir(String newParent) => _serialized(() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    // 用户选择的是父目录，实际根为 <parent>/.RemindAI
+    final newRoot = p.join(newParent, '.RemindAI');
+
+    // 从数据库路径推算旧根: databasePath = <root>/sqlite/remind_ai.db
+    final oldRoot = p.dirname(p.dirname(current.databasePath));
+    if (p.equals(oldRoot, newRoot)) return;
+
+    // 先关闭数据库连接 (避免文件被占用导致迁移/删除失败)
+    DatabaseHelper.instance.close();
+
+    // 整体迁移目录 (带进度，失败自动回退) — 只复制不删除旧目录
+    try {
+      await _migrateDirectoryWithProgress(oldRoot, newRoot);
+    } catch (e) {
+      // 回退失败: 重新连接旧路径的数据库
+      DatabaseHelper.configurePath(current.databasePath);
+      rethrow;
+    }
+
+    // 重新计算各子路径
+    final newDbPath = p.join(newRoot, 'sqlite', 'remind_ai.db');
+    final newHistoryPath = p.join(newRoot, 'history');
+    final newSkillsPath = p.join(newRoot, 'skills');
+    final newKbPath = p.join(newRoot, 'knowledge_base');
+    final newLogsPath = p.join(newRoot, 'logs');
+
+    // 重连数据库到新路径
+    DatabaseHelper.configurePath(newDbPath);
+
+    // 通知 Logger 切换目录
+    await AppLogger.instance.updateLogDir(newLogsPath);
+
+    final updated = current.copyWith(
+      databasePath: newDbPath,
+      historyPath: newHistoryPath,
+      skillsPath: newSkillsPath,
+      knowledgeBasePath: newKbPath,
+      logsPath: newLogsPath,
+    );
+    await updated.save();
+    AppSettings.initRootDir(updated);
+    state = AsyncData(updated);
+
+    // 所有资源已切换完毕，延迟一小段时间再删旧目录
+    // (等 Windows 释放残留句柄)
+    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      final oldDir = Directory(oldRoot);
+      if (await oldDir.exists()) {
+        await oldDir.delete(recursive: true);
+      }
+    } catch (e) {
+      AppLogger.instance.log('[Settings] 旧目录删除失败 (可手动删除 $oldRoot): $e');
+    }
+  });
+
   Future<void> updateDatabasePath(String newPath) => _serialized(() async {
     final current = state.valueOrNull;
     if (current == null) return;
@@ -192,6 +293,22 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     await _migrateDirectory(oldPath, newPath);
 
     final updated = current.copyWith(skillsPath: newPath);
+    await updated.save();
+    state = AsyncData(updated);
+  });
+
+  /// 更新知识库存储目录 (迁移已导入的文档副本到新路径)
+  Future<void> updateKnowledgeBasePath(String newPath) => _serialized(() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    final oldPath = current.knowledgeBasePath;
+    if (oldPath == newPath) return;
+
+    // 迁移: 复制旧知识库目录到新路径
+    await _migrateDirectory(oldPath, newPath);
+
+    final updated = current.copyWith(knowledgeBasePath: newPath);
     await updated.save();
     state = AsyncData(updated);
   });
@@ -403,6 +520,84 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
 
     await oldFile.copy(newPath);
     await oldFile.delete();
+  }
+
+  /// 带真实进度的目录迁移 (用于根目录整体搬迁)。
+  ///
+  /// 只负责复制，不删除旧目录 (删除由调用方在所有资源切换后执行)。
+  /// 复制阶段任何文件失败 → 清除已复制的新目录(回退) → 抛出异常。
+  Future<void> _migrateDirectoryWithProgress(
+    String oldPath,
+    String newPath,
+  ) async {
+    final oldDir = Directory(oldPath);
+    if (!await oldDir.exists()) return;
+
+    final progress = ref.read(migrationProgressProvider.notifier);
+
+    // 统计总文件数
+    final files = <File>[];
+    await for (final entity in oldDir.list(recursive: true)) {
+      if (entity is File) files.add(entity);
+    }
+    final total = files.length;
+    progress.state = MigrationProgress(
+      total: total,
+      completed: 0,
+      running: true,
+    );
+
+    final newDir = Directory(newPath);
+    if (!await newDir.exists()) {
+      await newDir.create(recursive: true);
+    }
+
+    // 先创建所有子目录
+    await for (final entity in oldDir.list(recursive: true)) {
+      if (entity is Directory) {
+        final relativePath = p.relative(entity.path, from: oldPath);
+        final destDir = Directory(p.join(newPath, relativePath));
+        if (!await destDir.exists()) {
+          await destDir.create(recursive: true);
+        }
+      }
+    }
+
+    // 逐文件复制 — 任何失败立即回退
+    int completed = 0;
+    try {
+      for (final file in files) {
+        final relativePath = p.relative(file.path, from: oldPath);
+        final newFilePath = p.join(newPath, relativePath);
+        final destDir = Directory(p.dirname(newFilePath));
+        if (!await destDir.exists()) {
+          await destDir.create(recursive: true);
+        }
+        await file.copy(newFilePath);
+        completed++;
+        progress.state = MigrationProgress(
+          total: total,
+          completed: completed,
+          currentFile: p.basename(file.path),
+          running: true,
+        );
+      }
+    } catch (e) {
+      // 复制失败: 清除已复制的新目录 (回退)
+      progress.state = const MigrationProgress();
+      try {
+        if (await newDir.exists()) {
+          await newDir.delete(recursive: true);
+        }
+      } catch (_) {}
+      throw MigrationException('迁移失败，已回退。原因: $e');
+    }
+
+    progress.state = MigrationProgress(
+      total: total,
+      completed: total,
+      running: false,
+    );
   }
 
   Future<void> _migrateDirectory(String oldPath, String newPath) async {

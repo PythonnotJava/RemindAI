@@ -1500,6 +1500,16 @@ class SEn extends S {
   String get mcpStreamableHint => 'e.g. http://localhost:3000/mcp';
 
   @override
+  String get mcpFormCommandOptional => 'Launch command (optional)';
+
+  @override
+  String get mcpLocalProcessSectionTitle => 'Local process (optional)';
+
+  @override
+  String get mcpLocalProcessSectionHint =>
+      'If this server needs a local process started before it can be reached, fill in the launch command here. The app will start it and wait for the port to be ready before connecting. Leave blank for a pure remote connection, same as before.';
+
+  @override
   String get skillsEmptyHint =>
       'Tap the button below to import a ZIP skill package';
 
@@ -3466,4 +3476,155 @@ class SEn extends S {
   @override
   String get chatLoopAutoApproveHint =>
       'In Loop mode, tool operations execute automatically without per-action confirmation.';
+
+  @override
+  String get servicesKbTab => 'Knowledge Base';
+
+  @override
+  String get kbSectionHint =>
+      'Document knowledge bases organized by topic/project. Imported documents are parsed and indexed by a chosen embedding model, then retrievable in chats or working directories. Each KB\'s embedding model is fixed after creation.';
+
+  @override
+  String get kbEmpty => 'No knowledge bases yet';
+
+  @override
+  String get kbEmptyHint =>
+      'Create a knowledge base and import documents to start building your knowledge';
+
+  @override
+  String get kbCreate => 'New Knowledge Base';
+
+  @override
+  String get kbCreateTitle => 'New Knowledge Base';
+
+  @override
+  String get kbEditTitle => 'Edit Knowledge Base';
+
+  @override
+  String get kbNameLabel => 'Name';
+
+  @override
+  String get kbNameHint => 'e.g. Flutter Development KB';
+
+  @override
+  String get kbDescLabel => 'Description (optional)';
+
+  @override
+  String get kbDescHint => 'What this knowledge base contains';
+
+  @override
+  String get kbEmbeddingLabel => 'Embedding Model';
+
+  @override
+  String get kbEmbeddingLocked =>
+      'Embedding model cannot be changed after creation';
+
+  @override
+  String get kbEmbeddingPickHint => 'Select an embedding model';
+
+  @override
+  String get kbNoEmbeddingConfigured =>
+      'No embedding model configured. Add one in Embedding Model settings first.';
+
+  @override
+  String get kbNameRequired => 'Please enter a name';
+
+  @override
+  String get kbEmbeddingRequired => 'Please select an embedding model';
+
+  @override
+  String get kbDeleteTitle => 'Delete Knowledge Base';
+
+  @override
+  String kbDeleteConfirm(String name) {
+    return 'Delete knowledge base \"$name\"? All its documents and indexed vectors will be removed. This cannot be undone.';
+  }
+
+  @override
+  String kbDocCount(Object count) {
+    return '$count documents';
+  }
+
+  @override
+  String get kbManageDocs => 'Manage Documents';
+
+  @override
+  String get kbImportDocs => 'Import Documents';
+
+  @override
+  String kbDocsTitle(String name) {
+    return 'Documents in \"$name\"';
+  }
+
+  @override
+  String get kbDocsEmpty =>
+      'No documents yet. Click \"Import Documents\" to add.';
+
+  @override
+  String get kbDocStatusPending => 'Pending';
+
+  @override
+  String get kbDocStatusIndexing => 'Indexing';
+
+  @override
+  String get kbDocStatusDone => 'Indexed';
+
+  @override
+  String get kbDocStatusFailed => 'Failed';
+
+  @override
+  String kbDocChunks(Object count) {
+    return '$count chunks';
+  }
+
+  @override
+  String get kbDocRetry => 'Retry';
+
+  @override
+  String get kbDocDelete => 'Delete';
+
+  @override
+  String kbDocDeleteConfirm(String name) {
+    return 'Delete document \"$name\"? Its vector chunks will be removed too.';
+  }
+
+  @override
+  String get kbImportPickTitle => 'Select documents to import';
+
+  @override
+  String get kbQdrantHint =>
+      'Knowledge base requires the vector DB (Qdrant) running; it starts automatically on import.';
+
+  @override
+  String kbDimension(Object dim) {
+    return '$dim dims';
+  }
+
+  @override
+  String get kbImporting => 'Indexing…';
+
+  @override
+  String get kbStartIndex => 'Start Indexing';
+
+  @override
+  String get kbCloseBackground => 'Load in Background & Close';
+
+  @override
+  String get kbImportDir => 'Import Folder';
+
+  @override
+  String get kbImportDirPick => 'Select folder to import';
+
+  @override
+  String get kbImportDirEmpty => 'No importable documents found in this folder';
+
+  @override
+  String get settingsKbPathTitle => 'Knowledge Base Storage Directory';
+
+  @override
+  String get settingsKbPathDesc =>
+      'Where imported document copies are stored. Existing documents migrate to the new directory when changed.';
+
+  @override
+  String get settingsRootPath => 'Data Root Directory (.RemindAI)';
 }

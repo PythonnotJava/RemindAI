@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
+import '../settings/app_settings.dart';
 
 class DatabaseHelper {
   static DatabaseHelper? _instance;
@@ -36,9 +36,9 @@ class DatabaseHelper {
     if (_customDbPath != null && _customDbPath!.isNotEmpty) {
       dbPath = _customDbPath!;
     } else {
-      // 默认: 文档目录/.RemindAI/sqlite/remind_ai.db
-      final documentsDir = await getApplicationDocumentsDirectory();
-      dbPath = p.join(documentsDir.path, '.RemindAI', 'sqlite', 'remind_ai.db');
+      // 回退: 从全局根目录获取
+      final root = await AppSettings.getRootDir();
+      dbPath = p.join(root, 'sqlite', 'remind_ai.db');
     }
 
     // 确保目录存在
@@ -169,6 +169,49 @@ class DatabaseHelper {
     db.execute('''
       CREATE INDEX IF NOT EXISTS idx_memory_collection ON memory_entries(collection)
     ''');
+
+    // 知识库表 — 每个知识库指定不可修改的嵌入模型快照，独占一个 Qdrant collection
+    db.execute('''
+      CREATE TABLE IF NOT EXISTS knowledge_bases (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        collection TEXT NOT NULL,
+        embedding_base_url TEXT NOT NULL DEFAULT '',
+        embedding_api_key TEXT NOT NULL DEFAULT '',
+        embedding_model TEXT NOT NULL DEFAULT '',
+        embedding_dimension INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    // 知识库文档表 — 记录每个知识库导入的文档及其解析(炼丹)状态
+    db.execute('''
+      CREATE TABLE IF NOT EXISTS kb_documents (
+        id TEXT PRIMARY KEY,
+        kb_id TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        source_path TEXT NOT NULL DEFAULT '',
+        source_group TEXT NOT NULL DEFAULT '',
+        chunk_count INTEGER NOT NULL DEFAULT 0,
+        char_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        error TEXT NOT NULL DEFAULT '',
+        imported_at TEXT NOT NULL,
+        FOREIGN KEY (kb_id) REFERENCES knowledge_bases(id)
+      )
+    ''');
+    db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_kb_documents_kb ON kb_documents(kb_id)
+    ''');
+
+    // 迁移: 为已有 kb_documents 表添加 source_group 列
+    _migrateAddColumn(
+      db,
+      'kb_documents',
+      'source_group',
+      "TEXT NOT NULL DEFAULT ''",
+    );
   }
 
   /// 通用：为指定表添加缺失的列。

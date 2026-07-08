@@ -8,9 +8,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/font/custom_font_loader.dart';
+import 'core/logger/app_logger.dart';
 import 'core/shortcuts/shortcut_config.dart';
 import 'l10n/app_localizations.dart';
 import 'core/l10n/l10n_ext.dart';
+import 'providers/mcp_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/api_server_provider.dart';
 import 'features/online_service/online_service_provider.dart';
@@ -288,8 +290,14 @@ class _WindowWrapperState extends ConsumerState<_WindowWrapper>
         _toggleOnlineService();
         break;
       case 'exit':
-        windowManager.setPreventClose(false);
-        windowManager.close();
+        // 这里先关闭 preventClose 再 close()，走的是"直接原生关闭"路径，
+        // 不保证 onWindowClose 监听器一定会被触发去做清理，所以清理动作
+        // 显式放在这里做一遍 (与 onWindowClose 里的清理逻辑重复调用是安全的，
+        // disconnectAll 对已清空的状态是幂等操作)。
+        _cleanupBeforeExit().whenComplete(() {
+          windowManager.setPreventClose(false);
+          windowManager.close();
+        });
         break;
     }
   }
@@ -302,9 +310,26 @@ class _WindowWrapperState extends ConsumerState<_WindowWrapper>
     if (shouldMinimize) {
       await windowManager.hide();
     } else {
+      await _cleanupBeforeExit();
       await trayManager.destroy();
       await windowManager.setPreventClose(false);
       await windowManager.close();
+    }
+  }
+
+  /// 真正退出前的收尾清理——目前主要是 MCP 连接：stdio 模式的子进程、
+  /// SSE/HTTP 模式下应用代为拉起的本地进程，若不在这里显式断开，
+  /// 单靠 Riverpod 容器 dispose 并不保证会在窗口关闭流程里被同步触发，
+  /// 遗留下来会变成占着端口/常驻后台的僵尸进程。加超时兜底，避免某个
+  /// 进程杀不掉时把整个退出流程卡住。
+  Future<void> _cleanupBeforeExit() async {
+    try {
+      await ref
+          .read(mcpConnectionsProvider.notifier)
+          .disconnectAll()
+          .timeout(const Duration(seconds: 5));
+    } catch (e) {
+      AppLogger.instance.log('[App] 退出前清理 MCP 连接异常(已忽略，继续退出): $e');
     }
   }
 

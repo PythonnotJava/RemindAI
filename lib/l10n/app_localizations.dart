@@ -2839,6 +2839,24 @@ abstract class S {
   /// **'如: http://localhost:3000/mcp'**
   String get mcpStreamableHint;
 
+  /// No description provided for @mcpFormCommandOptional.
+  ///
+  /// In zh, this message translates to:
+  /// **'启动命令 (可选)'**
+  String get mcpFormCommandOptional;
+
+  /// No description provided for @mcpLocalProcessSectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'本地进程 (可选)'**
+  String get mcpLocalProcessSectionTitle;
+
+  /// No description provided for @mcpLocalProcessSectionHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'若该服务需要先手动启动一个本地进程才能连接，可在此填写启动命令，应用会自动拉起并等待端口就绪后再连接；留空则视为纯远程连接，行为与之前一致。'**
+  String get mcpLocalProcessSectionHint;
+
   /// No description provided for @skillsEmptyHint.
   ///
   /// In zh, this message translates to:
@@ -6408,6 +6426,270 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'Loop 模式下工具操作将自动执行，无需逐次确认。'**
   String get chatLoopAutoApproveHint;
+
+  /// No description provided for @servicesKbTab.
+  ///
+  /// In zh, this message translates to:
+  /// **'知识库'**
+  String get servicesKbTab;
+
+  /// No description provided for @kbSectionHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'按主题/项目组织的文档知识库。导入文档后由指定嵌入模型解析入库（炼丹），可在对话或工作目录中检索。每个知识库的嵌入模型创建后不可修改。'**
+  String get kbSectionHint;
+
+  /// No description provided for @kbEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有知识库'**
+  String get kbEmpty;
+
+  /// No description provided for @kbEmptyHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建一个知识库，导入文档开始构建你的专属知识'**
+  String get kbEmptyHint;
+
+  /// No description provided for @kbCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建知识库'**
+  String get kbCreate;
+
+  /// No description provided for @kbCreateTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建知识库'**
+  String get kbCreateTitle;
+
+  /// No description provided for @kbEditTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑知识库'**
+  String get kbEditTitle;
+
+  /// No description provided for @kbNameLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称'**
+  String get kbNameLabel;
+
+  /// No description provided for @kbNameHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：Flutter 开发知识库'**
+  String get kbNameHint;
+
+  /// No description provided for @kbDescLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'描述（可选）'**
+  String get kbDescLabel;
+
+  /// No description provided for @kbDescHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个知识库收录了什么内容'**
+  String get kbDescHint;
+
+  /// No description provided for @kbEmbeddingLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'嵌入模型'**
+  String get kbEmbeddingLabel;
+
+  /// No description provided for @kbEmbeddingLocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'嵌入模型创建后不可修改'**
+  String get kbEmbeddingLocked;
+
+  /// No description provided for @kbEmbeddingPickHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择一个嵌入模型'**
+  String get kbEmbeddingPickHint;
+
+  /// No description provided for @kbNoEmbeddingConfigured.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未配置任何嵌入模型，请先到「嵌入模型」设置中添加'**
+  String get kbNoEmbeddingConfigured;
+
+  /// No description provided for @kbNameRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请填写知识库名称'**
+  String get kbNameRequired;
+
+  /// No description provided for @kbEmbeddingRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择嵌入模型'**
+  String get kbEmbeddingRequired;
+
+  /// No description provided for @kbDeleteTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除知识库'**
+  String get kbDeleteTitle;
+
+  /// No description provided for @kbDeleteConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定要删除知识库「{name}」吗？其所有文档与已入库的向量都会被清除，此操作不可撤销。'**
+  String kbDeleteConfirm(String name);
+
+  /// No description provided for @kbDocCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 篇文档'**
+  String kbDocCount(Object count);
+
+  /// No description provided for @kbManageDocs.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理文档'**
+  String get kbManageDocs;
+
+  /// No description provided for @kbImportDocs.
+  ///
+  /// In zh, this message translates to:
+  /// **'导入文档'**
+  String get kbImportDocs;
+
+  /// No description provided for @kbDocsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'「{name}」的文档'**
+  String kbDocsTitle(String name);
+
+  /// No description provided for @kbDocsEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有文档，点击「导入文档」添加'**
+  String get kbDocsEmpty;
+
+  /// No description provided for @kbDocStatusPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'待解析'**
+  String get kbDocStatusPending;
+
+  /// No description provided for @kbDocStatusIndexing.
+  ///
+  /// In zh, this message translates to:
+  /// **'解析中'**
+  String get kbDocStatusIndexing;
+
+  /// No description provided for @kbDocStatusDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已入库'**
+  String get kbDocStatusDone;
+
+  /// No description provided for @kbDocStatusFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'失败'**
+  String get kbDocStatusFailed;
+
+  /// No description provided for @kbDocChunks.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 块'**
+  String kbDocChunks(Object count);
+
+  /// No description provided for @kbDocRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get kbDocRetry;
+
+  /// No description provided for @kbDocDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get kbDocDelete;
+
+  /// No description provided for @kbDocDeleteConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定删除文档「{name}」？其向量块会一并清除。'**
+  String kbDocDeleteConfirm(String name);
+
+  /// No description provided for @kbImportPickTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择要导入的文档'**
+  String get kbImportPickTitle;
+
+  /// No description provided for @kbQdrantHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'知识库需要向量库(Qdrant)运行，导入时会自动启动。'**
+  String get kbQdrantHint;
+
+  /// No description provided for @kbDimension.
+  ///
+  /// In zh, this message translates to:
+  /// **'{dim} 维'**
+  String kbDimension(Object dim);
+
+  /// No description provided for @kbImporting.
+  ///
+  /// In zh, this message translates to:
+  /// **'解析中…'**
+  String get kbImporting;
+
+  /// No description provided for @kbStartIndex.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始解析'**
+  String get kbStartIndex;
+
+  /// No description provided for @kbCloseBackground.
+  ///
+  /// In zh, this message translates to:
+  /// **'后台加载并关闭'**
+  String get kbCloseBackground;
+
+  /// No description provided for @kbImportDir.
+  ///
+  /// In zh, this message translates to:
+  /// **'导入目录'**
+  String get kbImportDir;
+
+  /// No description provided for @kbImportDirPick.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择要导入的文件夹'**
+  String get kbImportDirPick;
+
+  /// No description provided for @kbImportDirEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'该目录下没有找到可导入的文档文件'**
+  String get kbImportDirEmpty;
+
+  /// No description provided for @settingsKbPathTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'知识库存储目录'**
+  String get settingsKbPathTitle;
+
+  /// No description provided for @settingsKbPathDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'知识库导入的文档副本存放位置。修改后已有文档会迁移到新目录。'**
+  String get settingsKbPathDesc;
+
+  /// No description provided for @settingsRootPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据根目录 (.RemindAI)'**
+  String get settingsRootPath;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

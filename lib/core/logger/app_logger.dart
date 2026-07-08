@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import '../settings/app_settings.dart';
 
 /// 应用日志服务 — 拦截所有 print 输出并写入日志文件
 ///
-/// 日志存储在可配置目录下（默认 ~/.RemindAI/logs/），按日期分文件。
+/// 日志存储在可配置目录下（默认 <rootDir>/logs/），按日期分文件。
 /// 支持查看、清空操作，由日志页面调用。
 class AppLogger {
   AppLogger._();
@@ -21,8 +21,8 @@ class AppLogger {
     if (customLogDir != null && customLogDir.isNotEmpty) {
       _logDir = customLogDir;
     } else {
-      final documentsDir = await getApplicationDocumentsDirectory();
-      _logDir = p.join(documentsDir.path, '.RemindAI', 'logs');
+      final root = await AppSettings.getRootDir();
+      _logDir = p.join(root, 'logs');
     }
     await Directory(_logDir).create(recursive: true);
     _initialized = true;

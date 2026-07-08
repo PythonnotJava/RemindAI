@@ -328,17 +328,29 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   /// 清理 _agentMessages 中不完整的 tool_calls 链
   /// OpenAI 协议要求: assistant(tool_calls) 后必须紧跟对应数量的 tool messages
+  /// 清理 _agentMessages 尾部不完整的 tool_calls 序列。
+  ///
+  /// 中断对话时 AgentLoop 可能已写入 assistant(tool_calls) + 部分 tool 回复。
+  /// API 要求每个 tool_call 都有对应的 tool response，否则 400。
+  /// 此方法从尾部向前清理，直到消息序列合法。
   void _sanitizeAgentMessages() {
     while (_agentMessages.isNotEmpty) {
       final last = _agentMessages.last;
       final role = last['role'] as String?;
-      final toolCalls = last['tool_calls'] as List?;
 
-      // 如果最后一条是带 tool_calls 的 assistant → 后面缺 tool messages，删掉
+      // 尾部是 tool message → 可能是不完整序列的一部分，先摘掉
+      if (role == 'tool') {
+        _agentMessages.removeLast();
+        continue;
+      }
+
+      // 尾部是带 tool_calls 的 assistant → 后面缺 tool messages，删掉
+      final toolCalls = last['tool_calls'] as List?;
       if (role == 'assistant' && toolCalls != null && toolCalls.isNotEmpty) {
         _agentMessages.removeLast();
         continue;
       }
+
       break;
     }
   }
@@ -981,6 +993,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _subscription = null;
     // 中断前刷净缓冲，保留已生成的部分输出
     _flushStreamBuffer();
+    // 清理 AgentLoop 可能已写入的不完整 tool_calls 序列
+    _sanitizeAgentMessages();
 
     final partial = state.streamingText;
     final convId = state.currentConversationId;

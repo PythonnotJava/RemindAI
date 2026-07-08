@@ -77,9 +77,28 @@ class EmbeddingConfig {
 }
 
 class AppSettings {
+  /// 当前 .RemindAI 根目录 (main 启动时设置一次，全局可读)。
+  /// 所有需要根目录的代码从这里取，不再各自硬编码默认路径。
+  static String? _rootDir;
+
+  /// 获取当前根目录。若未初始化则回退到默认路径。
+  static Future<String> getRootDir() async {
+    if (_rootDir != null && _rootDir!.isNotEmpty) return _rootDir!;
+    return await defaultRootDir;
+  }
+
+  /// main 启动时从已加载的 settings 中设置根目录 (从 databasePath 推算)。
+  static void initRootDir(AppSettings settings) {
+    if (settings.databasePath.isNotEmpty) {
+      // databasePath = <root>/sqlite/remind_ai.db → root = 上两级
+      _rootDir = p.dirname(p.dirname(settings.databasePath));
+    }
+  }
+
   final String databasePath;
   final String historyPath;
   final String skillsPath; // 技能存放目录
+  final String knowledgeBasePath; // 知识库存放目录 (导入文档副本)
   final String logsPath; // 日志存放目录
   final String pandocPath;
   final String workingDirectory; // 工作目录
@@ -100,6 +119,7 @@ class AppSettings {
     required this.databasePath,
     required this.historyPath,
     required this.skillsPath,
+    this.knowledgeBasePath = '',
     required this.logsPath,
     required this.pandocPath,
     this.workingDirectory = '',
@@ -132,6 +152,7 @@ class AppSettings {
     String? databasePath,
     String? historyPath,
     String? skillsPath,
+    String? knowledgeBasePath,
     String? logsPath,
     String? pandocPath,
     String? workingDirectory,
@@ -152,6 +173,7 @@ class AppSettings {
       databasePath: databasePath ?? this.databasePath,
       historyPath: historyPath ?? this.historyPath,
       skillsPath: skillsPath ?? this.skillsPath,
+      knowledgeBasePath: knowledgeBasePath ?? this.knowledgeBasePath,
       logsPath: logsPath ?? this.logsPath,
       pandocPath: pandocPath ?? this.pandocPath,
       workingDirectory: workingDirectory ?? this.workingDirectory,
@@ -174,6 +196,7 @@ class AppSettings {
     'databasePath': databasePath,
     'historyPath': historyPath,
     'skillsPath': skillsPath,
+    'knowledgeBasePath': knowledgeBasePath,
     'logsPath': logsPath,
     'pandocPath': pandocPath,
     'workingDirectory': workingDirectory,
@@ -223,6 +246,7 @@ class AppSettings {
       databasePath: json['databasePath'] as String? ?? '',
       historyPath: json['historyPath'] as String? ?? '',
       skillsPath: json['skillsPath'] as String? ?? '',
+      knowledgeBasePath: json['knowledgeBasePath'] as String? ?? '',
       logsPath: json['logsPath'] as String? ?? '',
       pandocPath: json['pandocPath'] as String? ?? '',
       workingDirectory: json['workingDirectory'] as String? ?? '',
@@ -271,6 +295,9 @@ class AppSettings {
         skillsPath: settings.skillsPath.isEmpty
             ? defaults.skillsPath
             : settings.skillsPath,
+        knowledgeBasePath: settings.knowledgeBasePath.isEmpty
+            ? defaults.knowledgeBasePath
+            : settings.knowledgeBasePath,
         logsPath: settings.logsPath.isEmpty
             ? defaults.logsPath
             : settings.logsPath,
@@ -320,6 +347,7 @@ class AppSettings {
     final defaultDbPath = p.join(root, 'sqlite', 'remind_ai.db');
     final defaultHistoryPath = p.join(root, 'history');
     final defaultSkillsPath = p.join(root, 'skills');
+    final defaultKnowledgeBasePath = p.join(root, 'knowledge_base');
     final defaultLogsPath = p.join(root, 'logs');
     final pandocPath = await _detectPandoc();
 
@@ -327,6 +355,7 @@ class AppSettings {
       databasePath: defaultDbPath,
       historyPath: defaultHistoryPath,
       skillsPath: defaultSkillsPath,
+      knowledgeBasePath: defaultKnowledgeBasePath,
       logsPath: defaultLogsPath,
       pandocPath: pandocPath,
     );

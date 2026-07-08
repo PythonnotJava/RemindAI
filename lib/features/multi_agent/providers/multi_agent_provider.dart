@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/settings/app_settings.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../core/llm/llm_client.dart';
 import '../../../core/llm/llm_provider.dart';
@@ -172,12 +172,10 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
     }
   }
 
-  /// 获取快照保存目录: 文档目录/.RemindAI/agent_snapshots/
+  /// 获取快照保存目录: <rootDir>/agent_snapshots/
   Future<Directory> _snapshotDir() async {
-    final documentsDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(
-      p.join(documentsDir.path, '.RemindAI', 'agent_snapshots'),
-    );
+    final root = await AppSettings.getRootDir();
+    final dir = Directory(p.join(root, 'agent_snapshots'));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }

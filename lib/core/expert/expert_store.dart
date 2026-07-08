@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import '../settings/app_settings.dart';
 import 'expert.dart';
 
 /// 专家存储服务 — 管理专家配置的持久化
@@ -17,8 +17,8 @@ class ExpertStore {
 
   Future<void> init() async {
     if (_initialized) return;
-    final documentsDir = await getApplicationDocumentsDirectory();
-    _storePath = p.join(documentsDir.path, '.RemindAI', 'experts.json');
+    final root = await AppSettings.getRootDir();
+    _storePath = p.join(root, 'experts.json');
     await _load();
     _initialized = true;
   }

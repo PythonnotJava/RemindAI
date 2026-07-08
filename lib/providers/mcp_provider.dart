@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/logger/app_logger.dart';
+import '../core/mcp/local_process_launcher.dart';
 import '../core/mcp/mcp_client.dart';
 import '../core/mcp/mcp_registry.dart';
 import '../core/mcp/transports/mcp_transport.dart';
@@ -89,21 +92,29 @@ class McpConnectionState {
   final Map<String, McpConnectionStatus> statuses;
   final Map<String, List<Map<String, dynamic>>> toolsCache;
 
+  /// SSE/HTTP 模式下，若配置了 command 而由应用代为拉起的本地进程。
+  /// 只有这类连接才会有条目；纯远程连接 (未配置 command) 或 stdio 模式
+  /// (子进程生命周期已经在 StdioTransport 内部管理) 都不会出现在这里。
+  final Map<String, LocalProcessLauncher> localProcesses;
+
   const McpConnectionState({
     this.clients = const {},
     this.statuses = const {},
     this.toolsCache = const {},
+    this.localProcesses = const {},
   });
 
   McpConnectionState copyWith({
     Map<String, McpClient>? clients,
     Map<String, McpConnectionStatus>? statuses,
     Map<String, List<Map<String, dynamic>>>? toolsCache,
+    Map<String, LocalProcessLauncher>? localProcesses,
   }) {
     return McpConnectionState(
       clients: clients ?? this.clients,
       statuses: statuses ?? this.statuses,
       toolsCache: toolsCache ?? this.toolsCache,
+      localProcesses: localProcesses ?? this.localProcesses,
     );
   }
 }
@@ -126,6 +137,7 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
       statuses: {...state.statuses, config.id: McpConnectionStatus.connecting},
     );
 
+    LocalProcessLauncher? launcher;
     try {
       final client = McpClient();
 
@@ -150,17 +162,70 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
           break;
 
         case McpTransportType.sse:
-          await client.connectSse(
-            url: config.url,
-            headers: config.httpHeaders.isNotEmpty ? config.httpHeaders : null,
-          );
-          break;
-
         case McpTransportType.streamableHttp:
-          await client.connectStreamableHttp(
-            url: config.url,
-            headers: config.httpHeaders.isNotEmpty ? config.httpHeaders : null,
-          );
+          // command 在 SSE/HTTP 模式下是可选的："本地拉起进程"配置——
+          // 部分 MCP server 对外是 SSE/HTTP 接口，但本身要先手动跑一个
+          // 进程才能把端口打开。留空 command 就是纯远程连接，行为和以前
+          // 完全一致；填了才会先拉起进程、等端口就绪，再走 SSE/HTTP 连接。
+          if (config.command.isNotEmpty) {
+            final uri = Uri.tryParse(config.url);
+            if (uri == null) {
+              throw Exception('URL 格式不正确，无法解析出用于探测端口的 host:port');
+            }
+
+            // 先探测一次：如果 url 已经能连上 (用户手动起了进程，或上次的
+            // 进程还没被清理干净)，就不再重复拉起，避免端口冲突导致新
+            // 进程直接崩溃、却又"看似连接成功"(连到了旧进程)的怪异体验。
+            final probe = LocalProcessLauncher();
+            final alreadyUp = await probe.waitForPortOpen(
+              uri,
+              timeout: const Duration(milliseconds: 300),
+              retryInterval: const Duration(milliseconds: 100),
+            );
+
+            if (!alreadyUp) {
+              launcher = LocalProcessLauncher();
+              await launcher.start(
+                command: config.command,
+                args: config.args,
+                env: config.env.isNotEmpty ? config.env : null,
+                workingDirectory: config.cwd.isNotEmpty ? config.cwd : null,
+              );
+
+              final portReady = await launcher.waitForPortOpen(uri);
+              if (!portReady) {
+                final stderr = launcher.stderrOutput;
+                await launcher.kill();
+                throw Exception(
+                  '本地进程已启动但端口一直未就绪 (等待超时): '
+                  '${stderr.isNotEmpty ? stderr : "${config.command} ${config.args.join(" ")}"}',
+                );
+              }
+              AppLogger.instance.log(
+                '[MCP] 本地进程已就绪 (pid=${launcher.pid})，开始连接 ${config.url}',
+              );
+            } else {
+              AppLogger.instance.log(
+                '[MCP] ${config.url} 已可连接，跳过拉起本地进程 (可能已在运行)',
+              );
+            }
+          }
+
+          if (config.transportType == McpTransportType.sse) {
+            await client.connectSse(
+              url: config.url,
+              headers: config.httpHeaders.isNotEmpty
+                  ? config.httpHeaders
+                  : null,
+            );
+          } else {
+            await client.connectStreamableHttp(
+              url: config.url,
+              headers: config.httpHeaders.isNotEmpty
+                  ? config.httpHeaders
+                  : null,
+            );
+          }
           break;
       }
 
@@ -171,10 +236,15 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
         clients: {...state.clients, config.id: client},
         statuses: {...state.statuses, config.id: McpConnectionStatus.connected},
         toolsCache: {...state.toolsCache, config.id: tools},
+        localProcesses: launcher != null
+            ? {...state.localProcesses, config.id: launcher}
+            : state.localProcesses,
       );
 
       return tools;
     } catch (e) {
+      // 连接失败时，若已经拉起了本地进程也要一并杀掉，不留下孤儿进程。
+      await launcher?.kill();
       state = state.copyWith(
         statuses: {...state.statuses, config.id: McpConnectionStatus.error},
       );
@@ -188,6 +258,11 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
     if (client != null) {
       client.disconnect();
     }
+    // 若这个连接是由应用代为拉起的本地进程，断开时一并杀掉——否则用户
+    // 每次"断开"只是断了通信通道，进程仍占着端口，下次连接会先探测到
+    // "已可连接"从而复用它，行为上勉强能接受，但用户点了断开预期是
+    // 彻底停掉，留着后台进程不符合直觉，所以这里直接杀。
+    unawaited(state.localProcesses[serverId]?.kill());
 
     final newClients = Map<String, McpClient>.from(state.clients)
       ..remove(serverId);
@@ -196,11 +271,15 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
     final newTools = Map<String, List<Map<String, dynamic>>>.from(
       state.toolsCache,
     )..remove(serverId);
+    final newLocalProcesses = Map<String, LocalProcessLauncher>.from(
+      state.localProcesses,
+    )..remove(serverId);
 
     state = McpConnectionState(
       clients: newClients,
       statuses: newStatuses,
       toolsCache: newTools,
+      localProcesses: newLocalProcesses,
     );
   }
 
@@ -241,10 +320,27 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
     return null;
   }
 
+  /// 断开所有连接并杀掉所有本地拉起的进程——用于应用退出时的收尾清理。
+  /// 与 [dispose] 的区别：这个方法可以显式 await，确保进程真的被杀掉后
+  /// 才继续关闭流程；[dispose] 是 Riverpod 容器销毁时的同步兜底，不保证
+  /// 异步 kill 已经完成 (进程终止信号已发出，但不等待其退出)。
+  Future<void> disconnectAll() async {
+    for (final client in state.clients.values) {
+      await client.disconnect();
+    }
+    for (final launcher in state.localProcesses.values) {
+      await launcher.kill();
+    }
+    state = const McpConnectionState();
+  }
+
   @override
   void dispose() {
     for (final client in state.clients.values) {
       client.disconnect();
+    }
+    for (final launcher in state.localProcesses.values) {
+      launcher.kill();
     }
     super.dispose();
   }

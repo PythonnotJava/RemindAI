@@ -9,8 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:path_provider/path_provider.dart';
-
 import '../../core/export/conversation_exporter.dart';
 import '../../core/l10n/l10n_ext.dart';
 import '../../core/utils/directory_picker.dart';
@@ -20,6 +18,7 @@ import '../../core/models/file_attachment.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/skill/skill_model.dart';
 import '../../providers/database_provider.dart';
+import '../../providers/kb_provider.dart';
 import '../../core/mcp/mcp_registry.dart';
 import '../../providers/mcp_provider.dart';
 import '../../providers/search_provider.dart';
@@ -761,6 +760,8 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
               const _MemoryChip(),
               const SizedBox(width: 8),
               const _SearchChip(),
+              const SizedBox(width: 8),
+              const _KnowledgeBaseChip(),
               const SizedBox(width: 8),
               const _LoopChip(),
               const SizedBox(width: 8),
@@ -1685,8 +1686,8 @@ class _MemorySheetState extends ConsumerState<_MemorySheet> {
   Future<void> _loadProjectConfig() async {
     var workDir = ref.read(workingDirectoryProvider);
     if (workDir.isEmpty) {
-      final documentsDir = await getApplicationDocumentsDirectory();
-      workDir = p.join(documentsDir.path, '.RemindAI', 'workspace');
+      final root = await AppSettings.getRootDir();
+      workDir = p.join(root, 'workspace');
     }
     final config = await ProjectConfig.load(workDir);
     if (!mounted) return;
@@ -1943,6 +1944,149 @@ class _SearchChip extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 知识库 Chip: 多选接入本次对话的知识库
+class _KnowledgeBaseChip extends ConsumerWidget {
+  const _KnowledgeBaseChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selectedIds = ref.watch(sessionKnowledgeBasesProvider);
+    final active = selectedIds.isNotEmpty;
+
+    return ActionChip(
+      avatar: Icon(
+        active ? Icons.menu_book : Icons.menu_book_outlined,
+        size: 16,
+        color: active ? colorScheme.primary : null,
+      ),
+      label: Text(
+        active ? '知识库 (${selectedIds.length})' : '知识库',
+        style: const TextStyle(fontSize: 12),
+      ),
+      tooltip: active ? '已接入 ${selectedIds.length} 个知识库' : '选择知识库接入对话',
+      onPressed: () => _showKbSelector(context, ref),
+    );
+  }
+
+  void _showKbSelector(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => const _KbSelectorSheet(),
+    );
+  }
+}
+
+/// 知识库多选面板
+class _KbSelectorSheet extends ConsumerStatefulWidget {
+  const _KbSelectorSheet();
+
+  @override
+  ConsumerState<_KbSelectorSheet> createState() => _KbSelectorSheetState();
+}
+
+class _KbSelectorSheetState extends ConsumerState<_KbSelectorSheet> {
+  late Set<String> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = ref.read(sessionKnowledgeBasesProvider).toSet();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final basesAsync = ref.watch(knowledgeBasesProvider);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.menu_book, size: 20),
+                  const SizedBox(width: 8),
+                  Text('选择知识库', style: Theme.of(context).textTheme.titleMedium),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      ref.read(sessionKnowledgeBasesProvider.notifier).state =
+                          _selected.toList();
+                      Navigator.pop(context);
+                    },
+                    child: const Text('确定'),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            basesAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              ),
+              error: (e, _) => Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('加载失败: $e'),
+              ),
+              data: (bases) {
+                if (bases.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      '暂无知识库，请先在服务页创建',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  );
+                }
+                return Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: bases.length,
+                    itemBuilder: (context, i) {
+                      final kb = bases[i];
+                      final isSelected = _selected.contains(kb.id);
+                      return CheckboxListTile(
+                        value: isSelected,
+                        onChanged: (v) {
+                          setState(() {
+                            if (v == true) {
+                              _selected.add(kb.id);
+                            } else {
+                              _selected.remove(kb.id);
+                            }
+                          });
+                        },
+                        title: Text(kb.name),
+                        subtitle: Text(
+                          kb.embeddingDisplay,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        secondary: Icon(
+                          Icons.auto_stories,
+                          color: isSelected ? colorScheme.primary : null,
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
