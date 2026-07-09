@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../settings/app_settings.dart';
 import '../db/daos/memory_dao.dart';
+import '../db/daos/worktree_sessions_dao.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import '../logger/app_logger.dart';
@@ -20,6 +21,7 @@ import '../skill/skill_model.dart';
 import '../skill/skill_registry.dart';
 import '../toolshell/agent_loop.dart';
 import '../toolshell/executor.dart';
+import '../toolshell/git_availability.dart';
 import '../toolshell/worktree_manager.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/experts_provider.dart';
@@ -142,7 +144,29 @@ class AgentContextBuilder {
     // 只在真正有工作目录时才可能生效 (纯对话模式没有 .toolshell，也没有该功能)。
     var effectiveRoot = workDir;
     if (hasRealWorkDir) {
-      final activeWorktree = _ref.read(activeWorktreeProvider);
+      var activeWorktree = _ref.read(activeWorktreeProvider);
+
+      // 持久化恢复: 若内存态为空(刚启动或刚切换工作目录)，尝试从 SQLite
+      // 里恢复该 workDir 下仍在 active 状态的会话。这解决了"应用重启后
+      // 实验分支变孤儿"的问题——只要 DB 里有记录且磁盘目录仍存在就恢复。
+      if (activeWorktree.isEmpty) {
+        try {
+          final dao = WorktreeSessionsDao(_ref.read(databaseProvider));
+          final activeSessions = await dao.getActive(workDir: workDir);
+          if (activeSessions.isNotEmpty) {
+            activeWorktree = activeSessions.first.worktreePath;
+            AppLogger.instance.log(
+              '[AgentContext] 从 DB 恢复活跃 worktree: $activeWorktree',
+            );
+          }
+        } catch (e) {
+          // DB 查询失败不应阻断主流程(可能是首次运行、表还未建好等)
+          AppLogger.instance.log(
+            '[AgentContext] 尝试恢复 worktree 会话失败(忽略): $e',
+          );
+        }
+      }
+
       if (activeWorktree.isNotEmpty) {
         final worktreesRoot = p.join(workDir, '.toolshell', 'worktrees');
         final normalized = p.normalize(activeWorktree);
@@ -151,10 +175,20 @@ class AgentContextBuilder {
             await Directory(normalized).exists();
         if (stillValid) {
           effectiveRoot = normalized;
+          // 同步内存态(可能是刚从 DB 恢复的)
+          _ref.read(activeWorktreeProvider.notifier).state = normalized;
         } else {
           // 工作树已被移除(finish 完成或被手动删除)，清掉失效状态，
           // 避免下一轮继续错误地定向到一个不存在的目录。
+          // 同时标记 DB 记录为已结束(以 'discard' 标记，因为目录已消失)。
           _ref.read(activeWorktreeProvider.notifier).state = '';
+          try {
+            final dao = WorktreeSessionsDao(_ref.read(databaseProvider));
+            await dao.recordEnd(
+              worktreePath: normalized,
+              action: 'discard',
+            );
+          } catch (_) {}
         }
       }
     }
@@ -228,15 +262,49 @@ class AgentContextBuilder {
           _installSkill(registry, args);
       toolSourceMapping['toolshell_install_skill'] = '元技能:ToolShell';
 
-      // Worktree 隔离工具: 是否/何时使用完全由 LLM 判断，框架不做自动触发。
+      // Worktree 隔离工具 (版本工作流: 分支实验+存档/回退+合并/丢弃): 是否/
+      // 何时使用完全由 LLM 判断，框架不做自动触发。但前提是系统装有 git——
+      // 没有 git 就没有底层依赖，此时整套功能冻结：既不注册 handler，也把
+      // 工具定义从 tools 列表里摘掉，避免 LLM 看到工具却调用失败。检测只在
+      // 真正"触发"(即将构建含工作目录的会话)时做一次，结果进程内缓存，
+      // 见 GitAvailability。
+      //
       // 始终针对真实的主工作目录 workDir 操作 (而不是可能已被重定向的
       // effectiveRoot)，因为 git 仓库根在主工作目录，隔离工作树是从它派生的。
-      customHandlers['toolshell_worktree_start'] = (args) =>
-          _worktreeStart(workDir, args);
-      toolSourceMapping['toolshell_worktree_start'] = '元技能:ToolShell';
-      customHandlers['toolshell_worktree_finish'] = (args) =>
-          _worktreeFinish(workDir, args);
-      toolSourceMapping['toolshell_worktree_finish'] = '元技能:ToolShell';
+      final gitAvailable = await GitAvailability.isAvailable();
+      if (gitAvailable) {
+        customHandlers['toolshell_worktree_start'] = (args) =>
+            _worktreeStart(workDir, args);
+        toolSourceMapping['toolshell_worktree_start'] = '元技能:ToolShell';
+        customHandlers['toolshell_worktree_finish'] = (args) =>
+            _worktreeFinish(workDir, args);
+        toolSourceMapping['toolshell_worktree_finish'] = '元技能:ToolShell';
+        customHandlers['toolshell_worktree_checkpoint'] = (args) =>
+            _worktreeCheckpoint(args);
+        toolSourceMapping['toolshell_worktree_checkpoint'] = '元技能:ToolShell';
+        customHandlers['toolshell_worktree_list_checkpoints'] = (args) =>
+            _worktreeListCheckpoints(args);
+        toolSourceMapping['toolshell_worktree_list_checkpoints'] =
+            '元技能:ToolShell';
+        customHandlers['toolshell_worktree_revert'] = (args) =>
+            _worktreeRevert(args);
+        toolSourceMapping['toolshell_worktree_revert'] = '元技能:ToolShell';
+        customHandlers['toolshell_worktree_diff'] = (args) =>
+            _worktreeDiff(args);
+        toolSourceMapping['toolshell_worktree_diff'] = '元技能:ToolShell';
+        customHandlers['toolshell_worktree_list'] = (args) =>
+            _worktreeList(args);
+        toolSourceMapping['toolshell_worktree_list'] = '元技能:ToolShell';
+      } else {
+        // 冻结: 从提供给 LLM 的工具列表中移除，而不是留着让调用必然失败。
+        tools.removeWhere((t) {
+          final name = (t['function'] as Map?)?['name'] as String?;
+          return kWorktreeWorkflowToolNames.contains(name);
+        });
+        AppLogger.instance.log(
+          '[AgentContext] 未检测到系统 git，版本工作流(worktree 隔离)工具已冻结',
+        );
+      }
     }
 
     for (final cap in capabilities) {
@@ -449,6 +517,23 @@ class AgentContextBuilder {
         '[AgentContext] Worktree 隔离已启动: ${result['worktree_path']} '
         '(分支 ${result['branch']})',
       );
+
+      // 持久化记录: 写入 SQLite，使应用重启后能恢复此会话。
+      try {
+        final dao = WorktreeSessionsDao(_ref.read(databaseProvider));
+        await dao.recordStart(
+          workDir: workDir,
+          worktreePath: result['worktree_path'] as String,
+          branch: result['branch'] as String,
+          name: name ?? '',
+          baseCommit: '', // start 返回结果里暂不含 base hash，留空
+        );
+      } catch (e) {
+        // 写入失败不阻断主流程——最坏情况就是退化为纯内存态。
+        AppLogger.instance.log(
+          '[AgentContext] worktree 会话记录写入失败(忽略): $e',
+        );
+      }
     }
     return jsonEncode(result);
   }
@@ -494,8 +579,186 @@ class AgentContextBuilder {
       AppLogger.instance.log(
         '[AgentContext] Worktree 隔离已结束: $worktreePath (${result['action']})',
       );
+
+      // 持久化记录: 标记该会话为已结束。
+      try {
+        final dao = WorktreeSessionsDao(_ref.read(databaseProvider));
+        await dao.recordEnd(
+          worktreePath: worktreePath,
+          action: result['action'] as String? ?? action,
+        );
+      } catch (e) {
+        AppLogger.instance.log(
+          '[AgentContext] worktree 会话结束记录写入失败(忽略): $e',
+        );
+      }
     }
     return jsonEncode(result);
+  }
+
+  /// 自定义工具 `toolshell_worktree_checkpoint` 的执行体。
+  ///
+  /// 在当前活跃(或显式指定)的隔离工作树内创建一个存档点，供之后
+  /// `toolshell_worktree_revert` 退回。不改变 [activeWorktreeProvider]。
+  Future<String> _worktreeCheckpoint(Map<String, dynamic> args) async {
+    final explicitPath = (args['worktree_path'] as String?)?.trim();
+    final worktreePath = (explicitPath != null && explicitPath.isNotEmpty)
+        ? explicitPath
+        : _ref.read(activeWorktreeProvider);
+
+    if (worktreePath.isEmpty) {
+      return jsonEncode({
+        'status': 'error',
+        'code': 'NO_ACTIVE_WORKTREE',
+        'detail': '当前没有活跃的隔离工作树，也未显式传入 worktree_path',
+      });
+    }
+
+    // checkpoint 只对隔离工作树有意义，manager 用哪个 workDir 构造无关紧要
+    // (checkpoint 内部只操作 worktreePath 自身)，但保持与其他 handler 一致。
+    final workDir = _ref.read(workingDirectoryProvider);
+    final manager = WorktreeManager(workDir: workDir);
+    final result = await manager.checkpoint(
+      worktreePath: worktreePath,
+      label: (args['label'] as String?)?.trim(),
+    );
+    if (result['status'] == 'ok') {
+      AppLogger.instance.log(
+        '[AgentContext] Worktree 存档点已创建: ${result['checkpoint']} '
+        '(工作树 $worktreePath)',
+      );
+    }
+    return jsonEncode(result);
+  }
+
+  /// 自定义工具 `toolshell_worktree_list_checkpoints` 的执行体。
+  Future<String> _worktreeListCheckpoints(Map<String, dynamic> args) async {
+    final explicitPath = (args['worktree_path'] as String?)?.trim();
+    final worktreePath = (explicitPath != null && explicitPath.isNotEmpty)
+        ? explicitPath
+        : _ref.read(activeWorktreeProvider);
+
+    if (worktreePath.isEmpty) {
+      return jsonEncode({
+        'status': 'error',
+        'code': 'NO_ACTIVE_WORKTREE',
+        'detail': '当前没有活跃的隔离工作树，也未显式传入 worktree_path',
+      });
+    }
+
+    final workDir = _ref.read(workingDirectoryProvider);
+    final manager = WorktreeManager(workDir: workDir);
+    final result = await manager.listCheckpoints(worktreePath);
+    return jsonEncode(result);
+  }
+
+  /// 自定义工具 `toolshell_worktree_revert` 的执行体。
+  ///
+  /// 把隔离工作树硬回退到某个存档点，用于"这一步走偏了，退回上一个
+  /// 存档重新尝试"，比 discard 整个实验分支的代价小得多。
+  Future<String> _worktreeRevert(Map<String, dynamic> args) async {
+    final explicitPath = (args['worktree_path'] as String?)?.trim();
+    final worktreePath = (explicitPath != null && explicitPath.isNotEmpty)
+        ? explicitPath
+        : _ref.read(activeWorktreeProvider);
+    final checkpoint = (args['checkpoint'] as String?)?.trim() ?? '';
+
+    if (worktreePath.isEmpty) {
+      return jsonEncode({
+        'status': 'error',
+        'code': 'NO_ACTIVE_WORKTREE',
+        'detail': '当前没有活跃的隔离工作树，也未显式传入 worktree_path',
+      });
+    }
+    if (checkpoint.isEmpty) {
+      return jsonEncode({
+        'status': 'error',
+        'code': 'INVALID_ARGS',
+        'detail': '必须传入 checkpoint(存档点名或 commit hash)',
+      });
+    }
+
+    final workDir = _ref.read(workingDirectoryProvider);
+    final manager = WorktreeManager(workDir: workDir);
+    final result = await manager.revert(
+      worktreePath: worktreePath,
+      checkpoint: checkpoint,
+    );
+    if (result['status'] == 'ok') {
+      AppLogger.instance.log(
+        '[AgentContext] Worktree 已回退: $worktreePath -> $checkpoint',
+      );
+    }
+    return jsonEncode(result);
+  }
+
+  /// 自定义工具 `toolshell_worktree_diff` 的执行体。
+  ///
+  /// 让 Agent 在 merge 之前或实验途中查看"工作树相对于主分支改了什么"。
+  /// 默认只返回 --stat (文件级摘要)，token 消耗极低；传 detail=true 时返回
+  /// 完整 diff 内容(可配合 paths 限定只看某几个文件，避免 diff 过大)。
+  Future<String> _worktreeDiff(Map<String, dynamic> args) async {
+    final explicitPath = (args['worktree_path'] as String?)?.trim();
+    final worktreePath = (explicitPath != null && explicitPath.isNotEmpty)
+        ? explicitPath
+        : _ref.read(activeWorktreeProvider);
+
+    if (worktreePath.isEmpty) {
+      return jsonEncode({
+        'status': 'error',
+        'code': 'NO_ACTIVE_WORKTREE',
+        'detail': '当前没有活跃的隔离工作树，也未显式传入 worktree_path',
+      });
+    }
+
+    final detail = args['detail'] == true;
+    final rawPaths = args['paths'];
+    List<String>? paths;
+    if (rawPaths is List) {
+      paths = rawPaths.cast<String>().where((s) => s.trim().isNotEmpty).toList();
+      if (paths.isEmpty) paths = null;
+    }
+
+    final workDir = _ref.read(workingDirectoryProvider);
+    final manager = WorktreeManager(workDir: workDir);
+    final result = await manager.diff(
+      worktreePath: worktreePath,
+      detail: detail,
+      paths: paths,
+    );
+    return jsonEncode(result);
+  }
+
+  /// 自定义工具 `toolshell_worktree_list` 的执行体。
+  ///
+  /// 返回当前工作目录关联的 worktree 会话列表(含活跃和历史)。
+  /// Agent 可以用它了解"当前有没有未完成的实验分支""之前做过哪些实验"。
+  Future<String> _worktreeList(Map<String, dynamic> args) async {
+    final showHistory = args['include_history'] == true;
+    final workDir = _ref.read(workingDirectoryProvider);
+
+    try {
+      final dao = WorktreeSessionsDao(_ref.read(databaseProvider));
+      if (showHistory) {
+        final sessions = await dao.getHistory(workDir: workDir, limit: 20);
+        return jsonEncode({
+          'status': 'ok',
+          'sessions': sessions.map((s) => s.toJson()).toList(),
+        });
+      } else {
+        final sessions = await dao.getActive(workDir: workDir);
+        return jsonEncode({
+          'status': 'ok',
+          'sessions': sessions.map((s) => s.toJson()).toList(),
+        });
+      }
+    } catch (e) {
+      return jsonEncode({
+        'status': 'error',
+        'code': 'DB_QUERY_FAILED',
+        'detail': '查询 worktree 会话记录失败: $e',
+      });
+    }
   }
 
   /// 若 [sourceDir] 位于当前工作目录的 `.toolshell/` 下，则删除它并返回 true；
@@ -662,6 +925,16 @@ class AgentContextBuilder {
         workDirOverride ?? _ref.read(workingDirectoryProvider);
     final hasWorkspace = currentWorkDir.isNotEmpty;
 
+    // ─── 身份锚定 ───
+    // 无论有无工作目录、有无领域专家，system prompt 最前面始终声明身份。
+    // 这解决了 DeepSeek 等蒸馏模型在缺乏身份指令时自称"Claude"的问题——
+    // 没有明确锚定时，模型会复述训练语料中频率最高的身份自称。
+    parts.add(
+      '你是 RemindAI 智能助手，由用户通过 RemindAI 应用接入。'
+      '你不是 ChatGPT、Claude、Gemini 或其他 AI 助手——'
+      '无论你的底层模型是什么，在本次对话中你的身份是 RemindAI 助手。\n\n',
+    );
+
     // 领域专家
     final activeExpert = _ref.read(activeExpertProvider);
     if (activeExpert != null) {
@@ -699,7 +972,7 @@ class AgentContextBuilder {
       parts.add('\n\n---\n# 元技能: System\n$sysPrompt');
     } else {
       parts.add(
-        '你是 RemindAI 智能助手。当前处于全局模式（无工作目录），'
+        '当前处于全局模式（无工作目录），'
         '可以回答问题、分析内容、进行对话。如果需要文件操作能力，'
         '请先在设置中选择一个工作目录。',
       );

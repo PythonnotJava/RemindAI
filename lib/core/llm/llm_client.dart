@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 
 import '../logger/app_logger.dart';
@@ -208,10 +209,20 @@ class OpenAiClient implements LlmClient {
   final String _base;
 
   /// 去掉末尾斜杠，避免拼出双斜杠。
+  /// 同时处理用户误填完整 endpoint 路径的情况(如填了 /v1/chat/completions)，
+  /// 自动剥离——代码内部会拼 `/chat/completions`，重复拼接导致 404。
   static String _normalizeBase(String url) {
     var u = url.trim();
     while (u.endsWith('/')) {
       u = u.substring(0, u.length - 1);
+    }
+    // 常见误填: 用户从文档或 curl 里复制了完整 endpoint URL
+    if (u.endsWith('/chat/completions')) {
+      u = u.substring(0, u.length - '/chat/completions'.length);
+    }
+    // 用户可能误把 Anthropic endpoint 填到 OpenAI 协议里
+    if (u.endsWith('/v1/messages')) {
+      u = u.substring(0, u.length - '/messages'.length);
     }
     return u;
   }
@@ -232,8 +243,39 @@ class OpenAiClient implements LlmClient {
       if (tools != null && tools.isNotEmpty) 'tool_choice': 'auto',
     };
 
-    final response = await _dio.post(_chatUrl, data: body);
-    return ChatResponse.fromJson(response.data);
+    try {
+      final response = await _dio.post(_chatUrl, data: body);
+      return ChatResponse.fromJson(response.data);
+    } on DioException catch (e) {
+      String detail = e.message ?? e.type.name;
+      if (e.response?.data != null) {
+        try {
+          if (e.response!.data is Map || e.response!.data is String) {
+            detail = e.response!.data.toString();
+          }
+        } catch (_) {}
+      }
+      final status = e.response?.statusCode;
+      if (status == null) {
+        final innerError = e.error?.toString() ?? '';
+        final typeLabel = switch (e.type) {
+          DioExceptionType.connectionTimeout => '连接超时',
+          DioExceptionType.sendTimeout => '发送超时',
+          DioExceptionType.receiveTimeout => '接收超时',
+          DioExceptionType.connectionError => '连接失败',
+          _ => '网络异常',
+        };
+        throw Exception(
+          '$typeLabel: ${innerError.isNotEmpty ? innerError : detail}',
+        );
+      }
+      throw Exception('HTTP $status: $detail');
+    } on HttpException catch (e) {
+      throw Exception(
+        '连接被关闭: $e\n'
+        '可能原因: 请求内容超出模型上下文窗口限制或网络不稳定',
+      );
+    }
   }
 
   /// 流式调用 (纯 content tokens，不处理 tool_calls)
@@ -299,6 +341,16 @@ class OpenAiClient implements LlmClient {
       if (tools != null && tools.isNotEmpty) 'tools': tools,
       if (tools != null && tools.isNotEmpty) 'tool_choice': 'auto',
     };
+
+    // 诊断：记录请求体大小，帮助排查因 payload 超限导致的连接关闭问题
+    final bodyJson = jsonEncode(body);
+    final bodySize = bodyJson.length;
+    final toolCount = tools?.length ?? 0;
+    final msgCount = processedMessages.length;
+    AppLogger.instance.log(
+      '[LLM Request] POST $_chatUrl | body=${(bodySize / 1024).toStringAsFixed(1)}KB '
+      '(messages=$msgCount, tools=$toolCount, model=$model)',
+    );
 
     final Response response;
     try {
@@ -366,6 +418,7 @@ class OpenAiClient implements LlmClient {
     int tokenCount = 0;
     bool firstChunk = true;
 
+    try {
     await for (final chunk in rawStream) {
       final decoded = utf8.decode(chunk, allowMalformed: true);
       chunkCount++;
@@ -463,8 +516,33 @@ class OpenAiClient implements LlmClient {
         }
       }
     }
+    } on HttpException catch (e) {
+      // "Connection closed while receiving data" — 连接在流传输中途被对端关闭。
+      // 常见原因:
+      // 1. 请求 body 超过模型的 context window 限制(服务端直接断开)
+      // 2. 代理/CDN 层的 idle timeout 被触发(模型思考时间过长,中间无数据传输)
+      // 3. 不稳定的网络环境导致 TCP 连接中断
+      //
+      // 如果已经收到了部分内容(chunkCount > 0)，视为"部分成功"——
+      // 把已累积的内容作为截断响应发出(比直接报错体验好，用户至少看到了部分回答)。
+      // 如果一个 chunk 都没收到(chunkCount == 0)，那就是一开始就断了，才抛异常。
+      AppLogger.instance.log(
+        '[LLM Stream] 连接中断: $e (已收到 $chunkCount 个chunk, $tokenCount 个token)',
+      );
+      if (chunkCount == 0) {
+        throw Exception(
+          '连接被关闭(未收到任何数据)。可能原因：\n'
+          '1. 请求内容超出模型上下文窗口限制(当前 body ${(bodySize / 1024).toStringAsFixed(1)}KB, '
+          '含 $toolCount 个工具、$msgCount 条消息)\n'
+          '2. 网络不稳定或代理超时\n'
+          '请尝试: 减少工具/技能数量、清理过长的对话历史、或检查网络连接',
+        );
+      }
+      // 有部分内容——作为截断响应发出
+    }
 
-    // 流异常结束 — 仍然发出已累积的内容
+    // 流异常结束(包括正常跑完无[DONE]、以及 HttpException 被 catch 后落到这里)
+    // 仍然发出已累积的内容
     AppLogger.instance.log(
       '[LLM Stream] 流结束(无[DONE]): chunks=$chunkCount, tokens=$tokenCount, buffer剩余=${buffer.length}字符',
     );

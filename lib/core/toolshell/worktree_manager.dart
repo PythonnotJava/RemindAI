@@ -98,6 +98,12 @@ class WorktreeManager {
       };
     }
 
+    // discard 分支包含 `git worktree remove --force` + `branch -D`，
+    // 必须确保目标确实是隔离工作树，不能是被误传进来的主工作目录或
+    // 任意外部路径。
+    final guard = _ensureWithinWorktreesRoot(worktreePath);
+    if (guard != null) return guard;
+
     final dir = Directory(worktreePath);
     if (!await dir.exists()) {
       return {
@@ -222,6 +228,276 @@ class WorktreeManager {
     };
   }
 
+  /// 在隔离工作树内创建一个"存档点"(checkpoint)。
+  ///
+  /// 本质是：若有未提交改动先自动提交，再打一个指向该 commit 的轻量 tag。
+  /// 用于让 LLM 在实验过程中的关键节点"存一下"，后续如果某一步走偏，
+  /// 可以用 [revert] 退回到这个点重新尝试，而不必推倒整个实验(discard)
+  /// 重来——checkpoint/revert 是同一个实验分支内部的"存档/读档"，
+  /// 与 [finish] 的 merge/discard(结束整个实验)是不同层次的操作。
+  ///
+  /// [label] 可选，用作 tag 名的可读后缀(如 "before-refactor")；不传则用
+  /// 默认名 "cp"。返回的 `checkpoint` 字段就是 [revert] 需要传入的标识。
+  Future<Map<String, dynamic>> checkpoint({
+    required String worktreePath,
+    String? label,
+  }) async {
+    final guard = _ensureWithinWorktreesRoot(worktreePath);
+    if (guard != null) return guard;
+
+    final dir = Directory(worktreePath);
+    if (!await dir.exists()) {
+      return {
+        'status': 'error',
+        'code': 'WORKTREE_NOT_FOUND',
+        'detail': '工作树目录不存在: $worktreePath',
+      };
+    }
+
+    final dirty = await _hasUncommittedChanges(worktreePath);
+    if (dirty) {
+      final addResult = await Process.run('git', [
+        '-C',
+        worktreePath,
+        'add',
+        '-A',
+      ]);
+      if (addResult.exitCode != 0) {
+        return {
+          'status': 'error',
+          'code': 'CHECKPOINT_COMMIT_FAILED',
+          'detail': '存档前 git add 失败: ${_stderr(addResult)}',
+        };
+      }
+      final commitResult = await Process.run('git', [
+        '-C',
+        worktreePath,
+        'commit',
+        '-m',
+        'toolshell checkpoint: ${label ?? "cp"}',
+      ]);
+      if (commitResult.exitCode != 0) {
+        return {
+          'status': 'error',
+          'code': 'CHECKPOINT_COMMIT_FAILED',
+          'detail': '存档提交失败: ${_stderr(commitResult)}',
+        };
+      }
+    }
+
+    final slug = _slugify(label) ?? 'cp';
+    final stamp = _timestamp();
+    final folderName = p.basename(worktreePath);
+    final tagName = 'toolshell-cp/$folderName/${slug}_$stamp';
+
+    final tagResult = await Process.run('git', [
+      '-C',
+      worktreePath,
+      'tag',
+      tagName,
+    ]);
+    if (tagResult.exitCode != 0) {
+      return {
+        'status': 'error',
+        'code': 'CHECKPOINT_TAG_FAILED',
+        'detail': '创建存档点标记失败: ${_stderr(tagResult)}',
+      };
+    }
+
+    final hash = await _revParse(worktreePath, tagName);
+
+    return {
+      'status': 'ok',
+      'checkpoint': tagName,
+      'commit': hash,
+      'had_uncommitted_changes': dirty,
+      'message': dirty
+          ? '已提交当前改动并创建存档点 "$tagName"。之后可用 '
+                'toolshell_worktree_revert(checkpoint: "$tagName") 退回这里。'
+          : '工作树当前无未提交改动，已直接在现有 HEAD 上创建存档点 "$tagName"。',
+    };
+  }
+
+  /// 列出某工作树下已创建的全部存档点(按创建时间排序)。
+  Future<Map<String, dynamic>> listCheckpoints(String worktreePath) async {
+    final guard = _ensureWithinWorktreesRoot(worktreePath);
+    if (guard != null) return guard;
+
+    final folderName = p.basename(worktreePath);
+    final result = await Process.run('git', [
+      '-C',
+      worktreePath,
+      'tag',
+      '-l',
+      'toolshell-cp/$folderName/*',
+      '--sort=creatordate',
+    ]);
+    if (result.exitCode != 0) {
+      return {
+        'status': 'error',
+        'code': 'LIST_CHECKPOINTS_FAILED',
+        'detail': _stderr(result),
+      };
+    }
+    final names = result.stdout
+        .toString()
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    return {'status': 'ok', 'checkpoints': names};
+  }
+
+  /// 将工作树硬回退到某个存档点(或任意可解析的 commit/ref)。
+  ///
+  /// 安全边界：只允许对隔离工作树(`.toolshell/worktrees/` 下)执行 `reset
+  /// --hard`，绝不允许对主工作目录 [workDir] 做这个操作——那会摧毁用户
+  /// 未提交的工作，与本功能"实验分支内部读档"的定位完全无关。
+  Future<Map<String, dynamic>> revert({
+    required String worktreePath,
+    required String checkpoint,
+  }) async {
+    final guard = _ensureWithinWorktreesRoot(worktreePath);
+    if (guard != null) return guard;
+
+    final dir = Directory(worktreePath);
+    if (!await dir.exists()) {
+      return {
+        'status': 'error',
+        'code': 'WORKTREE_NOT_FOUND',
+        'detail': '工作树目录不存在: $worktreePath',
+      };
+    }
+
+    // 先校验目标确实能解析成一个 commit，避免 reset --hard 到一个拼写
+    // 错误的名字后抛出难懂的 git 错误信息。
+    final hash = await _revParse(worktreePath, checkpoint);
+    if (hash == null) {
+      return {
+        'status': 'error',
+        'code': 'CHECKPOINT_NOT_FOUND',
+        'detail': '找不到存档点或 commit: $checkpoint',
+      };
+    }
+
+    final resetResult = await Process.run('git', [
+      '-C',
+      worktreePath,
+      'reset',
+      '--hard',
+      checkpoint,
+    ]);
+    if (resetResult.exitCode != 0) {
+      return {
+        'status': 'error',
+        'code': 'REVERT_FAILED',
+        'detail': '回退失败: ${_stderr(resetResult)}',
+      };
+    }
+
+    // reset --hard 只处理已跟踪文件，回退前新建但从未提交过的未跟踪文件
+    // 不会被清掉——但那些文件属于"要退回之前"产生的内容，不应该保留，
+    // 否则 revert 的语义就不是"完全变回存档那一刻"。一并清理。
+    await Process.run('git', ['-C', worktreePath, 'clean', '-fd']);
+
+    return {
+      'status': 'ok',
+      'checkpoint': checkpoint,
+      'commit': hash,
+      'message': '工作树已回退到存档点 "$checkpoint" (commit $hash)，之后产生的改动已被清除。',
+    };
+  }
+
+  /// 查看隔离工作树相对于主分支 HEAD 的改动摘要 (diff)。
+  ///
+  /// 两种模式:
+  /// - [detail] = false (默认): 只返回文件级摘要 (`--stat`): 哪些文件改了、
+  ///   各改了多少行。token 消耗极低，适合快速评估"改动规模/范围"。
+  /// - [detail] = true: 返回完整差异内容 (逐行 +/-)。token 消耗较高，
+  ///   适合仔细审查具体改了什么——可配合 [paths] 只看某几个文件的 diff，
+  ///   避免一次性塞入过多内容。
+  ///
+  /// 典型使用场景:
+  /// 1. merge 之前: Agent 先调用 diff(detail=false) 看影响面，若需要深挖
+  ///    再对特定文件调用 diff(detail=true, paths=[...])。
+  /// 2. revert 之前: 确认"从存档点到现在到底改了什么"，帮助决定是否真的
+  ///    要退回(避免误操作)。
+  ///
+  /// 实现: diff 的"基准"取主分支(workDir)当前 HEAD commit，不是当初
+  /// start() 时的 HEAD——因为主分支在隔离期间可能有新提交(虽然框架设计上
+  /// 不鼓励这样做)，但"merge 会怎样"的真相是当前主分支 HEAD vs 工作树
+  /// HEAD 的三方合并预览。为降低实现复杂度，这里做的是二路 diff，足够
+  /// 给 LLM 提供有用信息，不必做完整三方合并预览。
+  Future<Map<String, dynamic>> diff({
+    required String worktreePath,
+    bool detail = false,
+    List<String>? paths,
+  }) async {
+    final guard = _ensureWithinWorktreesRoot(worktreePath);
+    if (guard != null) return guard;
+
+    final dir = Directory(worktreePath);
+    if (!await dir.exists()) {
+      return {
+        'status': 'error',
+        'code': 'WORKTREE_NOT_FOUND',
+        'detail': '工作树目录不存在: $worktreePath',
+      };
+    }
+
+    // 基准: 主工作目录当前 HEAD
+    final baseHash = await _revParse(workDir, 'HEAD');
+    if (baseHash == null) {
+      return {
+        'status': 'error',
+        'code': 'BASE_RESOLVE_FAILED',
+        'detail': '无法解析主工作目录 HEAD commit',
+      };
+    }
+
+    // 若工作树内有未提交的改动，diff 也应覆盖——先把未暂存文件纳入索引
+    // (用 --cached 并不能覆盖这种情况)。最简单的方式是把比较目标设为
+    // "工作树当前状态(含未提交)"，即不传 worktree HEAD commit，而是
+    // 用 git diff <base> (比较 base vs 工作树目录文件)。但 git diff
+    // <commit> 不加第二个 commit 会比较 index+working tree vs commit，
+    // 且只对当前工作目录生效——我们需要 -C worktreePath。
+    // 策略: `git -C worktreePath diff <baseHash> --stat` (或不加 --stat)
+    // 这会比较 baseHash 与工作树的实际文件状态(含未提交改动)。
+    final args = <String>[
+      '-C',
+      worktreePath,
+      'diff',
+      baseHash,
+    ];
+
+    if (!detail) args.add('--stat');
+    if (paths != null && paths.isNotEmpty) {
+      args.add('--');
+      args.addAll(paths);
+    }
+
+    final result = await Process.run('git', args);
+    if (result.exitCode != 0) {
+      return {
+        'status': 'error',
+        'code': 'DIFF_FAILED',
+        'detail': '获取 diff 失败: ${_stderr(result)}',
+      };
+    }
+
+    final output = result.stdout.toString().trim();
+    return {
+      'status': 'ok',
+      'mode': detail ? 'full' : 'stat',
+      'base': baseHash,
+      'diff': output.isEmpty ? '(无差异)' : output,
+      'message': detail
+          ? '以下是工作树相对于主分支 HEAD ($baseHash) 的完整差异:'
+          : '以下是工作树相对于主分支 HEAD ($baseHash) 的文件级改动摘要:',
+    };
+  }
+
   // ─── 内部辅助 ─────────────────────────────────────────────
 
   Future<bool> _isInsideGitWorkTree(String dir) async {
@@ -287,6 +563,33 @@ class WorktreeManager {
   String _stderr(ProcessResult result) {
     final err = result.stderr.toString().trim();
     return err.isEmpty ? result.stdout.toString().trim() : err;
+  }
+
+  /// 解析任意 ref(tag/分支/commit hash) 为完整 commit hash；解析失败返回 null。
+  Future<String?> _revParse(String dir, String ref) async {
+    final result = await Process.run('git', ['-C', dir, 'rev-parse', ref]);
+    if (result.exitCode != 0) return null;
+    final hash = result.stdout.toString().trim();
+    return hash.isEmpty ? null : hash;
+  }
+
+  /// checkpoint/revert/listCheckpoints 的共用安全边界校验：只允许对
+  /// `<workDir>/.toolshell/worktrees/` 下的隔离工作树操作，绝不允许被
+  /// 误传主工作目录或任意外部路径进来——这几个操作里 revert 会执行
+  /// `reset --hard` + `clean -fd`，一旦作用到主工作目录就是破坏性事故。
+  /// 校验通过返回 null，失败返回可直接返回给调用方的错误 Map。
+  Map<String, dynamic>? _ensureWithinWorktreesRoot(String worktreePath) {
+    final normalized = p.normalize(worktreePath);
+    if (!p.isWithin(_worktreesRoot, normalized)) {
+      return {
+        'status': 'error',
+        'code': 'PATH_OUT_OF_SCOPE',
+        'detail':
+            '"$worktreePath" 不在隔离工作树目录范围内(.toolshell/worktrees/)，'
+            '拒绝执行(该操作可能包含 reset --hard，绝不允许作用于主工作目录)。',
+      };
+    }
+    return null;
   }
 
   /// 确保 `.toolshell/` 被写入本地 `.git/info/exclude`，避免它作为

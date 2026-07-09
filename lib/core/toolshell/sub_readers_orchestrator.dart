@@ -161,7 +161,19 @@ class SubReadersOrchestrator {
       final merged = await merge(description, orderedResults);
       yield SubReadersMerged(merged, orderedResults);
     } catch (e) {
-      yield SubReadersError('结果合并失败: $e');
+      // 合并失败时降级：直接拼接子任务结果返回，不至于整个 /sub-readers 报废
+      final fallback = StringBuffer();
+      fallback.writeln('> 合并阶段因网络/模型异常未能完成，以下为各子任务的原始产出：\n');
+      for (final r in orderedResults) {
+        fallback.writeln('## ${r.task.scope}');
+        if (r.success) {
+          fallback.writeln(r.content.isEmpty ? '(无输出)' : r.content);
+        } else {
+          fallback.writeln('执行失败: ${r.error}');
+        }
+        fallback.writeln();
+      }
+      yield SubReadersMerged(fallback.toString(), orderedResults);
     }
   }
 
@@ -304,6 +316,9 @@ class SubReadersOrchestrator {
       '- 使用清晰的分段/要点结构，方便用户快速理解全局。';
 
   /// 把所有子任务结果连同原始需求一起交回主模型，产出最终综合理解。
+  ///
+  /// 为避免合并阶段 payload 过大导致连接断开，每个子任务结果会被截断到
+  /// [_mergeMaxCharsPerResult] 字符以内。
   Future<String> merge(
     String description,
     List<SubReaderResult> results,
@@ -314,7 +329,14 @@ class SubReadersOrchestrator {
       final r = results[i];
       buffer.writeln('### 子任务 ${i + 1} (范围: ${r.task.scope})');
       if (r.success) {
-        buffer.writeln(r.content.isEmpty ? '(无输出)' : r.content);
+        if (r.content.isEmpty) {
+          buffer.writeln('(无输出)');
+        } else if (r.content.length > _mergeMaxCharsPerResult) {
+          buffer.writeln(r.content.substring(0, _mergeMaxCharsPerResult));
+          buffer.writeln('... (内容过长已截断)');
+        } else {
+          buffer.writeln(r.content);
+        }
       } else {
         buffer.writeln('该子任务执行失败: ${r.error}');
       }
@@ -329,4 +351,7 @@ class SubReadersOrchestrator {
     final merged = response.content?.trim();
     return (merged == null || merged.isEmpty) ? buffer.toString() : merged;
   }
+
+  /// 合并阶段每个子任务结果的最大字符数（约 3000 token）。
+  static const _mergeMaxCharsPerResult = 6000;
 }

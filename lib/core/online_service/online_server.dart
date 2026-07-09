@@ -714,8 +714,17 @@ class OnlineServer {
       List<String> models = [];
       switch (provider) {
         case 'anthropic':
+          // 用户填的是完整 endpoint URL (如 .../v1/messages)，推导 models URL
+          String modelsUrl;
+          if (baseUrl.endsWith('/messages')) {
+            modelsUrl = '${baseUrl.substring(0, baseUrl.length - '/messages'.length)}/models';
+          } else if (baseUrl.endsWith('/v1')) {
+            modelsUrl = '$baseUrl/models';
+          } else {
+            modelsUrl = '$baseUrl/v1/models';
+          }
           final resp = await dio.get(
-            '$baseUrl/v1/models',
+            modelsUrl,
             options: Options(
               headers: {'x-api-key': apiKey, 'anthropic-version': '2023-06-01'},
             ),

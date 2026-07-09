@@ -547,14 +547,26 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
     return [];
   }
 
-  /// Anthropic: GET {base}/v1/models, x-api-key + anthropic-version
+  /// Anthropic: 用户填的是完整 endpoint URL (如 https://api.anthropic.com/v1/messages)
+  /// 从中推导出模型列表地址 (把 /messages 替换为 /models)。
   Future<List<_DetectedModel>> _fetchAnthropicModels(
     Dio dio,
     String baseUrl,
     String key,
   ) async {
+    // 从 endpoint URL 推导 models 列表 URL
+    // e.g. https://api.anthropic.com/v1/messages → https://api.anthropic.com/v1/models
+    String modelsUrl;
+    if (baseUrl.endsWith('/messages')) {
+      modelsUrl = '${baseUrl.substring(0, baseUrl.length - '/messages'.length)}/models';
+    } else if (baseUrl.endsWith('/v1')) {
+      modelsUrl = '$baseUrl/models';
+    } else {
+      modelsUrl = '$baseUrl/v1/models';
+    }
+
     final response = await dio.get(
-      '$baseUrl/v1/models',
+      modelsUrl,
       options: Options(
         headers: {'x-api-key': key, 'anthropic-version': '2023-06-01'},
       ),

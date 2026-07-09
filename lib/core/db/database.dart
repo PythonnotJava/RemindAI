@@ -212,6 +212,29 @@ class DatabaseHelper {
       'source_group',
       "TEXT NOT NULL DEFAULT ''",
     );
+
+    // Worktree 会话持久化表 — 记录每次版本工作流的开启/结束状态，
+    // 使应用重启后能恢复"哪些实验分支还在跑、哪些已结束"的全局状态，
+    // 并提供历史查询能力(LLM 可以通过 toolshell_worktree_list 查看)。
+    db.execute('''
+      CREATE TABLE IF NOT EXISTS worktree_sessions (
+        id TEXT PRIMARY KEY,
+        work_dir TEXT NOT NULL,
+        worktree_path TEXT NOT NULL,
+        branch TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'active',
+        base_commit TEXT NOT NULL DEFAULT '',
+        end_action TEXT NOT NULL DEFAULT '',
+        end_commit TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL DEFAULT ''
+      )
+    ''');
+    db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_worktree_sessions_status
+        ON worktree_sessions(status)
+    ''');
   }
 
   /// 通用：为指定表添加缺失的列。

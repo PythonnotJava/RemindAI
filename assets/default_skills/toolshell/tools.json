@@ -187,7 +187,7 @@
     "type": "function",
     "function": {
       "name": "toolshell_worktree_start",
-      "description": "开启一个隔离的 Git 工作树，用于做实验性/风险较高的改动(如大范围重构、尝试性方案、升级可能不兼容的依赖)而不污染主工作目录。基于当前 HEAD 新建一个分支+独立工作目录，位于 <工作目录>/.toolshell/worktrees/ 下。调用成功后，你后续的文件读写/命令执行会自动定向到这个隔离工作树，直到你调用 toolshell_worktree_finish 结束隔离。要求工作目录是一个 git 仓库；不是的话会报错，可先用 toolshell_exec 执行 git init。何时使用完全由你判断，框架不会自动触发或提示。",
+      "description": "开启一个隔离的 Git 工作树，用于做实验性/风险较高的改动(如大范围重构、尝试性方案、升级可能不兼容的依赖)而不污染主工作目录。基于当前 HEAD 新建一个分支+独立工作目录，位于 <工作目录>/.toolshell/worktrees/ 下。调用成功后，你后续的文件读写/命令执行会自动定向到这个隔离工作树，直到你调用 toolshell_worktree_finish 结束隔离。要求工作目录是一个 git 仓库；不是的话会报错，可先用 toolshell_exec 执行 git init。推荐的完整流程: start → (做改动) → 可选 toolshell_worktree_checkpoint 存档关键节点 → 若某步走偏可 toolshell_worktree_revert 退回上一个存档重试 → 验证通过后 finish(action=merge)，不满意则 finish(action=discard)。何时使用完全由你判断，框架不会自动触发或提示。若系统未安装 git，这一整套工具不会出现在你的工具列表里。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -210,6 +210,80 @@
           "commit_message": {"type": "string", "description": "可选：action=merge 且有未提交改动时使用的提交信息"}
         },
         "required": ["action"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_worktree_checkpoint",
+      "description": "在当前隔离工作树内创建一个存档点：若有未提交改动会先自动提交，再打一个标记。用于在实验过程中的关键节点'存一下'——之后如果某一步走偏了，可以用 toolshell_worktree_revert 退回这个存档点重新尝试，而不必调用 finish(action=discard) 放弃整个实验分支。这是同一个实验分支内部的存档/读档，不是 finish 的合并/丢弃。建议在完成一个有意义的子步骤、且后续要尝试风险较高的下一步之前调用。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "label": {"type": "string", "description": "可选：本次存档点的简短描述(如 before-schema-change)，不传则用默认名"},
+          "worktree_path": {"type": "string", "description": "可选：要存档的工作树绝对路径，不传则使用当前活跃的那个"}
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_worktree_list_checkpoints",
+      "description": "列出当前隔离工作树内已创建的全部存档点(按创建时间排序)，用于在调用 toolshell_worktree_revert 前确认有哪些存档点可以退回。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "worktree_path": {"type": "string", "description": "可选：要查询的工作树绝对路径，不传则使用当前活跃的那个"}
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_worktree_revert",
+      "description": "将当前隔离工作树硬回退到某个存档点(由 toolshell_worktree_checkpoint 创建)，之后产生的全部改动(包括未提交的新文件)会被清除，不可恢复。只作用于隔离工作树，绝不会影响主工作目录。用于'这一步走偏了，退回上一个存档重新尝试'的场景。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "checkpoint": {"type": "string", "description": "必需：要回退到的存档点名称(来自 toolshell_worktree_checkpoint 返回的 checkpoint 字段，或 toolshell_worktree_list_checkpoints 列出的名称)"},
+          "worktree_path": {"type": "string", "description": "可选：要回退的工作树绝对路径，不传则使用当前活跃的那个"}
+        },
+        "required": ["checkpoint"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_worktree_diff",
+      "description": "查看隔离工作树相对于主分支当前 HEAD 的改动差异。默认返回文件级摘要(哪些文件改了、各增删多少行)，token 消耗极低，适合快速判断影响面；传 detail=true 则返回逐行完整差异(+/-)。建议在调用 toolshell_worktree_finish(action=merge) 之前先用这个工具审查改动，确认改动范围和内容符合预期再合并。也可配合 paths 参数只看特定文件的 diff，避免完整 diff 过大。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "detail": {"type": "boolean", "description": "可选：true=返回完整逐行差异，false(默认)=只返回文件级统计摘要(--stat)"},
+          "paths": {"type": "array", "items": {"type": "string"}, "description": "可选：只查看指定文件/目录的差异(相对于工作树根)，不传则查看全部改动"},
+          "worktree_path": {"type": "string", "description": "可选：要查看的工作树绝对路径，不传则使用当前活跃的那个"}
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_worktree_list",
+      "description": "查看当前工作目录关联的版本工作流会话列表。默认只返回仍在活跃状态(未 merge/discard)的实验分支；传 include_history=true 则包含已结束的历史记录(最近20条)。用于新对话开始时确认'有没有上次未完成的实验分支还在跑'，或者回顾之前做过哪些实验、各自以什么方式结束的。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "include_history": {"type": "boolean", "description": "可选：true=包含已结束的历史记录(默认 false，只看活跃的)"}
+        },
+        "required": []
       }
     }
   }

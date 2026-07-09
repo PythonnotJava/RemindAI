@@ -237,11 +237,26 @@ class ChatNotifier extends StateNotifier<ChatState> {
   /// null 表示尚未捕获（首条消息时初始化）。
   String? _activeSkillSig;
 
+  /// 上次扫描项目技能目录时记录的 mtime，用于轻量变化检测。
+  /// 已有 AgentContext 缓存时，只在此时间戳变化时才执行完整重扫，
+  /// 避免每条消息都遍历磁盘，同时确保用户手动放入新技能也能被及时发现。
+  DateTime? _projectSkillsDirMtime;
+
   /// 当前对话轮次的 hooks 引用 (用于 AgentDone 后触发 onAgentDone)
   List<AgentHook> _activeHooks = [];
 
   /// 当前轮次的 token 计数（用于宠物经济系统奖励）
   int _currentTokenCount = 0;
+
+  /// ─── AgentContext 缓存 ───
+  /// 同一个对话会话内复用，避免每条消息发送时都全量重建(加载技能、
+  /// 扫描目录、解析 JSON、MCP 工具收集等)。仅在以下时机 invalidate:
+  /// - 新建会话 (newConversation)
+  /// - 加载历史会话 (loadConversation)
+  /// - 显式切换模型 (switchModel)
+  /// 其他情况(如技能变化)由 _activeSkillSig 机制处理，不需要重建整个 context。
+  AgentContext? _cachedAgentContext;
+  AgentContextBuilder? _cachedContextBuilder;
 
   /// 流式 token 合并缓冲：每个 token 先入此缓冲，由 [_flushTimer] 周期性合并到
   /// state.streamingText，避免"每 token 一次 setState + 全量 rebuild + markdown 重解析"
@@ -280,6 +295,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     await _fireSessionEnd();
     _agentMessages.clear();
     _activeSkillSig = null;
+    _projectSkillsDirMtime = null;
+    _cachedAgentContext = null;
+    _cachedContextBuilder = null;
     state = const ChatState();
     // 刷新历史列表
     _ref.read(conversationsProvider.notifier).refresh();
@@ -290,6 +308,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _subscription?.cancel();
     _agentMessages.clear();
     _activeSkillSig = null;
+    _projectSkillsDirMtime = null;
+    _cachedAgentContext = null;
+    _cachedContextBuilder = null;
 
     // 进入加载状态，让 UI 显示过渡动画
     state = state.copyWith(isLoadingHistory: true);
@@ -358,6 +379,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
   /// 切换模型
   void switchModel(ModelCard modelCard) {
     _ref.read(activeModelCardProvider.notifier).state = modelCard;
+    // 模型变了需要重建 LLM 客户端和可能的 system prompt(token 限制不同)
+    _cachedAgentContext = null;
+    _cachedContextBuilder = null;
   }
 
   /// 添加附件
@@ -529,7 +553,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
       ),
       // 每个子任务独立一份只读 Executor 实例，互不共享可变状态；
       // 因为只读，即使多个子 Agent 同时指向同一 workDir 也不会产生写冲突。
-      createReadOnlyExecutor: () => ReadOnlyExecutor(projectRoot: workDir),
+      // allowOutsideRoot: true 使子 Agent 可以访问用户指定的任意绝对路径
+      // (桌面交互模式下与主 Executor 行为一致，否则跨目录读取会被"路径越界"拒绝)。
+      createReadOnlyExecutor: () => ReadOnlyExecutor(
+        projectRoot: workDir,
+        allowOutsideRoot: true,
+      ),
       readOnlyTools: ReadOnlyExecutor.toolDefinitions,
     );
 
@@ -685,26 +714,72 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     // ─── 重扫项目级临时技能目录,感知中途变化 ───
     // 模型可能在上一轮用 toolshell_write 往工作目录的 .toolshell/skills/
-    // 写入了新的项目级技能。这里强制重建 projectSkillsProvider 让其重扫磁盘,
-    // 使新技能的工具与 SKILL.md 在本轮就能生效。
-    // 项目技能与全局技能数据源隔离,重扫不影响全局技能管理 UI。
-    // 技能集合未变时,下方的签名比对会保持 prompt cache,无额外开销。
-    try {
-      _ref.invalidate(projectSkillsProvider);
-      await _ref.read(projectSkillsProvider.future);
-    } catch (e) {
-      print('[SKILL] 重扫项目技能失败(忽略): $e');
+    // 写入了新的项目级技能，或者用户手动往该目录放入了新技能文件夹。
+    // 策略：
+    // - 无缓存（首条消息 / 会话切换）时：无条件全量重扫
+    // - 有缓存时：仅检查 .toolshell/skills/ 目录的 mtime，变了才重扫+重建 context
+    //   mtime 检查是纯内存 stat 调用（<1ms），避免每条消息都遍历磁盘
+    bool needRescanSkills = false;
+    if (_cachedAgentContext == null) {
+      needRescanSkills = true;
+    } else {
+      // 轻量 mtime 检查
+      final skillsDir = Directory(
+        '${_ref.read(workingDirectoryProvider)}/.toolshell/skills',
+      );
+      try {
+        if (await skillsDir.exists()) {
+          final stat = await skillsDir.stat();
+          if (_projectSkillsDirMtime == null ||
+              stat.modified != _projectSkillsDirMtime) {
+            needRescanSkills = true;
+          }
+        } else if (_projectSkillsDirMtime != null) {
+          // 目录被删除了，也需要刷新
+          needRescanSkills = true;
+        }
+      } catch (_) {
+        // stat 失败忽略，不影响正常流程
+      }
+    }
+
+    if (needRescanSkills) {
+      try {
+        _ref.invalidate(projectSkillsProvider);
+        await _ref.read(projectSkillsProvider.future);
+        // 记录当前 mtime
+        final skillsDir = Directory(
+          '${_ref.read(workingDirectoryProvider)}/.toolshell/skills',
+        );
+        if (await skillsDir.exists()) {
+          final stat = await skillsDir.stat();
+          _projectSkillsDirMtime = stat.modified;
+        } else {
+          _projectSkillsDirMtime = null;
+        }
+        // 有缓存时检测到变化，需要重建 context 以加载新技能的工具和 prompt
+        if (_cachedAgentContext != null) {
+          _cachedAgentContext = null;
+          _cachedContextBuilder = null;
+        }
+      } catch (e) {
+        print('[SKILL] 重扫项目技能失败(忽略): $e');
+      }
     }
 
     // ─── 使用 AgentContext 构建执行环境 ───
-    final contextBuilder = AgentContextBuilder(_ref);
-    final agentContext = await contextBuilder.build(
+    // 同一个对话会话内复用缓存，避免每条消息都全量重建(节省 100-500ms)。
+    // 需要重建的时机已在 newConversation/loadConversation/switchModel 中 invalidate。
+    final contextBuilder = _cachedContextBuilder ?? AgentContextBuilder(_ref);
+    final agentContext = _cachedAgentContext ?? await contextBuilder.build(
       modelCard: modelCard,
       existingMessages: _agentMessages,
       sessionAutoApprove: _sessionAutoApprove,
       onPermissionRequest: _onPermissionRequest,
       userInput: input,
     );
+    _cachedAgentContext = agentContext;
+    _cachedContextBuilder = contextBuilder;
 
     // 保存 hooks 引用 (AgentDone 后触发)
     _activeHooks = agentContext.hooks;
@@ -1182,6 +1257,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _fireSessionEnd();
     _agentMessages.clear();
     _activeSkillSig = null;
+    _projectSkillsDirMtime = null;
     state = const ChatState();
   }
 

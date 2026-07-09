@@ -14,6 +14,8 @@
 
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 /// 单个 Slash 命令定义
 class SlashCommand {
   /// 触发词，含前导斜杠，如 `/skill-cti`
@@ -201,15 +203,27 @@ String _expandSkillTemp(String description) =>
 /// 与 paddle_ocr_tool.dart 的 `_getScriptsDir()` 同一套两段式探测：
 /// 开发模式下 CWD 就是项目根，直接用相对路径；发布模式下资源被打进
 /// `<可执行文件同级目录>/data/flutter_assets/` 下，需要从可执行文件路径推算。
+///
+/// 注意：必须返回绝对路径，因为用户的工作目录可以是任意位置，
+/// Agent 的 toolshell_read 以用户工作目录为 base 解析相对路径，
+/// 如果返回相对路径会被解析成错误位置。
 String _archifyScriptsDir() {
   final candidates = [
-    'assets/scripts/archify',
-    '${File(Platform.resolvedExecutable).parent.path}/data/flutter_assets/assets/scripts/archify',
+    p.join(Directory.current.path, 'assets', 'scripts', 'archify'),
+    p.join(
+      File(Platform.resolvedExecutable).parent.path,
+      'data',
+      'flutter_assets',
+      'assets',
+      'scripts',
+      'archify',
+    ),
   ];
-  for (final p in candidates) {
-    if (Directory(p).existsSync()) return p;
+  for (final candidate in candidates) {
+    if (Directory(candidate).existsSync()) return candidate;
   }
-  return 'assets/scripts/archify';
+  // 兜底：返回第一个候选的绝对路径，即使不存在也比相对路径好
+  return candidates.first;
 }
 
 /// `/archify-draw` 展开模板：调用内置 archify 技能生成技术图表 HTML

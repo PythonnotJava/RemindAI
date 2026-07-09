@@ -14,8 +14,15 @@ import '../agent_hook.dart';
 /// - 有 pnpm → 用 pnpm 而非 npm
 /// - 有 rg → 用 ripgrep 而非 findstr
 /// - 无 docker → 不建议容器化
+///
+/// 进程级缓存: 环境探测结果(已安装的工具列表)在同一次应用运行期间是稳定的，
+/// 不需要每个新会话都重新跑 60+ 个子进程。首次探测的结果缓存在静态字段里，
+/// 后续会话直接复用摘要字符串注入 context，响应时间从 1-2s 降到 <1ms。
 class SystemProbeHook extends AgentHook {
   final SystemExecutor _executor;
+
+  /// 进程级缓存: 探测摘要文本。null = 尚未探测; '' = 探测完成但无内容。
+  static String? _cachedSummary;
 
   SystemProbeHook() : _executor = SystemExecutor();
 
@@ -25,14 +32,16 @@ class SystemProbeHook extends AgentHook {
     List<Map<String, dynamic>> messages,
   ) async {
     try {
-      final resultJson = await _executor.run('system_probe', {
-        'category': 'all',
-      });
+      // 复用进程级缓存——环境工具列表在一次应用运行期间不会变化
+      if (_cachedSummary == null) {
+        final resultJson = await _executor.run('system_probe', {
+          'category': 'all',
+        });
+        final data = jsonDecode(resultJson) as Map<String, dynamic>;
+        _cachedSummary = data['status'] == 'ok' ? _buildSummary(data) : '';
+      }
 
-      final data = jsonDecode(resultJson) as Map<String, dynamic>;
-      if (data['status'] != 'ok') return;
-
-      final summary = _buildSummary(data);
+      final summary = _cachedSummary!;
       if (summary.isEmpty) return;
 
       messages.add({'role': 'system', 'content': '[系统环境]\n$summary'});

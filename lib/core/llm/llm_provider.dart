@@ -28,7 +28,7 @@ extension LlmProviderX on LlmProvider {
   /// 导入对话框里的 Base URL 占位示例。
   String get baseUrlHint => switch (this) {
     LlmProvider.openai => 'https://api.openai.com/v1',
-    LlmProvider.anthropic => 'https://api.anthropic.com',
+    LlmProvider.anthropic => 'https://api.anthropic.com/v1/messages',
     LlmProvider.gemini => 'https://generativelanguage.googleapis.com/v1beta',
   };
 

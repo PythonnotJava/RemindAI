@@ -8,6 +8,10 @@ import 'llm_client.dart';
 ///
 /// 对上层暴露与 [OpenAiClient] 相同的接口：输入/输出均使用 OpenAI 风格的
 /// 消息与工具格式，内部负责双向翻译。
+///
+/// **URL 约定**: 用户填写完整的 endpoint URL（如 `https://api.anthropic.com/v1/messages`
+/// 或中转站的 `https://relay.example.com/v1/messages`），客户端直接 POST 到该地址，
+/// 不再在代码中拼接路径。
 class AnthropicClient implements LlmClient {
   final Dio _dio;
   final String baseUrl;
@@ -25,9 +29,10 @@ class AnthropicClient implements LlmClient {
     required this.apiKey,
     required this.model,
     this.maxTokens = 4096,
-  }) : _dio = Dio(
+  }) : _endpointUrl = _normalizeEndpoint(baseUrl),
+       _dio = Dio(
          BaseOptions(
-           baseUrl: _normalizeBase(baseUrl),
+           // 不设 baseUrl — 使用绝对 URL 直接 POST
            headers: {
              'x-api-key': apiKey,
              'anthropic-version': _apiVersion,
@@ -38,11 +43,26 @@ class AnthropicClient implements LlmClient {
          ),
        );
 
-  /// 去掉末尾斜杠；若用户误填了 /v1，也保留，由 endpoint 负责拼 /v1/messages。
-  static String _normalizeBase(String url) {
+  /// 规范化后的完整 endpoint URL（用于 POST 请求）。
+  final String _endpointUrl;
+
+  /// 规范化 endpoint URL：只去掉末尾斜杠。
+  /// 用户应填写完整地址如 `https://api.anthropic.com/v1/messages`。
+  /// 兼容旧数据：如果用户填的是不含 /v1/messages 的 base URL，自动补全。
+  static String _normalizeEndpoint(String url) {
     var u = url.trim();
     while (u.endsWith('/')) {
       u = u.substring(0, u.length - 1);
+    }
+    // 兼容旧数据：用户可能存的是 base URL (如 https://api.anthropic.com)
+    // 如果 URL 不以 /messages 结尾，认为是 base URL，自动追加 /v1/messages
+    if (!u.endsWith('/messages')) {
+      // 如果已有 /v1 后缀，只追加 /messages
+      if (u.endsWith('/v1')) {
+        u = '$u/messages';
+      } else {
+        u = '$u/v1/messages';
+      }
     }
     return u;
   }
@@ -232,7 +252,7 @@ class AnthropicClient implements LlmClient {
   }) async {
     final body = _buildBody(messages, tools, stream: false);
     try {
-      final response = await _dio.post('/v1/messages', data: body);
+      final response = await _dio.post(_endpointUrl, data: body);
       return _parseNonStream(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       String detail = e.response?.data?.toString() ?? e.message ?? e.type.name;
@@ -283,7 +303,7 @@ class AnthropicClient implements LlmClient {
     final Response response;
     try {
       response = await _dio.post(
-        '/v1/messages',
+        _endpointUrl,
         data: body,
         options: Options(responseType: ResponseType.stream),
       );
