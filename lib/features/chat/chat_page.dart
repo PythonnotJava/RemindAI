@@ -226,7 +226,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Widget _buildTopBar(BuildContext context, ChatState chatState) {
     final colorScheme = Theme.of(context).colorScheme;
     final modelCard = ref.watch(activeModelCardProvider);
-    final modelCardsAsync = ref.watch(modelCardsProvider);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -234,24 +233,26 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         children: [
           Icon(Icons.psychology, color: colorScheme.primary, size: 24),
           const SizedBox(width: 8),
-          // 模型选择器
-          modelCardsAsync.when(
-            data: (cards) => PopupMenuButton<db.ModelCard>(
-              onSelected: (selected) {
-                // 将 db.ModelCard 转换为 llm ModelCard
-                final llmCard = ModelCard(
-                  id: selected.id,
-                  name: selected.name,
-                  baseUrl: selected.baseUrl,
-                  apiKey: selected.apiKey,
-                  model: selected.modelId,
-                  logoPath: selected.logoPath,
-                  provider: selected.provider,
-                  contextWindow: selected.contextWindow,
-                );
-                ref.read(chatProvider.notifier).switchModel(llmCard);
-              },
-              itemBuilder: (context) => cards.map((card) {
+          // 模型选择器 — 不 watch modelCardsProvider，只在弹出菜单时 read，
+          // 避免其他页面切换默认模型时触发整个 chat_page rebuild。
+          PopupMenuButton<db.ModelCard>(
+            onSelected: (selected) {
+              final llmCard = ModelCard(
+                id: selected.id,
+                name: selected.name,
+                baseUrl: selected.baseUrl,
+                apiKey: selected.apiKey,
+                model: selected.modelId,
+                logoPath: selected.logoPath,
+                provider: selected.provider,
+                contextWindow: selected.contextWindow,
+              );
+              ref.read(chatProvider.notifier).switchModel(llmCard);
+            },
+            itemBuilder: (context) {
+              final cards =
+                  ref.read(modelCardsProvider).valueOrNull ?? const [];
+              return cards.map((card) {
                 final isActive = modelCard?.id == card.id;
                 return PopupMenuItem<db.ModelCard>(
                   value: card,
@@ -291,44 +292,36 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     ],
                   ),
                 );
-              }).toList(),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (modelCard != null) ...[
-                    ModelLogo(
-                      logoPath: modelCard.logoPath,
-                      name: modelCard.name,
-                      modelId: modelCard.model,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  Text(
-                    modelCard != null ? modelCard.model : context.s.chatNoModel,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: modelCard != null
-                          ? colorScheme.onSurface
-                          : colorScheme.error,
-                    ),
+              }).toList();
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (modelCard != null) ...[
+                  ModelLogo(
+                    logoPath: modelCard.logoPath,
+                    name: modelCard.name,
+                    modelId: modelCard.model,
+                    size: 22,
                   ),
-                  Icon(
-                    Icons.arrow_drop_down,
-                    size: 20,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                  const SizedBox(width: 6),
                 ],
-              ),
-            ),
-            loading: () => Text(
-              context.s.chatLoading,
-              style: TextStyle(fontSize: 14, color: colorScheme.outline),
-            ),
-            error: (_, _) => Text(
-              context.s.chatLoadFailed,
-              style: TextStyle(fontSize: 14, color: colorScheme.error),
+                Text(
+                  modelCard != null ? modelCard.model : context.s.chatNoModel,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: modelCard != null
+                        ? colorScheme.onSurface
+                        : colorScheme.error,
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_drop_down,
+                  size: 20,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
             ),
           ),
           const Spacer(),

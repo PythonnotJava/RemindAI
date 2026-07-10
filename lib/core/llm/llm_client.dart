@@ -419,103 +419,103 @@ class OpenAiClient implements LlmClient {
     bool firstChunk = true;
 
     try {
-    await for (final chunk in rawStream) {
-      final decoded = utf8.decode(chunk, allowMalformed: true);
-      chunkCount++;
-      if (firstChunk) {
-        AppLogger.instance.log(
-          '[LLM Stream] 首个chunk (${decoded.length}字符): ${decoded.substring(0, decoded.length.clamp(0, 200))}',
-        );
-        firstChunk = false;
-      }
-      buffer += decoded;
-      // 兼容 \r\n 和 \n 换行
-      final lines = buffer.split(RegExp(r'\r?\n'));
-      buffer = lines.removeLast();
-
-      for (var line in lines) {
-        line = line.trim();
-        if (line.isEmpty) continue;
-
-        // 兼容 "data: {...}" 和 "data:{...}"
-        String data;
-        if (line.startsWith('data: ')) {
-          data = line.substring(6).trim();
-        } else if (line.startsWith('data:')) {
-          data = line.substring(5).trim();
-        } else {
-          continue;
-        }
-
-        if (data == '[DONE]') {
+      await for (final chunk in rawStream) {
+        final decoded = utf8.decode(chunk, allowMalformed: true);
+        chunkCount++;
+        if (firstChunk) {
           AppLogger.instance.log(
-            '[LLM Stream] 完成: chunks=$chunkCount, tokens=$tokenCount, content=${contentBuf.length}字符, reasoning=${reasoningBuf.length}字符',
+            '[LLM Stream] 首个chunk (${decoded.length}字符): ${decoded.substring(0, decoded.length.clamp(0, 200))}',
           );
-          // 构建最终结果
-          List<ToolCall>? calls;
-          if (toolCallsMap.isNotEmpty) {
-            calls = toolCallsMap.entries.map((e) => e.value.build()).toList();
-          }
-          yield StreamComplete(
-            content: contentBuf.isEmpty ? null : contentBuf.toString(),
-            reasoningContent: reasoningBuf.isEmpty
-                ? null
-                : reasoningBuf.toString(),
-            toolCalls: calls,
-            finishReason: finishReason,
-          );
-          return;
+          firstChunk = false;
         }
+        buffer += decoded;
+        // 兼容 \r\n 和 \n 换行
+        final lines = buffer.split(RegExp(r'\r?\n'));
+        buffer = lines.removeLast();
 
-        try {
-          final json = jsonDecode(data) as Map<String, dynamic>;
-          final choice = json['choices']?[0] as Map<String, dynamic>?;
-          if (choice == null) continue;
+        for (var line in lines) {
+          line = line.trim();
+          if (line.isEmpty) continue;
 
-          // 更新 finishReason
-          if (choice['finish_reason'] != null) {
-            finishReason = choice['finish_reason'] as String;
+          // 兼容 "data: {...}" 和 "data:{...}"
+          String data;
+          if (line.startsWith('data: ')) {
+            data = line.substring(6).trim();
+          } else if (line.startsWith('data:')) {
+            data = line.substring(5).trim();
+          } else {
+            continue;
           }
 
-          final delta = choice['delta'] as Map<String, dynamic>?;
-          if (delta == null) continue;
-
-          // Reasoning token (DeepSeek 等思维链模型)
-          if (delta['reasoning_content'] != null) {
-            final text = delta['reasoning_content'] as String;
-            if (text.isNotEmpty) {
-              reasoningBuf.write(text);
-              yield ReasoningToken(text);
+          if (data == '[DONE]') {
+            AppLogger.instance.log(
+              '[LLM Stream] 完成: chunks=$chunkCount, tokens=$tokenCount, content=${contentBuf.length}字符, reasoning=${reasoningBuf.length}字符',
+            );
+            // 构建最终结果
+            List<ToolCall>? calls;
+            if (toolCallsMap.isNotEmpty) {
+              calls = toolCallsMap.entries.map((e) => e.value.build()).toList();
             }
+            yield StreamComplete(
+              content: contentBuf.isEmpty ? null : contentBuf.toString(),
+              reasoningContent: reasoningBuf.isEmpty
+                  ? null
+                  : reasoningBuf.toString(),
+              toolCalls: calls,
+              finishReason: finishReason,
+            );
+            return;
           }
 
-          // Content token
-          if (delta['content'] != null) {
-            final text = delta['content'] as String;
-            if (text.isNotEmpty) {
-              tokenCount++;
-              contentBuf.write(text);
-              yield ContentToken(text);
-            }
-          }
+          try {
+            final json = jsonDecode(data) as Map<String, dynamic>;
+            final choice = json['choices']?[0] as Map<String, dynamic>?;
+            if (choice == null) continue;
 
-          // Tool calls delta
-          if (delta['tool_calls'] != null) {
-            final tcList = delta['tool_calls'] as List;
-            for (final tcDelta in tcList) {
-              final tc = tcDelta as Map<String, dynamic>;
-              final idx = tc['index'] as int;
-              toolCallsMap.putIfAbsent(idx, () => _ToolCallAccumulator());
-              toolCallsMap[idx]!.addDelta(tc);
+            // 更新 finishReason
+            if (choice['finish_reason'] != null) {
+              finishReason = choice['finish_reason'] as String;
             }
+
+            final delta = choice['delta'] as Map<String, dynamic>?;
+            if (delta == null) continue;
+
+            // Reasoning token (DeepSeek 等思维链模型)
+            if (delta['reasoning_content'] != null) {
+              final text = delta['reasoning_content'] as String;
+              if (text.isNotEmpty) {
+                reasoningBuf.write(text);
+                yield ReasoningToken(text);
+              }
+            }
+
+            // Content token
+            if (delta['content'] != null) {
+              final text = delta['content'] as String;
+              if (text.isNotEmpty) {
+                tokenCount++;
+                contentBuf.write(text);
+                yield ContentToken(text);
+              }
+            }
+
+            // Tool calls delta
+            if (delta['tool_calls'] != null) {
+              final tcList = delta['tool_calls'] as List;
+              for (final tcDelta in tcList) {
+                final tc = tcDelta as Map<String, dynamic>;
+                final idx = tc['index'] as int;
+                toolCallsMap.putIfAbsent(idx, () => _ToolCallAccumulator());
+                toolCallsMap[idx]!.addDelta(tc);
+              }
+            }
+          } catch (e) {
+            AppLogger.instance.log(
+              '[LLM Stream] JSON解析异常: $e | data: ${data.substring(0, data.length.clamp(0, 100))}',
+            );
           }
-        } catch (e) {
-          AppLogger.instance.log(
-            '[LLM Stream] JSON解析异常: $e | data: ${data.substring(0, data.length.clamp(0, 100))}',
-          );
         }
       }
-    }
     } on HttpException catch (e) {
       // "Connection closed while receiving data" — 连接在流传输中途被对端关闭。
       // 常见原因:

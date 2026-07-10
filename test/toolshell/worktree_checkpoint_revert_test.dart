@@ -59,9 +59,7 @@ void main() {
       final start = await manager.start(name: 'cp-dirty');
       final worktreePath = start['worktree_path'] as String;
 
-      await File(
-        p.join(worktreePath, 'feature.txt'),
-      ).writeAsString('实验性改动 v1');
+      await File(p.join(worktreePath, 'feature.txt')).writeAsString('实验性改动 v1');
 
       final cp = await manager.checkpoint(
         worktreePath: worktreePath,
@@ -72,7 +70,10 @@ void main() {
       expect(cp['had_uncommitted_changes'], isTrue);
 
       // 存档后应该没有未提交改动了(已被自动 commit)
-      final dirtyCheck = await git(['status', '--porcelain'], cwd: worktreePath);
+      final dirtyCheck = await git([
+        'status',
+        '--porcelain',
+      ], cwd: worktreePath);
       expect(dirtyCheck.stdout.toString().trim(), isEmpty);
 
       await manager.finish(worktreePath: worktreePath, action: 'discard');
@@ -95,9 +96,7 @@ void main() {
 
       // 第二步改动(这一步"走偏了")
       await featureFile.writeAsString('第二步的内容(错误的方向)');
-      await File(
-        p.join(worktreePath, 'oops.txt'),
-      ).writeAsString('这个文件不该存在');
+      await File(p.join(worktreePath, 'oops.txt')).writeAsString('这个文件不该存在');
 
       // 退回第一步存档点
       final revertResult = await manager.revert(
@@ -191,7 +190,9 @@ void main() {
       final worktreePath = start['worktree_path'] as String;
 
       await File(p.join(worktreePath, 'new_file.txt')).writeAsString('hello');
-      await File(p.join(worktreePath, 'README.md')).writeAsString('# changed\n');
+      await File(
+        p.join(worktreePath, 'README.md'),
+      ).writeAsString('# changed\n');
       // 需要 add 才能让 diff 看到新文件(对比的是 base..worktree 工作目录)
       await git(['add', '-A'], cwd: worktreePath);
 

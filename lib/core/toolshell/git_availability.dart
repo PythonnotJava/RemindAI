@@ -24,10 +24,9 @@ class GitAvailability {
     if (cached != null) return cached;
 
     try {
-      final result = await Process.run(
-        'git',
-        ['--version'],
-      ).timeout(const Duration(seconds: 5));
+      final result = await Process.run('git', [
+        '--version',
+      ]).timeout(const Duration(seconds: 5));
       _cached = result.exitCode == 0;
     } catch (_) {
       // git 未安装、不在 PATH 里、或探测超时，均视为不可用。

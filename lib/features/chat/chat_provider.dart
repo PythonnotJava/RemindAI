@@ -555,10 +555,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // 因为只读，即使多个子 Agent 同时指向同一 workDir 也不会产生写冲突。
       // allowOutsideRoot: true 使子 Agent 可以访问用户指定的任意绝对路径
       // (桌面交互模式下与主 Executor 行为一致，否则跨目录读取会被"路径越界"拒绝)。
-      createReadOnlyExecutor: () => ReadOnlyExecutor(
-        projectRoot: workDir,
-        allowOutsideRoot: true,
-      ),
+      createReadOnlyExecutor: () =>
+          ReadOnlyExecutor(projectRoot: workDir, allowOutsideRoot: true),
       readOnlyTools: ReadOnlyExecutor.toolDefinitions,
     );
 
@@ -771,13 +769,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
     // 同一个对话会话内复用缓存，避免每条消息都全量重建(节省 100-500ms)。
     // 需要重建的时机已在 newConversation/loadConversation/switchModel 中 invalidate。
     final contextBuilder = _cachedContextBuilder ?? AgentContextBuilder(_ref);
-    final agentContext = _cachedAgentContext ?? await contextBuilder.build(
-      modelCard: modelCard,
-      existingMessages: _agentMessages,
-      sessionAutoApprove: _sessionAutoApprove,
-      onPermissionRequest: _onPermissionRequest,
-      userInput: input,
-    );
+    final agentContext =
+        _cachedAgentContext ??
+        await contextBuilder.build(
+          modelCard: modelCard,
+          existingMessages: _agentMessages,
+          sessionAutoApprove: _sessionAutoApprove,
+          onPermissionRequest: _onPermissionRequest,
+          userInput: input,
+        );
     _cachedAgentContext = agentContext;
     _cachedContextBuilder = contextBuilder;
 

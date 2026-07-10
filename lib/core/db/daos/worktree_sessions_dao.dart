@@ -135,16 +135,16 @@ class WorktreeSession {
   bool get isActive => status == 'active';
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'work_dir': workDir,
-        'worktree_path': worktreePath,
-        'branch': branch,
-        'name': name,
-        'status': status,
-        'base_commit': baseCommit,
-        'end_action': endAction,
-        'end_commit': endCommit,
-        'created_at': createdAt.toIso8601String(),
-        'ended_at': endedAt?.toIso8601String() ?? '',
-      };
+    'id': id,
+    'work_dir': workDir,
+    'worktree_path': worktreePath,
+    'branch': branch,
+    'name': name,
+    'status': status,
+    'base_commit': baseCommit,
+    'end_action': endAction,
+    'end_commit': endCommit,
+    'created_at': createdAt.toIso8601String(),
+    'ended_at': endedAt?.toIso8601String() ?? '',
+  };
 }

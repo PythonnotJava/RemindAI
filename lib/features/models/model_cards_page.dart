@@ -558,7 +558,8 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
     // e.g. https://api.anthropic.com/v1/messages → https://api.anthropic.com/v1/models
     String modelsUrl;
     if (baseUrl.endsWith('/messages')) {
-      modelsUrl = '${baseUrl.substring(0, baseUrl.length - '/messages'.length)}/models';
+      modelsUrl =
+          '${baseUrl.substring(0, baseUrl.length - '/messages'.length)}/models';
     } else if (baseUrl.endsWith('/v1')) {
       modelsUrl = '$baseUrl/models';
     } else {

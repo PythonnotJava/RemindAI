@@ -161,9 +161,7 @@ class AgentContextBuilder {
           }
         } catch (e) {
           // DB 查询失败不应阻断主流程(可能是首次运行、表还未建好等)
-          AppLogger.instance.log(
-            '[AgentContext] 尝试恢复 worktree 会话失败(忽略): $e',
-          );
+          AppLogger.instance.log('[AgentContext] 尝试恢复 worktree 会话失败(忽略): $e');
         }
       }
 
@@ -184,10 +182,7 @@ class AgentContextBuilder {
           _ref.read(activeWorktreeProvider.notifier).state = '';
           try {
             final dao = WorktreeSessionsDao(_ref.read(databaseProvider));
-            await dao.recordEnd(
-              worktreePath: normalized,
-              action: 'discard',
-            );
+            await dao.recordEnd(worktreePath: normalized, action: 'discard');
           } catch (_) {}
         }
       }
@@ -530,9 +525,7 @@ class AgentContextBuilder {
         );
       } catch (e) {
         // 写入失败不阻断主流程——最坏情况就是退化为纯内存态。
-        AppLogger.instance.log(
-          '[AgentContext] worktree 会话记录写入失败(忽略): $e',
-        );
+        AppLogger.instance.log('[AgentContext] worktree 会话记录写入失败(忽略): $e');
       }
     }
     return jsonEncode(result);
@@ -588,9 +581,7 @@ class AgentContextBuilder {
           action: result['action'] as String? ?? action,
         );
       } catch (e) {
-        AppLogger.instance.log(
-          '[AgentContext] worktree 会话结束记录写入失败(忽略): $e',
-        );
+        AppLogger.instance.log('[AgentContext] worktree 会话结束记录写入失败(忽略): $e');
       }
     }
     return jsonEncode(result);
@@ -715,7 +706,10 @@ class AgentContextBuilder {
     final rawPaths = args['paths'];
     List<String>? paths;
     if (rawPaths is List) {
-      paths = rawPaths.cast<String>().where((s) => s.trim().isNotEmpty).toList();
+      paths = rawPaths
+          .cast<String>()
+          .where((s) => s.trim().isNotEmpty)
+          .toList();
       if (paths.isEmpty) paths = null;
     }
 

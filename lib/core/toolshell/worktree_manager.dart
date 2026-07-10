@@ -464,12 +464,7 @@ class WorktreeManager {
     // 且只对当前工作目录生效——我们需要 -C worktreePath。
     // 策略: `git -C worktreePath diff <baseHash> --stat` (或不加 --stat)
     // 这会比较 baseHash 与工作树的实际文件状态(含未提交改动)。
-    final args = <String>[
-      '-C',
-      worktreePath,
-      'diff',
-      baseHash,
-    ];
+    final args = <String>['-C', worktreePath, 'diff', baseHash];
 
     if (!detail) args.add('--stat');
     if (paths != null && paths.isNotEmpty) {

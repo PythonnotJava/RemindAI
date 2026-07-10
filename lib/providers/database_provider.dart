@@ -97,8 +97,16 @@ class ModelCardsNotifier extends AsyncNotifier<List<ModelCard>> {
   }
 
   Future<void> setDefault(String id) async {
+    // 乐观更新：立即修改本地状态让 UI 瞬间响应，不等 DB
+    final current = state.valueOrNull;
+    if (current != null) {
+      final updated = current
+          .map((c) => c.copyWith(isDefault: c.id == id))
+          .toList();
+      state = AsyncData(updated);
+    }
+    // 后台持久化
     await _dao.setDefault(id);
-    ref.invalidateSelf();
   }
 
   /// 按新顺序重排卡片 (orderedIds 为重排后的 id 序列)
