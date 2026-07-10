@@ -16,15 +16,37 @@ class _DetectedModel {
   const _DetectedModel(this.id, [this.contextWindow = 0]);
 }
 
-class ModelCardsPage extends ConsumerWidget {
+class ModelCardsPage extends ConsumerStatefulWidget {
   const ModelCardsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ModelCardsPage> createState() => _ModelCardsPageState();
+}
+
+class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
+  /// 是否处于排序模式（拖拽可用）
+  bool _reorderMode = false;
+
+  @override
+  Widget build(BuildContext context) {
     final cardsAsync = ref.watch(modelCardsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.s.modelsTitle)),
+      appBar: AppBar(
+        title: Text(context.s.modelsTitle),
+        actions: [
+          // 排序模式切换
+          if (cardsAsync.valueOrNull != null &&
+              cardsAsync.valueOrNull!.length > 1)
+            IconButton(
+              icon: Icon(
+                _reorderMode ? Icons.done : Icons.swap_vert,
+              ),
+              tooltip: _reorderMode ? '完成排序' : '拖拽排序',
+              onPressed: () => setState(() => _reorderMode = !_reorderMode),
+            ),
+        ],
+      ),
       body: cardsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) =>
@@ -62,25 +84,47 @@ class ModelCardsPage extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    context.s.modelsReorderHint,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                if (_reorderMode)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      context.s.modelsReorderHint,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ),
-                ReorderableCardGrid<ModelCard>(
-                  items: cards,
-                  keyOf: (c) => c.id,
-                  onReorder: (reordered) =>
-                      ref.read(modelCardsProvider.notifier).reorder(reordered),
-                  itemBuilder: (context, card) => _ModelCardTile(card: card),
-                  trailing: _AddModelCard(
-                    onTap: () => _showAddDialog(context, ref),
+                // 排序模式：带拖拽的重排网格
+                // 普通模式：轻量 Wrap，点击即切换默认，无拖拽开销
+                if (_reorderMode)
+                  ReorderableCardGrid<ModelCard>(
+                    items: cards,
+                    keyOf: (c) => c.id,
+                    onReorder: (reordered) =>
+                        ref.read(modelCardsProvider.notifier).reorder(reordered),
+                    itemBuilder: (context, card) => _ModelCardTile(card: card),
+                    trailing: _AddModelCard(
+                      onTap: () => _showAddDialog(context, ref),
+                    ),
+                  )
+                else
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final card in cards)
+                        SizedBox(
+                          width: 280,
+                          child: _ModelCardTile(card: card),
+                        ),
+                      SizedBox(
+                        width: 280,
+                        child: _AddModelCard(
+                          onTap: () => _showAddDialog(context, ref),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
               ],
             ),
           );

@@ -13,7 +13,7 @@
 - 知识库功能.
 - 优化了MCP服务器的载入和启动配置.
 - 优化了Agent自主生成文件默认在工作目录下.
-- 
+
 
 ## en
 - Optimized the issue of potential stuttering during long conversations.
@@ -24,7 +24,9 @@
 - Optimized code highlighting.
 - Use [archify](https://github.com/tt-a1i/archify) to summarize and output flowcharts of conversations.
 - More reliable version workflows.
-
+- Knowledge base functionality.
+- Optimized MCP server loading and startup configuration.
+- Optimized the default location of Agent-generated files in the working directory.
 
 # V1.0.3
 

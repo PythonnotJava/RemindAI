@@ -15,8 +15,7 @@
     <img src="https://img.shields.io/badge/Skill Support-purple.svg" alt="Skill" />
     <img src="https://img.shields.io/badge/API Server-green.svg" alt="API Server" />
     <img src="https://img.shields.io/badge/🐱 Global Pet Agent-orange.svg" alt="Pet Agent" />
-    <img src="https://img.shields.io/badge/v1.0.4-latest-informational.svg" alt="Version" />
-  </p>
+   </p>
 </div>
 
 ---
