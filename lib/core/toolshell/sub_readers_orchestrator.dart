@@ -283,6 +283,8 @@ class SubReadersOrchestrator {
           return content.isNotEmpty ? content : buffer.toString();
         case AgentError(message: final msg):
           throw Exception(msg);
+        case AgentReasoningToken():
+          break;
         case AgentToken(text: final text):
           buffer.write(text);
         case AgentToolStart():

@@ -29,11 +29,18 @@ class StreamComplete extends StreamEvent {
   final String? reasoningContent;
   final List<ToolCall>? toolCalls;
   final String finishReason;
+
+  /// 流是否在协议结束标记前异常中断。
+  ///
+  /// true 表示仅收到了部分数据，不能把本次响应当作正常完成。
+  final bool isTruncated;
+
   StreamComplete({
     this.content,
     this.reasoningContent,
     this.toolCalls,
     required this.finishReason,
+    this.isTruncated = false,
   });
 
   /// 转换为 assistant 消息 JSON (用于追加到 messages 历史)
@@ -413,7 +420,7 @@ class OpenAiClient implements LlmClient {
     final contentBuf = StringBuffer();
     final reasoningBuf = StringBuffer();
     final toolCallsMap = <int, _ToolCallAccumulator>{}; // index → accumulator
-    String finishReason = 'stop';
+    String? finishReason;
     int chunkCount = 0;
     int tokenCount = 0;
     bool firstChunk = true;
@@ -462,7 +469,7 @@ class OpenAiClient implements LlmClient {
                   ? null
                   : reasoningBuf.toString(),
               toolCalls: calls,
-              finishReason: finishReason,
+              finishReason: finishReason ?? 'stop',
             );
             return;
           }
@@ -554,7 +561,8 @@ class OpenAiClient implements LlmClient {
       content: contentBuf.isEmpty ? null : contentBuf.toString(),
       reasoningContent: reasoningBuf.isEmpty ? null : reasoningBuf.toString(),
       toolCalls: calls,
-      finishReason: finishReason,
+      finishReason: finishReason ?? 'stream_incomplete',
+      isTruncated: true,
     );
   }
 }

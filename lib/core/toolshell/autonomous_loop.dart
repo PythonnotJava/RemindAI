@@ -121,6 +121,7 @@ class AutonomousLoop {
     _injectLoopInstruction();
 
     String? lastOutput;
+    var consecutiveStalledRounds = 0;
 
     for (var iteration = 1; iteration <= config.maxIterations; iteration++) {
       yield LoopIterStart(iteration, config.maxIterations);
@@ -153,6 +154,9 @@ class AutonomousLoop {
         yield LoopAgentEvent(event);
 
         switch (event) {
+          case AgentReasoningToken():
+            // 推理过程仅透传给 UI，不计入本轮最终输出和停滞判断。
+            break;
           case AgentToken(text: final text):
             buffer.write(text);
           case AgentToolStart(name: _, args: _):
@@ -201,11 +205,19 @@ class AutonomousLoop {
         return;
       }
 
-      // 无进展检测：连续两轮输出高度相似
-      if (previousOutput != null && _isStalledOutput(previousOutput, output)) {
-        AppLogger.instance.log('[Loop] 检测到无进展，终止');
-        yield LoopStalled(iteration);
-        return;
+      // 无进展检测：至少完成 3 轮，并且连续两次检测均高度相似才停止。
+      // 避免第 2 轮因固定的“目标/操作/验证/结果”模板而被误判。
+      if (iteration >= 3 &&
+          previousOutput != null &&
+          _isStalledOutput(previousOutput, output)) {
+        consecutiveStalledRounds++;
+        if (consecutiveStalledRounds >= 2) {
+          AppLogger.instance.log('[Loop] 连续两轮检测到无实质进展，终止');
+          yield LoopStalled(iteration);
+          return;
+        }
+      } else {
+        consecutiveStalledRounds = 0;
       }
 
       if (hasError) return;
@@ -235,8 +247,17 @@ class AutonomousLoop {
   String _buildContinuePrompt(int iteration, String? lastOutput) {
     final buffer = StringBuffer();
     buffer.writeln('[Loop 第 $iteration 轮 — 请继续]');
-    buffer.writeln('上一轮你的操作已执行完毕。请检查结果并继续推进任务。');
-    buffer.writeln('如果任务已完成，请输出 [LOOP_DONE] + 总结。');
+    buffer.writeln('上一轮尚未声明任务完成。请基于已执行的工具结果继续推进，');
+    buffer.writeln('不要重复上一轮的说明或原样重做已经成功的步骤。');
+    if (lastOutput != null && lastOutput.trim().isNotEmpty) {
+      final compact = lastOutput.length > 1200
+          ? lastOutput.substring(lastOutput.length - 1200)
+          : lastOutput;
+      buffer.writeln('\n上一轮最终输出摘要（仅供识别未完成项）：');
+      buffer.writeln(compact);
+    }
+    buffer.writeln('\n请优先执行尚未完成的下一步，并验证实际结果。');
+    buffer.writeln('只有任务整体完成且验证通过时，才输出 [LOOP_DONE] + 总结。');
     buffer.writeln('如果需要继续，请直接执行下一步操作。');
     return buffer.toString();
   }

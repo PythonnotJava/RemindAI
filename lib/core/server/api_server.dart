@@ -334,6 +334,8 @@ class ApiServer {
     String? errMsg;
     await for (final ev in events) {
       switch (ev) {
+        case AgentReasoningToken():
+          break;
         case AgentToken(text: final t):
           buf.write(t);
         case AgentDone(content: final c):
@@ -402,7 +404,9 @@ class ApiServer {
     try {
       await for (final ev in events) {
         switch (ev) {
-          case AgentToken(text: final t):
+          case AgentReasoningToken():
+          break;
+        case AgentToken(text: final t):
             sendChunk({'content': t});
           case AgentToolStart(name: final n, args: final a):
             if (exposeTools) {
@@ -529,7 +533,9 @@ class ApiServer {
     try {
       await for (final ev in events) {
         switch (ev) {
-          case AgentToken(text: final t):
+          case AgentReasoningToken():
+          break;
+        case AgentToken(text: final t):
             buf.write(t);
           case AgentDone(content: final c):
             if (buf.isEmpty && c.isNotEmpty) buf.write(c);
@@ -615,7 +621,9 @@ class ApiServer {
     try {
       await for (final ev in events) {
         switch (ev) {
-          case AgentToken(text: final t):
+          case AgentReasoningToken():
+          break;
+        case AgentToken(text: final t):
             sendEvent('content_block_delta', {
               'type': 'content_block_delta',
               'index': 0,

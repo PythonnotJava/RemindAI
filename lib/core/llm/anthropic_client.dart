@@ -404,8 +404,15 @@ class AnthropicClient implements LlmClient {
       }
     }
 
-    // 流未显式 message_stop 也兜底输出
-    yield _complete(contentBuf, toolBlocks, finishReason);
+    // 流未显式 message_stop：返回截断标记，上层不得当作正常完成。
+    final fallback = _complete(contentBuf, toolBlocks, finishReason);
+    yield StreamComplete(
+      content: fallback.content,
+      reasoningContent: fallback.reasoningContent,
+      toolCalls: fallback.toolCalls,
+      finishReason: 'stream_incomplete',
+      isTruncated: true,
+    );
   }
 
   StreamComplete _complete(

@@ -334,7 +334,7 @@ class GeminiClient implements LlmClient {
     String buffer = '';
     final contentBuf = StringBuffer();
     final calls = <ToolCall>[];
-    String finishReason = 'stop';
+    String? finishReason;
 
     await for (final chunk in rawStream) {
       buffer += utf8.decode(chunk, allowMalformed: true);
@@ -386,7 +386,8 @@ class GeminiClient implements LlmClient {
     yield StreamComplete(
       content: contentBuf.isEmpty ? null : contentBuf.toString(),
       toolCalls: calls.isEmpty ? null : calls,
-      finishReason: finishReason,
+      finishReason: finishReason ?? 'stream_incomplete',
+      isTruncated: finishReason == null,
     );
   }
 }

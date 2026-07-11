@@ -89,6 +89,13 @@ class AgentToken extends AgentEvent {
   AgentToken(this.text);
 }
 
+/// 模型内部推理 token。与最终正文分开，避免 reasoning-only 响应被当作
+/// 已完成的 assistant 正文写入历史。
+class AgentReasoningToken extends AgentEvent {
+  final String text;
+  AgentReasoningToken(this.text);
+}
+
 class AgentToolStart extends AgentEvent {
   final String name;
   final Map<String, dynamic> args;
@@ -197,8 +204,8 @@ class AgentLoop {
               // 实时推送 token 给 UI
               yield AgentToken(text);
             case ReasoningToken(text: final text):
-              // 推理/思考 token (DeepSeek等) — 同样推送给 UI 展示
-              yield AgentToken(text);
+              // 推理 token 与最终正文分开传递；不能作为 AgentDone 的正文兜底。
+              yield AgentReasoningToken(text);
             case StreamComplete():
               completed = event;
           }
@@ -216,6 +223,46 @@ class AgentLoop {
       // 流异常结束，未收到 StreamComplete
       if (completed == null) {
         yield AgentError('LLM 流异常终止: 未收到完整响应');
+        return;
+      }
+
+      // 截断/异常流不能伪装成正常完成。尤其推理模型可能只收到 reasoning，
+      // 连接便被代理关闭；此时必须报告错误，不能写入空 assistant 消息。
+      if (completed.isTruncated) {
+        yield AgentError(
+          'LLM 响应被截断（finish_reason=${completed.finishReason}）。'
+          '模型尚未完成最终输出，请重试或检查网络、代理超时及上下文长度。',
+        );
+        return;
+      }
+
+      final finishReason = completed.finishReason.toLowerCase();
+      const abnormalFinishReasons = {
+        'length',
+        'max_tokens',
+        'content_filter',
+        'error',
+        'cancelled',
+        'stream_incomplete',
+      };
+      if (abnormalFinishReasons.contains(finishReason)) {
+        yield AgentError(
+          'LLM 未正常完成响应（finish_reason=${completed.finishReason}）。'
+          '请增加输出上限、缩短上下文或重试。',
+        );
+        return;
+      }
+
+      final hasToolCalls =
+          completed.toolCalls != null && completed.toolCalls!.isNotEmpty;
+      final hasFinalContent = completed.content?.trim().isNotEmpty ?? false;
+      final hasReasoning =
+          completed.reasoningContent?.trim().isNotEmpty ?? false;
+      if (!hasToolCalls && !hasFinalContent && hasReasoning) {
+        yield AgentError(
+          '模型只返回了推理内容，没有生成最终回答。'
+          '这通常表示输出上限不足或流被提前终止，请重试。',
+        );
         return;
       }
 

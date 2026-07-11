@@ -657,6 +657,9 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
     try {
       await for (final event in loop.chat(userInput)) {
         switch (event) {
+          case AgentReasoningToken():
+            // 推理过程不混入最终正文；保持 thinking 状态即可。
+            runtime.status = AgentStatus.thinking;
           case AgentToken(text: final text):
             runtime.streamingText += text;
             _notifyUpdate();

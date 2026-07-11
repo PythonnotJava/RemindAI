@@ -886,8 +886,35 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final iterMsg = ChatMessage.assistant('─── Loop 第 $iter/$max 轮 ───');
         state = state.copyWith(messages: [...state.messages, iterMsg]);
       case LoopAgentEvent(event: final agentEvent):
-        // 透传给普通事件处理
-        _handleEvent(agentEvent, conversationId);
+        // Loop 中间轮次的 AgentDone 不是整个会话完成，不能走普通完成逻辑
+        // （否则会关闭 loading、发完成通知、结算奖励，让 UI 看起来第一轮已结束）。
+        if (agentEvent case AgentDone(content: final content)) {
+          _flushStreamBuffer();
+          final finalContent = content.isNotEmpty ? content : state.streamingText;
+          if (finalContent.isNotEmpty) {
+            final assistantMsg = ChatMessage.assistant(finalContent);
+            state = state.copyWith(
+              messages: [...state.messages, assistantMsg],
+              streamingText: '',
+              activeToolCalls: [],
+              isLoading: true,
+            );
+            _conversationsDao.saveMessage(conversationId, assistantMsg);
+          } else {
+            state = state.copyWith(
+              streamingText: '',
+              activeToolCalls: [],
+              isLoading: true,
+            );
+          }
+        } else {
+          _handleEvent(agentEvent, conversationId);
+          // AgentError/熔断由 AutonomousLoop 随后的 LoopError 统一结束。
+          if (agentEvent is AgentError ||
+              agentEvent is AgentLoopLimitReached) {
+            state = state.copyWith(isLoading: true);
+          }
+        }
       case LoopDone(totalIterations: final iters, summary: final summary):
         _flushStreamBuffer();
         final doneMsg = ChatMessage.assistant(
@@ -964,6 +991,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   void _handleEvent(AgentEvent event, int conversationId) {
     switch (event) {
+      case AgentReasoningToken(text: final text):
+        // 推理过程单独展示在当前流区域，但不在 AgentDone 时作为最终正文兜底。
+        // 后续可扩展为独立的可折叠“思考过程”面板。
+        _currentTokenCount += ComputeService.estimateTokens(text);
       case AgentToken(text: final text):
         _currentTokenCount += ComputeService.estimateTokens(text);
         // 合并写入缓冲，由计时器周期性刷新到 state，避免每 token 一次全量 rebuild

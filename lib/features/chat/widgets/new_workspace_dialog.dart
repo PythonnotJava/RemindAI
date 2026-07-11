@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/l10n/l10n_ext.dart';
+import '../../../core/logger/app_logger.dart';
 import '../../../core/utils/directory_picker.dart';
 import '../../../core/settings/app_settings.dart';
 import '../../../providers/settings_provider.dart';
@@ -49,6 +50,9 @@ class _NewWorkspaceDialogState extends ConsumerState<NewWorkspaceDialog> {
 
   // 创建状态
   bool _creating = false;
+
+  // 原生目录选择器状态，防止快速重复点击打开多个 IFileDialog
+  bool _pickingParentDir = false;
 
   @override
   void dispose() {
@@ -153,7 +157,7 @@ class _NewWorkspaceDialogState extends ConsumerState<NewWorkspaceDialog> {
           children: [
             Expanded(
               child: InkWell(
-                onTap: _pickParentDir,
+                onTap: _pickingParentDir ? null : _pickParentDir,
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -450,15 +454,45 @@ class _NewWorkspaceDialogState extends ConsumerState<NewWorkspaceDialog> {
   // ─── 操作逻辑 ─────────────────────────────────────────────
 
   Future<void> _pickParentDir() async {
-    // 如果已选目录被删除，清空以避免系统对话框卡死
-    if (_parentDir.isNotEmpty && !Directory(_parentDir).existsSync()) {
-      setState(() => _parentDir = '');
-    }
-    final dir = await pickDirectory(
-      dialogTitle: context.s.wsDialogSelectParentTitle,
+    if (_pickingParentDir) return;
+    setState(() => _pickingParentDir = true);
+
+    final total = Stopwatch()..start();
+    final dialogTitle = context.s.wsDialogSelectParentTitle;
+    AppLogger.instance.log(
+      '[NewWorkspace] 开始选择父目录: current=$_parentDir',
     );
-    if (dir != null && mounted) {
-      setState(() => _parentDir = dir);
+
+    try {
+      // 异步检查旧父目录，避免 existsSync 在离线盘或网络路径上冻结 UI。
+      String? initialDirectory;
+      if (_parentDir.isNotEmpty) {
+        final exists = await directoryExistsSafely(_parentDir);
+        if (exists) {
+          initialDirectory = _parentDir;
+        } else if (mounted) {
+          AppLogger.instance.log(
+            '[NewWorkspace] 当前父目录无效或检查超时，清空旧路径',
+          );
+          setState(() => _parentDir = '');
+        }
+      }
+
+      final dir = await pickDirectory(
+        dialogTitle: dialogTitle,
+        initialDirectory: initialDirectory,
+      );
+      if (dir != null && mounted) {
+        setState(() => _parentDir = dir);
+        AppLogger.instance.log('[NewWorkspace] 父目录状态更新完成: path=$dir');
+      }
+    } finally {
+      total.stop();
+      AppLogger.instance.log(
+        '[NewWorkspace] 父目录选择流程结束: '
+        'elapsed=${total.elapsedMilliseconds}ms',
+      );
+      if (mounted) setState(() => _pickingParentDir = false);
     }
   }
 

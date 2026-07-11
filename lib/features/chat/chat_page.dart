@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/export/conversation_exporter.dart';
 import '../../core/l10n/l10n_ext.dart';
+import '../../core/logger/app_logger.dart';
 import '../../core/utils/directory_picker.dart';
 import '../../core/llm/models.dart';
 import '../../core/memory/project_config.dart';
@@ -1546,11 +1547,18 @@ class _McpChip extends ConsumerWidget {
 }
 
 /// 工作目录选择 Chip：显示当前目录名，点击选择目录
-class _WorkDirChip extends ConsumerWidget {
+class _WorkDirChip extends ConsumerStatefulWidget {
   const _WorkDirChip();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_WorkDirChip> createState() => _WorkDirChipState();
+}
+
+class _WorkDirChipState extends ConsumerState<_WorkDirChip> {
+  bool _isPicking = false;
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final workDir = ref.watch(workingDirectoryProvider);
     final hasDir = workDir.isNotEmpty;
@@ -1568,30 +1576,68 @@ class _WorkDirChip extends ConsumerWidget {
         overflow: TextOverflow.ellipsis,
       ),
       tooltip: hasDir ? workDir : context.s.chatSelectWorkingDir,
-      onPressed: () => _pickDir(context, ref),
-      onDeleted: hasDir ? () => _clearDir(ref) : null,
+      onPressed: _isPicking ? null : () => _pickDir(context),
+      onDeleted: hasDir && !_isPicking ? _clearDir : null,
       deleteIcon: hasDir ? const Icon(Icons.close, size: 14) : null,
     );
   }
 
-  Future<void> _pickDir(BuildContext context, WidgetRef ref) async {
+  Future<void> _pickDir(BuildContext context) async {
+    if (_isPicking) return;
+    setState(() => _isPicking = true);
+
+    final total = Stopwatch()..start();
     final title = context.s.chatSelectWorkingDir;
-
-    // 如果当前工作目录已被删除，先清空，避免系统文件对话框卡死
     final current = ref.read(workingDirectoryProvider);
-    if (current.isNotEmpty && !Directory(current).existsSync()) {
-      ref.read(workingDirectoryProvider.notifier).state = '';
-      await ref.read(settingsProvider.notifier).updateWorkingDirectory('');
-    }
+    AppLogger.instance.log('[WorkDir] 开始选择工作目录: current=$current');
 
-    final dir = await pickDirectory(dialogTitle: title);
-    if (dir != null && context.mounted) {
+    try {
+      // 异步检查旧目录，避免 existsSync 在慢盘/网络路径上阻塞 UI。
+      String? initialDirectory;
+      if (current.isNotEmpty) {
+        final exists = await directoryExistsSafely(current);
+        if (exists) {
+          initialDirectory = current;
+        } else {
+          AppLogger.instance.log('[WorkDir] 当前目录无效或检查超时，清空旧路径');
+          ref.read(workingDirectoryProvider.notifier).state = '';
+          await ref
+              .read(settingsProvider.notifier)
+              .updateWorkingDirectory('');
+        }
+      }
+
+      final dir = await pickDirectory(
+        dialogTitle: title,
+        initialDirectory: initialDirectory,
+      );
+      if (dir == null || !mounted) return;
+
+      final providerTimer = Stopwatch()..start();
       ref.read(workingDirectoryProvider.notifier).state = dir;
+      providerTimer.stop();
+      AppLogger.instance.log(
+        '[WorkDir] Provider 更新完成: '
+        'elapsed=${providerTimer.elapsedMilliseconds}ms, path=$dir',
+      );
+
+      final saveTimer = Stopwatch()..start();
       await ref.read(settingsProvider.notifier).updateWorkingDirectory(dir);
+      saveTimer.stop();
+      AppLogger.instance.log(
+        '[WorkDir] Settings 保存完成: '
+        'elapsed=${saveTimer.elapsedMilliseconds}ms, path=$dir',
+      );
+    } finally {
+      total.stop();
+      AppLogger.instance.log(
+        '[WorkDir] 目录选择流程结束: elapsed=${total.elapsedMilliseconds}ms',
+      );
+      if (mounted) setState(() => _isPicking = false);
     }
   }
 
-  Future<void> _clearDir(WidgetRef ref) async {
+  Future<void> _clearDir() async {
     ref.read(workingDirectoryProvider.notifier).state = '';
     await ref.read(settingsProvider.notifier).updateWorkingDirectory('');
   }
