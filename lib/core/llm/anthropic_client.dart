@@ -335,10 +335,12 @@ class AnthropicClient implements LlmClient {
   }
 
   /// 解析 Anthropic SSE：content_block_delta(text) → ContentToken；
-  /// tool_use block 累积 input_json_delta；message_stop → StreamComplete。
+  /// thinking block → ReasoningToken；tool_use block 累积 input_json_delta；
+  /// message_stop → StreamComplete。
   Stream<StreamEvent> _parseSse(Stream<List<int>> rawStream) async* {
     String buffer = '';
     final contentBuf = StringBuffer();
+    final thinkingBuf = StringBuffer(); // 扩展思考内容
     String finishReason = 'stop';
 
     // index → 正在累积的 tool_use block
@@ -373,18 +375,28 @@ class AnthropicClient implements LlmClient {
                 name: (block['name'] ?? '').toString(),
               );
             }
+            // 注意：thinking block 在 start 时没有内容，在 delta 中传输
             break;
           case 'content_block_delta':
             final idx = json['index'] as int? ?? 0;
             final delta = json['delta'] as Map<String, dynamic>?;
             if (delta == null) break;
-            if (delta['type'] == 'text_delta') {
+
+            final deltaType = delta['type'] as String?;
+            if (deltaType == 'text_delta') {
               final text = (delta['text'] ?? '').toString();
               if (text.isNotEmpty) {
                 contentBuf.write(text);
                 yield ContentToken(text);
               }
-            } else if (delta['type'] == 'input_json_delta') {
+            } else if (deltaType == 'thinking_delta') {
+              // 扩展思考内容
+              final text = (delta['thinking'] ?? '').toString();
+              if (text.isNotEmpty) {
+                thinkingBuf.write(text);
+                yield ReasoningToken(text);
+              }
+            } else if (deltaType == 'input_json_delta') {
               toolBlocks[idx]?.argsBuf.write(delta['partial_json'] ?? '');
             }
             break;
@@ -395,7 +407,7 @@ class AnthropicClient implements LlmClient {
             }
             break;
           case 'message_stop':
-            yield _complete(contentBuf, toolBlocks, finishReason);
+            yield _complete(contentBuf, thinkingBuf, toolBlocks, finishReason);
             return;
           case 'error':
             final msg = json['error']?['message'] ?? 'Anthropic stream error';
@@ -405,7 +417,12 @@ class AnthropicClient implements LlmClient {
     }
 
     // 流未显式 message_stop：返回截断标记，上层不得当作正常完成。
-    final fallback = _complete(contentBuf, toolBlocks, finishReason);
+    final fallback = _complete(
+      contentBuf,
+      thinkingBuf,
+      toolBlocks,
+      finishReason,
+    );
     yield StreamComplete(
       content: fallback.content,
       reasoningContent: fallback.reasoningContent,
@@ -417,6 +434,7 @@ class AnthropicClient implements LlmClient {
 
   StreamComplete _complete(
     StringBuffer contentBuf,
+    StringBuffer thinkingBuf,
     Map<int, _AnthropicToolBlock> toolBlocks,
     String finishReason,
   ) {
@@ -426,6 +444,7 @@ class AnthropicClient implements LlmClient {
     }
     return StreamComplete(
       content: contentBuf.isEmpty ? null : contentBuf.toString(),
+      reasoningContent: thinkingBuf.isEmpty ? null : thinkingBuf.toString(),
       toolCalls: calls,
       finishReason: finishReason,
     );

@@ -1012,9 +1012,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
         );
         // 如果 streamingText 含有 DSML 标记（模型以文本形式输出的工具调用），
         // 说明这些内容已被解析为 tool_call，清除残留的标记文本
-        final cleanedStream = state.streamingText.contains('DSML')
+        var cleanedStream = state.streamingText.contains('DSML')
             ? ''
             : state.streamingText;
+
+        // 自动补全未闭合的 <thinking> 标签
+        // 某些模型在思考模式下调用工具时，会输出 <thinking> 但忘记闭合标签
+        if (cleanedStream.contains('<thinking>') &&
+            !cleanedStream.contains('</thinking>')) {
+          cleanedStream += '\n</thinking>';
+        }
+
         state = state.copyWith(
           streamingText: cleanedStream,
           activeToolCalls: [...state.activeToolCalls, toolCall],
