@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../isolate/compute_service.dart';
 import '../llm/llm_client.dart';
+import '../pet/pet_economy.dart';
 import 'agent_loop.dart';
 import 'executor.dart';
 
@@ -186,12 +188,14 @@ class SubReadersOrchestrator {
   /// 而彻底不可用。
   Future<List<SubReaderTask>> plan(String description) async {
     final llm = createLlm();
-    final response = await llm.chat([
+    final planPrompt = [
       {'role': 'system', 'content': _planningSystemPrompt},
       {'role': 'user', 'content': description},
-    ]);
+    ];
+    final response = await llm.chat(planPrompt);
 
     final raw = response.content?.trim() ?? '';
+    _recordTokenUsage(planPrompt, raw);
     final tasks = _parsePlan(raw);
 
     if (tasks.isEmpty) {
@@ -276,25 +280,36 @@ class SubReadersOrchestrator {
       messages: messages,
     );
 
+    // 子 Agent 是独立的真实 LLM 调用链，主聊天窗口的 token 计数不会覆盖到，
+    // 这里单独估算并上报，避免 totalTokensSpent 系统性偏低。
+    var tokens = ComputeService.estimateTokens(_subAgentSystemPrompt(task));
+    tokens += ComputeService.estimateTokens(task.instruction);
+
     final buffer = StringBuffer();
-    await for (final event in loop.chat(task.instruction)) {
-      switch (event) {
-        case AgentDone(content: final content):
-          return content.isNotEmpty ? content : buffer.toString();
-        case AgentError(message: final msg):
-          throw Exception(msg);
-        case AgentReasoningToken():
-          break;
-        case AgentToken(text: final text):
-          buffer.write(text);
-        case AgentToolStart():
-        case AgentToolResult():
-          break;
-        case AgentLoopLimitReached(rounds: final rounds):
-          throw Exception('子 Agent 单轮 tool_call 轮次达到上限($rounds)，未能收敛');
+    try {
+      await for (final event in loop.chat(task.instruction)) {
+        switch (event) {
+          case AgentDone(content: final content):
+            tokens += ComputeService.estimateTokens(content);
+            return content.isNotEmpty ? content : buffer.toString();
+          case AgentError(message: final msg):
+            throw Exception(msg);
+          case AgentReasoningToken(text: final text):
+            tokens += ComputeService.estimateTokens(text);
+          case AgentToken(text: final text):
+            tokens += ComputeService.estimateTokens(text);
+            buffer.write(text);
+          case AgentToolStart():
+          case AgentToolResult():
+            break;
+          case AgentLoopLimitReached(rounds: final rounds):
+            throw Exception('子 Agent 单轮 tool_call 轮次达到上限($rounds)，未能收敛');
+        }
       }
+      return buffer.toString();
+    } finally {
+      if (tokens > 0) PetEconomy.instance.rewardForTokens(tokens);
     }
-    return buffer.toString();
   }
 
   String _subAgentSystemPrompt(SubReaderTask task) =>
@@ -345,13 +360,31 @@ class SubReadersOrchestrator {
       buffer.writeln();
     }
 
-    final response = await llm.chat([
+    final mergePrompt = [
       {'role': 'system', 'content': _mergeSystemPrompt},
       {'role': 'user', 'content': '原始需求：$description\n\n${buffer.toString()}'},
-    ]);
+    ];
+    final response = await llm.chat(mergePrompt);
 
     final merged = response.content?.trim();
+    _recordTokenUsage(mergePrompt, merged ?? '');
     return (merged == null || merged.isEmpty) ? buffer.toString() : merged;
+  }
+
+  /// 把规划/合并阶段的估算 token 计入宠物经济统计（子任务执行阶段在
+  /// [runSubtask] 内单独统计，因为它走的是流式 AgentLoop 而非一次性 chat）。
+  void _recordTokenUsage(List<Map<String, dynamic>> prompt, String result) {
+    var tokens = 0;
+    for (final msg in prompt) {
+      final content = msg['content'];
+      if (content is String) {
+        tokens += ComputeService.estimateTokens(content);
+      }
+    }
+    tokens += ComputeService.estimateTokens(result);
+    if (tokens > 0) {
+      PetEconomy.instance.rewardForTokens(tokens);
+    }
   }
 
   /// 合并阶段每个子任务结果的最大字符数（约 3000 token）。

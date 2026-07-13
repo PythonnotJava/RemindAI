@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -831,6 +832,29 @@ class ChatNotifier extends StateNotifier<ChatState> {
     // 监听事件流
     _subscription?.cancel();
     _currentTokenCount = 0;
+
+    // 估算输入 token（包括所有历史消息 + 当前输入 + 系统提示词 + 工具定义）
+    int inputTokens = 0;
+    for (final msg in _agentMessages) {
+      final content = msg['content'];
+      if (content is String) {
+        inputTokens += ComputeService.estimateTokens(content);
+      }
+      // 工具调用也算 token
+      if (msg['tool_calls'] != null) {
+        inputTokens += ComputeService.estimateTokens(
+          jsonEncode(msg['tool_calls']),
+        );
+      }
+    }
+    // 当前用户输入
+    inputTokens += ComputeService.estimateTokens(input);
+    // 工具定义（粗略估算：每个工具约 100 tokens）
+    inputTokens += agentContext.tools.length * 100;
+
+    // 累积输入 token
+    _currentTokenCount += inputTokens;
+
     PetObserver.instance.notifyAiGenerating();
 
     if (state.loopEnabled) {

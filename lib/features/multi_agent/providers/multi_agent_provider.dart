@@ -7,10 +7,12 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../../../core/settings/app_settings.dart';
+import '../../../core/isolate/compute_service.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../core/llm/llm_client.dart';
 import '../../../core/llm/llm_provider.dart';
 import '../../../core/db/tables/model_cards.dart';
+import '../../../core/pet/pet_economy.dart';
 import '../../../core/toolshell/agent_loop.dart';
 import '../../../core/toolshell/combined_executor.dart';
 import '../../../providers/database_provider.dart';
@@ -655,13 +657,26 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
     runtime.streamingText = '';
     _notifyUpdate();
 
+    // 多代理对话是独立于主聊天窗口的真实 LLM 调用，主聊天的 token 计数
+    // 不会覆盖到，这里单独估算历史 + 当轮输出并计入宠物经济统计。
+    var tokenCount = 0;
+    for (final msg in runtime.llmMessages) {
+      final content = msg['content'];
+      if (content is String) {
+        tokenCount += ComputeService.estimateTokens(content);
+      }
+    }
+    tokenCount += ComputeService.estimateTokens(userInput);
+
     try {
       await for (final event in loop.chat(userInput)) {
         switch (event) {
-          case AgentReasoningToken():
+          case AgentReasoningToken(text: final text):
             // 推理过程不混入最终正文；保持 thinking 状态即可。
+            tokenCount += ComputeService.estimateTokens(text);
             runtime.status = AgentStatus.thinking;
           case AgentToken(text: final text):
+            tokenCount += ComputeService.estimateTokens(text);
             runtime.streamingText += text;
             _notifyUpdate();
           case AgentToolStart():
@@ -696,6 +711,8 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
       runtime.status = AgentStatus.error;
       _addAssistantMessage(agentId, '⚠️ ${_friendlyError('$e')}');
       _notifyUpdate();
+    } finally {
+      if (tokenCount > 0) PetEconomy.instance.rewardForTokens(tokenCount);
     }
   }
 
@@ -831,6 +848,13 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
             : fullContent;
         summary = '...(摘要生成失败，截取尾部)\n$tail';
       }
+
+      // 团队产出摘要也是一次真实 LLM 调用，主聊天的 token 计数不会
+      // 覆盖到，这里单独估算并计入宠物经济统计。
+      final tokens =
+          ComputeService.estimateTokens(fullContent) +
+          ComputeService.estimateTokens(summary);
+      if (tokens > 0) PetEconomy.instance.rewardForTokens(tokens);
 
       _injectRouteMessage(fromAgentId, fromName, fromRole, timeStr, summary);
     } catch (e) {

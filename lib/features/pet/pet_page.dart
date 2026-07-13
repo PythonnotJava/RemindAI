@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n/l10n_ext.dart';
 import '../../l10n/app_localizations.dart';
+import '../../core/isolate/compute_service.dart';
 import '../../core/llm/llm_client.dart';
 import '../../core/llm/llm_provider.dart';
 import '../../core/pet/pet.dart';
@@ -619,7 +620,16 @@ class _PetPageState extends ConsumerState<PetPage>
                 final resp = await client.chat([
                   {'role': 'user', 'content': prompt},
                 ]);
-                return resp.content ?? '';
+                final content = resp.content ?? '';
+                // 宠物聊天是独立于主聊天窗口的真实 LLM 调用，主聊天的
+                // token 计数不会覆盖到，这里单独估算并计入宠物经济统计。
+                final tokens =
+                    ComputeService.estimateTokens(prompt) +
+                    ComputeService.estimateTokens(content);
+                if (tokens > 0) {
+                  PetEconomy.instance.rewardForTokens(tokens);
+                }
+                return content;
               };
             }
           },

@@ -4,6 +4,7 @@ import '../../isolate/compute_service.dart';
 import '../../llm/llm_client.dart';
 import '../../logger/app_logger.dart';
 import '../../memory/memory_manager.dart';
+import '../../pet/pet_economy.dart';
 import '../message_transformer.dart';
 
 /// 上下文压缩变换器
@@ -176,6 +177,23 @@ class ContextCompactor extends MessageTransformer {
     return ComputeService.estimateTokens(text);
   }
 
+  /// 把上下文压缩期间的记忆沉淀/摘要请求计入宠物经济统计。
+  /// 这些是真实的后台 LLM 调用，主聊天窗口的 token 计数不会覆盖到，
+  /// 单独估算并上报，避免 totalTokensSpent 系统性偏低。
+  void _recordTokenUsage(List<Map<String, dynamic>> prompt, String result) {
+    var tokens = 0;
+    for (final msg in prompt) {
+      final content = msg['content'];
+      if (content is String) {
+        tokens += ComputeService.estimateTokens(content);
+      }
+    }
+    tokens += ComputeService.estimateTokens(result);
+    if (tokens > 0) {
+      PetEconomy.instance.rewardForTokens(tokens);
+    }
+  }
+
   /// 找到保真区的起始位置：保留最近 keepRecentTurns 轮完整对话
   /// 一轮 = user + assistant（可能包含中间的 tool 消息）
   int _findRecentBoundary(List<Map<String, dynamic>> messages) {
@@ -224,6 +242,7 @@ class ContextCompactor extends MessageTransformer {
 
         final response = await llm.chat(extractPrompt);
         final result = response.content?.trim() ?? '';
+        _recordTokenUsage(extractPrompt, result);
 
         if (result.isEmpty || result.toUpperCase().startsWith('SKIP')) continue;
 
@@ -258,7 +277,7 @@ class ContextCompactor extends MessageTransformer {
     AppLogger.instance.log('[Compactor] 生成摘要: 原文 ${text.length} 字符');
 
     try {
-      final response = await llm.chat([
+      final summaryPrompt = [
         {
           'role': 'system',
           'content':
@@ -272,9 +291,12 @@ class ContextCompactor extends MessageTransformer {
               '- 直接输出摘要内容，不要前缀或解释',
         },
         {'role': 'user', 'content': text},
-      ]);
+      ];
+
+      final response = await llm.chat(summaryPrompt);
 
       final summary = response.content?.trim() ?? '';
+      _recordTokenUsage(summaryPrompt, summary);
       AppLogger.instance.log('[Compactor] 摘要生成完成: ${summary.length} 字符');
       return summary.isEmpty ? _fallbackSummary(messages) : summary;
     } catch (e) {

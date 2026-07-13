@@ -1,6 +1,8 @@
+import '../../isolate/compute_service.dart';
 import '../../llm/llm_client.dart';
 import '../../logger/app_logger.dart';
 import '../../memory/memory_manager.dart';
+import '../../pet/pet_economy.dart';
 import '../agent_hook.dart';
 
 /// 记忆存储钩子 — Agent 回复完成后自动提取值得记住的信息并存储
@@ -84,6 +86,10 @@ class MemoryStoreHook extends AgentHook {
         '"${result.substring(0, result.length.clamp(0, 80))}"',
       );
 
+      // 记忆提取也是一次真实的 LLM 调用，计入宠物经济的 token 统计，
+      // 避免这条旁路消耗完全不计入成就进度。
+      _recordTokenUsage(extractPrompt, result);
+
       if (result.isEmpty || result.toUpperCase().startsWith('SKIP')) {
         AppLogger.instance.log('[Memory] 跳过存储: LLM判断为SKIP');
         return;
@@ -107,6 +113,24 @@ class MemoryStoreHook extends AgentHook {
     } catch (e, stack) {
       AppLogger.instance.log('[Memory] ✗ 存储异常: $e');
       AppLogger.instance.log('[Memory] Stack: $stack');
+    }
+  }
+
+  /// 把本次记忆提取请求的估算 token 计入宠物经济统计。
+  /// 记忆提取是后台旁路的真实 LLM 调用，主聊天窗口的 token 计数
+  /// (chat_provider._currentTokenCount) 不会覆盖到这部分消耗，
+  /// 因此在这里单独估算并上报，避免 totalTokensSpent 系统性偏低。
+  void _recordTokenUsage(List<Map<String, dynamic>> prompt, String result) {
+    var tokens = 0;
+    for (final msg in prompt) {
+      final content = msg['content'];
+      if (content is String) {
+        tokens += ComputeService.estimateTokens(content);
+      }
+    }
+    tokens += ComputeService.estimateTokens(result);
+    if (tokens > 0) {
+      PetEconomy.instance.rewardForTokens(tokens);
     }
   }
 }

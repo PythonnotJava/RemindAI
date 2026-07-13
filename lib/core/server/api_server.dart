@@ -4,9 +4,11 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../isolate/compute_service.dart';
 import '../logger/app_logger.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
+import '../pet/pet_economy.dart';
 import '../toolshell/agent_loop.dart';
 import 'anthropic_proxy.dart';
 import 'api_server_config.dart';
@@ -312,15 +314,33 @@ class ApiServer {
     final loop = session.createLoop();
     final modelId = session.modelId;
 
+    // 内置 API 服务端是独立于主聊天窗口的真实 LLM 调用入口，主聊天的 token
+    // 计数不会覆盖到，这里单独估算输入 token（历史 + 当前输入），
+    // 输出 token 在 _blockingCompletion / _streamCompletion 中累加。
+    var inputTokens = 0;
+    for (final msg in session.messages) {
+      final content = msg['content'];
+      if (content is String) {
+        inputTokens += ComputeService.estimateTokens(content);
+      }
+    }
+    inputTokens += ComputeService.estimateTokens(userInput);
+
     if (stream) {
       await _streamCompletion(
         req.response,
         loop.chat(userInput),
         modelId,
         exposeTools,
+        inputTokens,
       );
     } else {
-      await _blockingCompletion(req.response, loop.chat(userInput), modelId);
+      await _blockingCompletion(
+        req.response,
+        loop.chat(userInput),
+        modelId,
+        inputTokens,
+      );
     }
   }
 
@@ -329,14 +349,17 @@ class ApiServer {
     HttpResponse res,
     Stream<AgentEvent> events,
     String modelId,
+    int inputTokens,
   ) async {
     final buf = StringBuffer();
     String? errMsg;
+    var tokenCount = inputTokens;
     await for (final ev in events) {
       switch (ev) {
-        case AgentReasoningToken():
-          break;
+        case AgentReasoningToken(text: final t):
+          tokenCount += ComputeService.estimateTokens(t);
         case AgentToken(text: final t):
+          tokenCount += ComputeService.estimateTokens(t);
           buf.write(t);
         case AgentDone(content: final c):
           if (buf.isEmpty && c.isNotEmpty) buf.write(c);
@@ -348,6 +371,7 @@ class ApiServer {
           break;
       }
     }
+    if (tokenCount > 0) PetEconomy.instance.rewardForTokens(tokenCount);
 
     if (errMsg != null) {
       await _error(res, HttpStatus.internalServerError, errMsg);
@@ -375,6 +399,7 @@ class ApiServer {
     Stream<AgentEvent> events,
     String modelId,
     bool exposeTools,
+    int inputTokens,
   ) async {
     res.statusCode = HttpStatus.ok;
     res.headers
@@ -384,6 +409,7 @@ class ApiServer {
 
     final id = 'chatcmpl-${DateTime.now().millisecondsSinceEpoch}';
     final created = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    var tokenCount = inputTokens;
 
     void sendChunk(Map<String, dynamic> delta, {String? finish}) {
       final chunk = {
@@ -404,9 +430,10 @@ class ApiServer {
     try {
       await for (final ev in events) {
         switch (ev) {
-          case AgentReasoningToken():
-            break;
+          case AgentReasoningToken(text: final t):
+            tokenCount += ComputeService.estimateTokens(t);
           case AgentToken(text: final t):
+            tokenCount += ComputeService.estimateTokens(t);
             sendChunk({'content': t});
           case AgentToolStart(name: final n, args: final a):
             if (exposeTools) {
@@ -435,8 +462,9 @@ class ApiServer {
     } catch (e) {
       sendChunk({'content': '\n[服务异常] $e'}, finish: 'stop');
       res.write('data: [DONE]\n\n');
+    } finally {
+      if (tokenCount > 0) PetEconomy.instance.rewardForTokens(tokenCount);
     }
-    await res.close();
   }
 
   // ─── /v1/agent/messages (Anthropic / Claude 协议, 聚合 Agent 模式) ───
@@ -513,29 +541,49 @@ class ApiServer {
       'history=${history.length}, stream=$stream',
     );
 
+    // 与 /v1/chat/completions 一致：单独估算输入 token，避免这条旁路
+    // 完全不计入宠物经济的 totalTokensSpent。
+    var inputTokens = 0;
+    for (final msg in session.messages) {
+      final content = msg['content'];
+      if (content is String) {
+        inputTokens += ComputeService.estimateTokens(content);
+      }
+    }
+    inputTokens += ComputeService.estimateTokens(userInput);
+
     if (stream) {
-      await _streamAnthropicAgent(req.response, loop.chat(userInput), modelId);
+      await _streamAnthropicAgent(
+        req.response,
+        loop.chat(userInput),
+        modelId,
+        inputTokens,
+      );
     } else {
       await _blockingAnthropicAgent(
         req.response,
         loop.chat(userInput),
         modelId,
+        inputTokens,
       );
     }
   }
 
   /// 把聚合 Agent 的事件流聚合为终态文本。
-  Future<({String text, String? error})> _collectAgent(
+  Future<({String text, String? error, int tokens})> _collectAgent(
     Stream<AgentEvent> events,
+    int inputTokens,
   ) async {
     final buf = StringBuffer();
     String? error;
+    var tokens = inputTokens;
     try {
       await for (final ev in events) {
         switch (ev) {
-          case AgentReasoningToken():
-            break;
+          case AgentReasoningToken(text: final t):
+            tokens += ComputeService.estimateTokens(t);
           case AgentToken(text: final t):
+            tokens += ComputeService.estimateTokens(t);
             buf.write(t);
           case AgentDone(content: final c):
             if (buf.isEmpty && c.isNotEmpty) buf.write(c);
@@ -550,7 +598,7 @@ class ApiServer {
     } catch (e) {
       error = e.toString();
     }
-    return (text: buf.toString(), error: error);
+    return (text: buf.toString(), error: error, tokens: tokens);
   }
 
   /// 非流式 Anthropic 响应 (聚合 Agent)。
@@ -558,8 +606,10 @@ class ApiServer {
     HttpResponse res,
     Stream<AgentEvent> events,
     String modelId,
+    int inputTokens,
   ) async {
-    final r = await _collectAgent(events);
+    final r = await _collectAgent(events, inputTokens);
+    if (r.tokens > 0) PetEconomy.instance.rewardForTokens(r.tokens);
     if (r.error != null) {
       await _anthropicError(res, HttpStatus.internalServerError, r.error!);
       return;
@@ -584,6 +634,7 @@ class ApiServer {
     HttpResponse res,
     Stream<AgentEvent> events,
     String modelId,
+    int inputTokens,
   ) async {
     res.statusCode = HttpStatus.ok;
     res.headers
@@ -592,6 +643,7 @@ class ApiServer {
       ..set('Connection', 'keep-alive');
 
     final msgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
+    var tokenCount = inputTokens;
 
     void sendEvent(String event, Map<String, dynamic> data) {
       res.write('event: $event\n');
@@ -621,9 +673,10 @@ class ApiServer {
     try {
       await for (final ev in events) {
         switch (ev) {
-          case AgentReasoningToken():
-            break;
+          case AgentReasoningToken(text: final t):
+            tokenCount += ComputeService.estimateTokens(t);
           case AgentToken(text: final t):
+            tokenCount += ComputeService.estimateTokens(t);
             sendEvent('content_block_delta', {
               'type': 'content_block_delta',
               'index': 0,
@@ -654,6 +707,8 @@ class ApiServer {
         'index': 0,
         'delta': {'type': 'text_delta', 'text': '\n[服务异常] $e'},
       });
+    } finally {
+      if (tokenCount > 0) PetEconomy.instance.rewardForTokens(tokenCount);
     }
 
     sendEvent('content_block_stop', {'type': 'content_block_stop', 'index': 0});
@@ -737,36 +792,49 @@ class ApiServer {
       'tools=${tools?.length ?? 0}, stream=$stream',
     );
 
+    // 纯代理端点也是真实的 LLM 调用，主聊天窗口的 token 计数不会覆盖到，
+    // 这里单独估算输入 token（历史消息文本），输出 token 在聚合结果里累加。
+    var inputTokens = 0;
+    for (final msg in messages) {
+      final content = msg['content'];
+      if (content is String) {
+        inputTokens += ComputeService.estimateTokens(content);
+      }
+    }
+
     if (stream) {
       await _streamAnthropic(
         req.response,
         llm.chatStreamFull(messages, tools: tools),
         modelId,
+        inputTokens,
       );
     } else {
       await _blockingAnthropic(
         req.response,
         llm.chatStreamFull(messages, tools: tools),
         modelId,
+        inputTokens,
       );
     }
   }
 
   /// 把一次 LLM 流聚合为终态 (content + 工具调用)。
   /// 兼容标准 tool_calls 与 Kimi K2 文本内嵌 token。
-  Future<({String text, List<ToolCall> calls, String? error})> _collectStream(
-    Stream<StreamEvent> events,
-  ) async {
+  Future<({String text, List<ToolCall> calls, String? error, int tokens})>
+  _collectStream(Stream<StreamEvent> events, int inputTokens) async {
     final buf = StringBuffer();
     List<ToolCall> calls = const [];
     String? error;
+    var tokens = inputTokens;
     try {
       await for (final ev in events) {
         switch (ev) {
           case ContentToken(text: final t):
+            tokens += ComputeService.estimateTokens(t);
             buf.write(t);
-          case ReasoningToken():
-            break; // 推理 token 不计入对外正文
+          case ReasoningToken(text: final t):
+            tokens += ComputeService.estimateTokens(t);
           case StreamComplete(content: final c, toolCalls: final tc):
             if (buf.isEmpty && c != null) buf.write(c);
             if (tc != null && tc.isNotEmpty) calls = tc;
@@ -785,7 +853,8 @@ class ApiServer {
         calls = kimiCalls;
       }
     }
-    return (text: text, calls: calls, error: error);
+    if (tokens > 0) PetEconomy.instance.rewardForTokens(tokens);
+    return (text: text, calls: calls, error: error, tokens: tokens);
   }
 
   /// 把工具调用列表构造为 Anthropic content blocks (text + tool_use)。
@@ -816,8 +885,9 @@ class ApiServer {
     HttpResponse res,
     Stream<StreamEvent> events,
     String modelId,
+    int inputTokens,
   ) async {
-    final r = await _collectStream(events);
+    final r = await _collectStream(events, inputTokens);
     if (r.error != null) {
       await _anthropicError(res, HttpStatus.internalServerError, r.error!);
       return;
@@ -844,6 +914,7 @@ class ApiServer {
     HttpResponse res,
     Stream<StreamEvent> events,
     String modelId,
+    int inputTokens,
   ) async {
     res.statusCode = HttpStatus.ok;
     res.headers
@@ -858,7 +929,7 @@ class ApiServer {
       res.write('data: ${jsonEncode(data)}\n\n');
     }
 
-    final r = await _collectStream(events);
+    final r = await _collectStream(events, inputTokens);
     final stopReason = r.calls.isNotEmpty ? 'tool_use' : 'end_turn';
 
     // message_start
