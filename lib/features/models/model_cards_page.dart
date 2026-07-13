@@ -39,9 +39,7 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
           if (cardsAsync.valueOrNull != null &&
               cardsAsync.valueOrNull!.length > 1)
             IconButton(
-              icon: Icon(
-                _reorderMode ? Icons.done : Icons.swap_vert,
-              ),
+              icon: Icon(_reorderMode ? Icons.done : Icons.swap_vert),
               tooltip: _reorderMode ? '完成排序' : '拖拽排序',
               onPressed: () => setState(() => _reorderMode = !_reorderMode),
             ),
@@ -100,8 +98,9 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
                   ReorderableCardGrid<ModelCard>(
                     items: cards,
                     keyOf: (c) => c.id,
-                    onReorder: (reordered) =>
-                        ref.read(modelCardsProvider.notifier).reorder(reordered),
+                    onReorder: (reordered) => ref
+                        .read(modelCardsProvider.notifier)
+                        .reorder(reordered),
                     itemBuilder: (context, card) => _ModelCardTile(card: card),
                     trailing: _AddModelCard(
                       onTap: () => _showAddDialog(context, ref),
@@ -113,10 +112,7 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
                     runSpacing: 12,
                     children: [
                       for (final card in cards)
-                        SizedBox(
-                          width: 280,
-                          child: _ModelCardTile(card: card),
-                        ),
+                        SizedBox(width: 280, child: _ModelCardTile(card: card)),
                       SizedBox(
                         width: 280,
                         child: _AddModelCard(

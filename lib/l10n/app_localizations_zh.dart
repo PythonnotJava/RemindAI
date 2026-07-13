@@ -857,6 +857,10 @@ class SZh extends S {
   String get multiAgentSelectDirTitle => '选择协作工作目录';
 
   @override
+  String get multiAgentSelectDirDesc =>
+      '多Agent协作需要一个共享工作目录，\n所有Agent将在此目录下读写文件、执行任务。';
+
+  @override
   String get multiAgentOpenDir => '打开目录';
 
   @override
@@ -1250,6 +1254,14 @@ class SZh extends S {
 
   @override
   String get qdrantAutoDetect => '恢复自动检测';
+
+  @override
+  String qdrantSource(String source) {
+    return '来源: $source';
+  }
+
+  @override
+  String get qdrantPriority => '优先级: 手动指定 > 系统 PATH > 应用内置';
 
   @override
   String get exportFormatTitle => '选择导出格式';
@@ -3389,6 +3401,33 @@ class SZh extends S {
 
   @override
   String get chatLoopAutoApproveHint => 'Loop 模式下工具操作将自动执行，无需逐次确认。';
+
+  @override
+  String get chatKnowledgeBase => '知识库';
+
+  @override
+  String chatKnowledgeBaseCount(int count) {
+    return '知识库 ($count)';
+  }
+
+  @override
+  String chatKnowledgeBaseConnected(int count) {
+    return '已接入 $count 个知识库';
+  }
+
+  @override
+  String get chatKnowledgeBaseSelect => '选择知识库接入对话';
+
+  @override
+  String get chatKnowledgeBaseSelectTitle => '选择知识库';
+
+  @override
+  String chatKnowledgeBaseLoadFailed(String error) {
+    return '加载失败: $error';
+  }
+
+  @override
+  String get chatKnowledgeBaseEmpty => '暂无知识库，请先在服务页创建';
 
   @override
   String get servicesKbTab => '知识库';

@@ -4,7 +4,7 @@ import '../settings/app_settings.dart';
 
 /// 应用日志服务 — 拦截所有 print 输出并写入日志文件
 ///
-/// 日志存储在可配置目录下（默认 <rootDir>/logs/），按日期分文件。
+/// 日志存储在可配置目录下（默认 < rootDir >/logs/），按日期分文件。
 /// 支持查看、清空操作，由日志页面调用。
 class AppLogger {
   AppLogger._();

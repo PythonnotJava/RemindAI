@@ -1699,6 +1699,12 @@ abstract class S {
   /// **'选择协作工作目录'**
   String get multiAgentSelectDirTitle;
 
+  /// No description provided for @multiAgentSelectDirDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'多Agent协作需要一个共享工作目录，\n所有Agent将在此目录下读写文件、执行任务。'**
+  String get multiAgentSelectDirDesc;
+
   /// No description provided for @multiAgentOpenDir.
   ///
   /// In zh, this message translates to:
@@ -2454,6 +2460,18 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'恢复自动检测'**
   String get qdrantAutoDetect;
+
+  /// No description provided for @qdrantSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源: {source}'**
+  String qdrantSource(String source);
+
+  /// No description provided for @qdrantPriority.
+  ///
+  /// In zh, this message translates to:
+  /// **'优先级: 手动指定 > 系统 PATH > 应用内置'**
+  String get qdrantPriority;
 
   /// No description provided for @exportFormatTitle.
   ///
@@ -6426,6 +6444,48 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'Loop 模式下工具操作将自动执行，无需逐次确认。'**
   String get chatLoopAutoApproveHint;
+
+  /// No description provided for @chatKnowledgeBase.
+  ///
+  /// In zh, this message translates to:
+  /// **'知识库'**
+  String get chatKnowledgeBase;
+
+  /// No description provided for @chatKnowledgeBaseCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'知识库 ({count})'**
+  String chatKnowledgeBaseCount(int count);
+
+  /// No description provided for @chatKnowledgeBaseConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'已接入 {count} 个知识库'**
+  String chatKnowledgeBaseConnected(int count);
+
+  /// No description provided for @chatKnowledgeBaseSelect.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择知识库接入对话'**
+  String get chatKnowledgeBaseSelect;
+
+  /// No description provided for @chatKnowledgeBaseSelectTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择知识库'**
+  String get chatKnowledgeBaseSelectTitle;
+
+  /// No description provided for @chatKnowledgeBaseLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载失败: {error}'**
+  String chatKnowledgeBaseLoadFailed(String error);
+
+  /// No description provided for @chatKnowledgeBaseEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无知识库，请先在服务页创建'**
+  String get chatKnowledgeBaseEmpty;
 
   /// No description provided for @servicesKbTab.
   ///

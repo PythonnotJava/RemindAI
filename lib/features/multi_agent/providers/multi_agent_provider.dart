@@ -172,7 +172,7 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
     }
   }
 
-  /// 获取快照保存目录: <rootDir>/agent_snapshots/
+  /// 获取快照保存目录: < rootDir >/agent_snapshots/
   Future<Directory> _snapshotDir() async {
     final root = await AppSettings.getRootDir();
     final dir = Directory(p.join(root, 'agent_snapshots'));

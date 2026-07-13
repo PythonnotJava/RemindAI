@@ -459,9 +459,7 @@ class _NewWorkspaceDialogState extends ConsumerState<NewWorkspaceDialog> {
 
     final total = Stopwatch()..start();
     final dialogTitle = context.s.wsDialogSelectParentTitle;
-    AppLogger.instance.log(
-      '[NewWorkspace] 开始选择父目录: current=$_parentDir',
-    );
+    AppLogger.instance.log('[NewWorkspace] 开始选择父目录: current=$_parentDir');
 
     try {
       // 异步检查旧父目录，避免 existsSync 在离线盘或网络路径上冻结 UI。
@@ -471,9 +469,7 @@ class _NewWorkspaceDialogState extends ConsumerState<NewWorkspaceDialog> {
         if (exists) {
           initialDirectory = _parentDir;
         } else if (mounted) {
-          AppLogger.instance.log(
-            '[NewWorkspace] 当前父目录无效或检查超时，清空旧路径',
-          );
+          AppLogger.instance.log('[NewWorkspace] 当前父目录无效或检查超时，清空旧路径');
           setState(() => _parentDir = '');
         }
       }

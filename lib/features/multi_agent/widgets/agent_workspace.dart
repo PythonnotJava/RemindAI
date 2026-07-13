@@ -251,7 +251,7 @@ class _WorkspaceSetup extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              '多Agent协作需要一个共享工作目录，\n所有Agent将在此目录下读写文件、执行任务。',
+              context.s.multiAgentSelectDirDesc,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.6),

@@ -66,6 +66,9 @@ class AgentContext {
   final List<Map<String, dynamic>> messages;
   final MessagePipeline messagePipeline;
 
+  /// 模型的上下文窗口大小（token 数）
+  final int contextWindow;
+
   AgentContext({
     required this.llm,
     required this.pipeline,
@@ -76,6 +79,7 @@ class AgentContext {
     this.skillsSection = '',
     required this.messages,
     this.messagePipeline = const MessagePipeline(),
+    this.contextWindow = 0,
   });
 
   /// 创建 AgentLoop 实例
@@ -86,6 +90,7 @@ class AgentContext {
     messages: messages,
     messagePipeline: messagePipeline,
     hooks: hooks,
+    contextWindow: contextWindow,
   );
 
   /// 获取 Executor 实例（用于 AutonomousLoop 等外部消费）
@@ -412,6 +417,7 @@ class AgentContextBuilder {
       systemPromptPrefix: systemPromptPrefix,
       skillsSection: skillsSection,
       messages: existingMessages,
+      contextWindow: modelCard.contextWindow,
       messagePipeline: MessagePipeline([
         if (effectiveStore && memoryManager != null && memoryCollection != null)
           ContextCompactor(

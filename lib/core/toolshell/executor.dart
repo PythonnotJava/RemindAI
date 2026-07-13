@@ -198,7 +198,14 @@ class Executor {
   // ─── 文件操作 ─────────────────────────────────────────────
 
   Future<String> _read(Map<String, dynamic> args) async {
-    final path = _resolveReadable(args['path']);
+    final pathArg = args['path'];
+    if (pathArg == null || pathArg is! String || pathArg.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_read 缺少必需参数 path (String)。收到: ${args.toString()}',
+      );
+    }
+    final path = _resolveReadable(pathArg);
     final file = File(path);
     if (!await file.exists()) return _err('FILE_NOT_FOUND', args['path']);
 
@@ -224,12 +231,33 @@ class Executor {
   }
 
   Future<String> _write(Map<String, dynamic> args) async {
-    final path = _resolve(args['path']);
+    final pathArg = args['path'];
+    if (pathArg == null || pathArg is! String || pathArg.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_write 缺少必需参数 path (String)。收到: ${args.toString()}',
+      );
+    }
+    final path = _resolve(pathArg);
     if (_isProtected(path)) return _err('PROTECTED_PATH', args['path']);
 
     final file = File(path);
-    final mode = args['mode'] as String;
-    final content = args['content'] as String;
+    final mode = args['mode'];
+    final content = args['content'];
+    if (mode == null ||
+        mode is! String ||
+        !['create', 'overwrite', 'append'].contains(mode)) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_write 缺少或无效的 mode 参数 (必须是 create/overwrite/append)。收到: $mode',
+      );
+    }
+    if (content == null || content is! String) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_write 缺少必需参数 content (String)。收到: ${content.runtimeType}',
+      );
+    }
 
     await file.parent.create(recursive: true);
 
@@ -250,7 +278,14 @@ class Executor {
   }
 
   Future<String> _delete(Map<String, dynamic> args) async {
-    final path = _resolve(args['path']);
+    final pathArg = args['path'];
+    if (pathArg == null || pathArg is! String || pathArg.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_delete 缺少必需参数 path (String)。收到: ${args.toString()}',
+      );
+    }
+    final path = _resolve(pathArg);
     if (_isProtected(path)) return _err('PROTECTED_PATH', args['path']);
 
     final type = FileSystemEntity.typeSync(path);
@@ -278,7 +313,13 @@ class Executor {
   }
 
   Future<String> _search(Map<String, dynamic> args) async {
-    final pattern = args['pattern'] as String;
+    final pattern = args['pattern'];
+    if (pattern == null || pattern is! String || pattern.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_search 缺少必需参数 pattern (String)。收到: ${args.toString()}',
+      );
+    }
     final scope = _resolveReadable(args['scope'] ?? '.');
     final maxResults = args['max_results'] ?? 20;
     final contentRe = args['content'] as String?;
@@ -557,7 +598,13 @@ class Executor {
   }
 
   Future<String> _exec(Map<String, dynamic> args) async {
-    final command = args['command'] as String;
+    final command = args['command'];
+    if (command == null || command is! String || command.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_exec 缺少必需参数 command (String)。收到: ${args.toString()}',
+      );
+    }
     final cwd = _resolve(args['cwd'] ?? '.');
     final timeout = Duration(seconds: (args['timeout'] ?? 120) as int);
 
@@ -630,7 +677,13 @@ class Executor {
   // ─── Python 代码执行 ──────────────────────────────────────────
 
   Future<String> _runPython(Map<String, dynamic> args) async {
-    final code = args['code'] as String;
+    final code = args['code'];
+    if (code == null || code is! String || code.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_run_python 缺少必需参数 code (String)。收到: ${args.toString()}',
+      );
+    }
     final timeout = Duration(seconds: (args['timeout'] ?? 60) as int);
 
     // 创建临时目录用于脚本和输出
@@ -859,7 +912,13 @@ if (_figCounter > 0) {
   }
 
   Future<String> _runJs(Map<String, dynamic> args) async {
-    final code = args['code'] as String;
+    final code = args['code'];
+    if (code == null || code is! String || code.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_run_js 缺少必需参数 code (String)。收到: ${args.toString()}',
+      );
+    }
     final runtimePref = (args['runtime'] ?? 'auto') as String;
     final timeout = Duration(seconds: (args['timeout'] ?? 60) as int);
 

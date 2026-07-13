@@ -1601,9 +1601,7 @@ class _WorkDirChipState extends ConsumerState<_WorkDirChip> {
         } else {
           AppLogger.instance.log('[WorkDir] 当前目录无效或检查超时，清空旧路径');
           ref.read(workingDirectoryProvider.notifier).state = '';
-          await ref
-              .read(settingsProvider.notifier)
-              .updateWorkingDirectory('');
+          await ref.read(settingsProvider.notifier).updateWorkingDirectory('');
         }
       }
 
@@ -2006,10 +2004,14 @@ class _KnowledgeBaseChip extends ConsumerWidget {
         color: active ? colorScheme.primary : null,
       ),
       label: Text(
-        active ? '知识库 (${selectedIds.length})' : '知识库',
+        active
+            ? context.s.chatKnowledgeBaseCount(selectedIds.length)
+            : context.s.chatKnowledgeBase,
         style: const TextStyle(fontSize: 12),
       ),
-      tooltip: active ? '已接入 ${selectedIds.length} 个知识库' : '选择知识库接入对话',
+      tooltip: active
+          ? context.s.chatKnowledgeBaseConnected(selectedIds.length)
+          : context.s.chatKnowledgeBaseSelect,
       onPressed: () => _showKbSelector(context, ref),
     );
   }
@@ -2056,7 +2058,10 @@ class _KbSelectorSheetState extends ConsumerState<_KbSelectorSheet> {
                 children: [
                   const Icon(Icons.menu_book, size: 20),
                   const SizedBox(width: 8),
-                  Text('选择知识库', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    context.s.chatKnowledgeBaseSelectTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const Spacer(),
                   TextButton(
                     onPressed: () {
@@ -2064,7 +2069,7 @@ class _KbSelectorSheetState extends ConsumerState<_KbSelectorSheet> {
                           _selected.toList();
                       Navigator.pop(context);
                     },
-                    child: const Text('确定'),
+                    child: Text(context.s.commonConfirm),
                   ),
                 ],
               ),
@@ -2077,15 +2082,17 @@ class _KbSelectorSheetState extends ConsumerState<_KbSelectorSheet> {
               ),
               error: (e, _) => Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('加载失败: $e'),
+                child: Text(
+                  context.s.chatKnowledgeBaseLoadFailed(e.toString()),
+                ),
               ),
               data: (bases) {
                 if (bases.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
+                  return Padding(
+                    padding: const EdgeInsets.all(24),
                     child: Text(
-                      '暂无知识库，请先在服务页创建',
-                      style: TextStyle(color: Colors.grey),
+                      context.s.chatKnowledgeBaseEmpty,
+                      style: const TextStyle(color: Colors.grey),
                     ),
                   );
                 }

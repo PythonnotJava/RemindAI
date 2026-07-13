@@ -848,6 +848,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         config: loopConfig,
         messagePipeline: agentContext.messagePipeline,
         hooks: agentContext.hooks,
+        contextWindow: agentContext.contextWindow,
       );
       _subscription = autonomousLoop
           .run(input)
@@ -890,7 +891,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         // （否则会关闭 loading、发完成通知、结算奖励，让 UI 看起来第一轮已结束）。
         if (agentEvent case AgentDone(content: final content)) {
           _flushStreamBuffer();
-          final finalContent = content.isNotEmpty ? content : state.streamingText;
+          final finalContent = content.isNotEmpty
+              ? content
+              : state.streamingText;
           if (finalContent.isNotEmpty) {
             final assistantMsg = ChatMessage.assistant(finalContent);
             state = state.copyWith(
@@ -910,8 +913,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         } else {
           _handleEvent(agentEvent, conversationId);
           // AgentError/熔断由 AutonomousLoop 随后的 LoopError 统一结束。
-          if (agentEvent is AgentError ||
-              agentEvent is AgentLoopLimitReached) {
+          if (agentEvent is AgentError || agentEvent is AgentLoopLimitReached) {
             state = state.copyWith(isLoading: true);
           }
         }

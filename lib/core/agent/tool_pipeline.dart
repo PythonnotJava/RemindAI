@@ -143,7 +143,7 @@ class ToolPipeline {
         return jsonEncode({
           'status': 'error',
           'code': 'INVALID_ARGS',
-          'detail': 'calls[$i] 必须是对象',
+          'detail': 'calls[$i] 必须是对象，但收到: ${item.runtimeType}',
         });
       }
       final tool = item['tool'];
@@ -151,13 +151,23 @@ class ToolPipeline {
         return jsonEncode({
           'status': 'error',
           'code': 'INVALID_ARGS',
-          'detail': 'calls[$i] 缺少非空的 tool 字段',
+          'detail': 'calls[$i] 缺少非空的 tool 字段。收到的 item: $item',
         });
       }
       final rawArgs = item['args'];
       final callArgs = rawArgs is Map
           ? rawArgs.map((k, v) => MapEntry(k.toString(), v))
           : <String, dynamic>{};
+
+      // 警告：如果 args 字段缺失或不是 Map，会使用空对象，可能导致子工具缺少必需参数
+      if (rawArgs == null) {
+        print('[并行调用警告] calls[$i].tool=$tool: args 字段缺失，将使用空对象 {}');
+      } else if (rawArgs is! Map) {
+        print(
+          '[并行调用警告] calls[$i].tool=$tool: args 不是对象类型(${rawArgs.runtimeType})，将使用空对象 {}',
+        );
+      }
+
       calls.add(_ParallelCall(tool: tool, args: callArgs));
     }
 

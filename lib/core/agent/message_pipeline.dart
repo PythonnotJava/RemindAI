@@ -26,6 +26,9 @@ class MessagePipeline {
   /// 是否没有注册任何变换器（此时 process 是零开销透传）
   bool get isEmpty => _transformers.isEmpty;
 
+  /// 访问变换器列表（用于对话中压缩的重置标记等操作）
+  List<MessageTransformer> get transformers => _transformers;
+
   /// 执行变换管线
   ///
   /// 对 [messages] 的深拷贝依次应用所有激活的变换器。

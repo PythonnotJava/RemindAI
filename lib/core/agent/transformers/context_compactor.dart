@@ -42,8 +42,8 @@ class ContextCompactor extends MessageTransformer {
 
   /// 基于模型 context window 计算动态阈值的比例。
   /// 触发压缩 = contextWindow * ratio。
-  /// 预留 25% 给 system prompt + 工具定义 + 保真区 + LLM 回复空间。
-  static const double _thresholdRatio = 0.75;
+  /// 预留 40% 给工具循环累积、system prompt + 工具定义 + 保真区 + LLM 回复空间。
+  static const double _thresholdRatio = 0.60;
 
   /// 动态计算出的实际阈值
   int get effectiveThreshold {

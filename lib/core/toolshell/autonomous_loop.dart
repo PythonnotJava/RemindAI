@@ -86,6 +86,9 @@ class AutonomousLoop {
   final List<AgentHook> hooks;
   final LoopConfig config;
 
+  /// 模型的上下文窗口大小（token 数）。用于对话中压缩的阈值计算。
+  final int contextWindow;
+
   AutonomousLoop({
     required this.llm,
     required this.executor,
@@ -94,6 +97,7 @@ class AutonomousLoop {
     required this.config,
     this.messagePipeline = const MessagePipeline(),
     this.hooks = const [],
+    this.contextWindow = 0,
   });
 
   /// Loop 模式注入到 system prompt 的指令
@@ -144,6 +148,7 @@ class AutonomousLoop {
         messages: messages,
         messagePipeline: messagePipeline,
         hooks: hooks,
+        contextWindow: contextWindow,
       );
 
       final buffer = StringBuffer();

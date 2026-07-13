@@ -3,6 +3,8 @@ import 'dart:convert';
 import '../llm/llm_client.dart';
 import '../agent/agent_hook.dart';
 import '../agent/message_pipeline.dart';
+import '../agent/transformers/context_compactor.dart';
+import '../isolate/compute_service.dart';
 import '../logger/app_logger.dart';
 import 'executor.dart';
 
@@ -150,6 +152,10 @@ class AgentLoop {
   /// 真正卡死的场景通常在几轮内就会重复同一模式，50只是防止真的失控。
   final int maxToolCallRounds;
 
+  /// 模型的上下文窗口大小（token 数）。用于对话中压缩的阈值计算。
+  /// 0 表示未知，会使用保守默认值 128K。
+  final int contextWindow;
+
   AgentLoop({
     required this.llm,
     required this.executor,
@@ -158,6 +164,7 @@ class AgentLoop {
     this.messagePipeline = const MessagePipeline(),
     this.hooks = const [],
     this.maxToolCallRounds = 50,
+    this.contextWindow = 0,
   });
 
   /// 执行一轮对话 (用户输入 → 多轮 tool_call → 最终回复)
@@ -316,7 +323,96 @@ class AgentLoop {
         });
       }
 
+      // ✅ 对话中压缩检查：每 5 轮检查一次，防止单轮对话内上下文溢出
+      if (round % 5 == 0) {
+        await _checkAndCompressIfNeeded(round, messages);
+      }
+
       // 循环 → 把工具结果交给 LLM 继续处理
     }
+  }
+
+  /// 对话中压缩检查：估算当前 token 数，超过阈值则触发压缩
+  Future<void> _checkAndCompressIfNeeded(
+    int round,
+    List<Map<String, dynamic>> messages,
+  ) async {
+    final tokens = _estimateTokens(messages);
+    final threshold = _getEffectiveThreshold();
+
+    // 未超过阈值，不压缩
+    if (tokens <= threshold) {
+      return;
+    }
+
+    AppLogger.instance.log(
+      '[AgentLoop] 工具循环第 $round 轮触发对话中压缩: $tokens tokens > $threshold tokens (${(tokens / (contextWindow > 0 ? contextWindow : 128000) * 100).toStringAsFixed(1)}%)',
+    );
+
+    final processed = await messagePipeline.process(messages);
+
+    // 检查是否真的发生了压缩
+    if (processed.length < messages.length) {
+      final beforeTokens = tokens;
+      messages.clear();
+      messages.addAll(processed);
+
+      // 重置压缩标记，允许下次再压缩
+      for (final transformer in messagePipeline.transformers) {
+        if (transformer is ContextCompactor) {
+          transformer.resetRound();
+        }
+      }
+
+      final afterTokens = _estimateTokens(messages);
+      final reduction = ((1 - afterTokens / beforeTokens) * 100)
+          .toStringAsFixed(1);
+      AppLogger.instance.log(
+        '[AgentLoop] 压缩完成: ${messages.length} 条消息, $afterTokens tokens (压缩比: $reduction%)',
+      );
+    } else {
+      AppLogger.instance.log('[AgentLoop] 压缩跳过: 消息数量未减少 (可能已是最小保留量)');
+    }
+  }
+
+  /// 估算消息列表的 token 数
+  int _estimateTokens(List<Map<String, dynamic>> messages) {
+    int total = 0;
+    for (final msg in messages) {
+      final content = msg['content'];
+      if (content is String) {
+        total += ComputeService.estimateTokens(content);
+      } else if (content is List) {
+        // Multimodal content parts
+        for (final part in content) {
+          if (part is Map && part['type'] == 'text') {
+            total += ComputeService.estimateTokens(
+              part['text'] as String? ?? '',
+            );
+          }
+        }
+      }
+      // tool_calls 参数也算 token
+      if (msg['tool_calls'] is List) {
+        for (final tc in msg['tool_calls'] as List) {
+          final args = tc['function']?['arguments'] as String? ?? '';
+          total += ComputeService.estimateTokens(args);
+        }
+      }
+      total += 4; // 每条消息的元数据开销
+    }
+    return total;
+  }
+
+  /// 获取当前的压缩阈值
+  int _getEffectiveThreshold() {
+    for (final transformer in messagePipeline.transformers) {
+      if (transformer is ContextCompactor) {
+        return transformer.effectiveThreshold;
+      }
+    }
+    // 默认：128K * 0.60 = 76.8K
+    final ctx = contextWindow > 0 ? contextWindow : 128000;
+    return (ctx * 0.60).toInt();
   }
 }

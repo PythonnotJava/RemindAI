@@ -116,7 +116,7 @@ class _QdrantPathTileState extends ConsumerState<QdrantPathTile> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  '来源: ${detected.source}',
+                  context.s.qdrantSource(detected.source),
                   style: textTheme.labelSmall?.copyWith(
                     color: found
                         ? colorScheme.onSecondaryContainer
@@ -174,7 +174,7 @@ class _QdrantPathTileState extends ConsumerState<QdrantPathTile> {
             ),
             const SizedBox(height: 4),
             Text(
-              '优先级: 手动指定 > 系统 PATH > 应用内置',
+              context.s.qdrantPriority,
               style: textTheme.bodySmall?.copyWith(
                 color: colorScheme.outline,
                 fontSize: 11,

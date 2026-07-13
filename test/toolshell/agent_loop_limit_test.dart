@@ -95,7 +95,10 @@ void main() {
 
       expect(events.whereType<AgentReasoningToken>().length, 1);
       expect(events.whereType<AgentDone>(), isEmpty);
-      expect(events.whereType<AgentError>().single.message, contains('只返回了推理内容'));
+      expect(
+        events.whereType<AgentError>().single.message,
+        contains('只返回了推理内容'),
+      );
     });
 
     test('流截断响应不得被当作正常完成', () async {
@@ -137,7 +140,9 @@ class _AlwaysToolCallLlmClient implements LlmClient {
   }) async* {
     callCount++;
     yield StreamComplete(
-      toolCalls: [ToolCall(id: 'call_$callCount', name: toolName, arguments: args)],
+      toolCalls: [
+        ToolCall(id: 'call_$callCount', name: toolName, arguments: args),
+      ],
       finishReason: 'tool_calls',
     );
   }

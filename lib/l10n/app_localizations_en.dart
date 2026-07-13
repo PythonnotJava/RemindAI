@@ -875,6 +875,10 @@ class SEn extends S {
   String get multiAgentSelectDirTitle => 'Select collaboration directory';
 
   @override
+  String get multiAgentSelectDirDesc =>
+      'Multi-Agent collaboration requires a shared working directory.\nAll agents will read, write files, and execute tasks in this directory.';
+
+  @override
   String get multiAgentOpenDir => 'Open directory';
 
   @override
@@ -1280,6 +1284,14 @@ class SEn extends S {
 
   @override
   String get qdrantAutoDetect => 'Restore auto-detect';
+
+  @override
+  String qdrantSource(String source) {
+    return 'Source: $source';
+  }
+
+  @override
+  String get qdrantPriority => 'Priority: Manual > System PATH > Bundled';
 
   @override
   String get exportFormatTitle => 'Select export format';
@@ -3476,6 +3488,35 @@ class SEn extends S {
   @override
   String get chatLoopAutoApproveHint =>
       'In Loop mode, tool operations execute automatically without per-action confirmation.';
+
+  @override
+  String get chatKnowledgeBase => 'Knowledge Base';
+
+  @override
+  String chatKnowledgeBaseCount(int count) {
+    return 'Knowledge Base ($count)';
+  }
+
+  @override
+  String chatKnowledgeBaseConnected(int count) {
+    return '$count knowledge bases connected';
+  }
+
+  @override
+  String get chatKnowledgeBaseSelect =>
+      'Select knowledge bases for this conversation';
+
+  @override
+  String get chatKnowledgeBaseSelectTitle => 'Select Knowledge Bases';
+
+  @override
+  String chatKnowledgeBaseLoadFailed(String error) {
+    return 'Load failed: $error';
+  }
+
+  @override
+  String get chatKnowledgeBaseEmpty =>
+      'No knowledge bases yet. Create one in the Services page first.';
 
   @override
   String get servicesKbTab => 'Knowledge Base';
