@@ -134,6 +134,13 @@ class DatabaseHelper {
       'interrupted',
       "INTEGER NOT NULL DEFAULT 0",
     );
+    // Migration: add thinking_content for chat messages (思考/推理过程内容)
+    _migrateAddColumn(
+      db,
+      'chat_messages',
+      'thinking_content',
+      "TEXT DEFAULT NULL",
+    );
     // Migration: MCP 多传输类型支持
     _migrateAddColumn(
       db,

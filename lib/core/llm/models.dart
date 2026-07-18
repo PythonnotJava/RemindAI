@@ -16,6 +16,10 @@ class ChatMessage {
   /// 该消息是否由用户手动中断生成
   final bool interrupted;
 
+  /// 思考/推理过程内容（extended_thinking / reasoning_content）
+  /// 用于展示 AI 的思考过程，不发送给模型
+  final String? thinkingContent;
+
   /// 随消息携带的附件（图片/文档等）。仅用于 UI 展示与持久化，
   /// 不参与发给模型的 content parts 构建。
   final List<FileAttachment> attachments;
@@ -28,6 +32,7 @@ class ChatMessage {
     DateTime? timestamp,
     this.attachments = const [],
     this.interrupted = false,
+    this.thinkingContent,
   }) : timestamp = timestamp ?? DateTime.now();
 
   /// 创建用户消息
@@ -45,11 +50,13 @@ class ChatMessage {
     String content, {
     List<ChatToolCall>? toolCalls,
     bool interrupted = false,
+    String? thinkingContent,
   }) => ChatMessage(
     role: ChatRole.assistant,
     content: content,
     toolCalls: toolCalls,
     interrupted: interrupted,
+    thinkingContent: thinkingContent,
   );
 
   /// 创建工具结果消息

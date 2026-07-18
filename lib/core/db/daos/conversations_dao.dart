@@ -5,6 +5,14 @@ import '../tables/conversations.dart';
 import '../../llm/models.dart';
 import '../../models/file_attachment.dart';
 
+/// 数据库消息行（包含 ID）
+class DbChatMessage {
+  final int id;
+  final ChatMessage message;
+
+  DbChatMessage({required this.id, required this.message});
+}
+
 class ConversationsDao {
   final DatabaseHelper _dbHelper;
 
@@ -90,6 +98,62 @@ class ConversationsDao {
       'SELECT * FROM chat_messages WHERE conversation_id = ? ORDER BY id ASC',
       [conversationId],
     );
+    return _parseMessageRows(result);
+  }
+
+  /// 获取会话的消息（分页）
+  /// [limit] 返回的消息数量
+  /// [beforeMessageId] 如果指定，返回该消息之前的消息（用于向上翻页）
+  /// 返回带 ID 的消息列表
+  Future<List<DbChatMessage>> getMessagesPage(
+    int conversationId, {
+    required int limit,
+    int? beforeMessageId,
+  }) async {
+    final db = await _dbHelper.database;
+
+    String query;
+    List<Object?> params;
+
+    if (beforeMessageId != null) {
+      // 加载更早的消息：id < beforeMessageId，按 id 降序取 limit 条，然后反转
+      query = '''
+        SELECT * FROM chat_messages
+        WHERE conversation_id = ? AND id < ?
+        ORDER BY id DESC
+        LIMIT ?
+      ''';
+      params = [conversationId, beforeMessageId, limit];
+    } else {
+      // 初始加载：取最新的 limit 条消息
+      query = '''
+        SELECT * FROM chat_messages
+        WHERE conversation_id = ?
+        ORDER BY id DESC
+        LIMIT ?
+      ''';
+      params = [conversationId, limit];
+    }
+
+    final result = db.select(query, params);
+    final dbMessages = _parseMessageRowsWithId(result);
+
+    // 因为查询是降序的，需要反转以保持时间顺序
+    return dbMessages.reversed.toList();
+  }
+
+  /// 获取会话的消息总数
+  Future<int> getMessageCount(int conversationId) async {
+    final db = await _dbHelper.database;
+    final result = db.select(
+      'SELECT COUNT(*) as count FROM chat_messages WHERE conversation_id = ?',
+      [conversationId],
+    );
+    return result.first['count'] as int;
+  }
+
+  /// 解析消息行数据
+  List<ChatMessage> _parseMessageRows(List<dynamic> result) {
     return result.map((row) {
       List<ChatToolCall>? toolCalls;
       final toolCallsJson = row['tool_calls'] as String?;
@@ -123,7 +187,51 @@ class ConversationsDao {
         timestamp: DateTime.parse(row['created_at'] as String),
         attachments: attachments,
         interrupted: (_safeColumnInt(row, 'interrupted') ?? 0) == 1,
+        thinkingContent: _safeColumn(row, 'thinking_content'),
       );
+    }).toList();
+  }
+
+  /// 解析消息行数据（带 ID）
+  List<DbChatMessage> _parseMessageRowsWithId(List<dynamic> result) {
+    return result.map((row) {
+      final id = row['id'] as int;
+      List<ChatToolCall>? toolCalls;
+      final toolCallsJson = row['tool_calls'] as String?;
+      if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+        final list = jsonDecode(toolCallsJson) as List;
+        toolCalls = list
+            .map((tc) => ChatToolCall.fromMap(tc as Map<String, dynamic>))
+            .toList();
+      }
+
+      final roleStr = row['role'] as String;
+      final role = ChatRole.values.firstWhere((r) => r.name == roleStr);
+
+      // 解析附件 (列可能在旧库中不存在)
+      List<FileAttachment> attachments = const [];
+      final attachmentsJson = _safeColumn(row, 'attachments');
+      if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
+        try {
+          final list = jsonDecode(attachmentsJson) as List;
+          attachments = list
+              .map((e) => FileAttachment.fromJson(e as Map<String, dynamic>))
+              .toList();
+        } catch (_) {}
+      }
+
+      final message = ChatMessage(
+        role: role,
+        content: row['content'] as String?,
+        toolCalls: toolCalls,
+        toolCallId: row['tool_call_id'] as String?,
+        timestamp: DateTime.parse(row['created_at'] as String),
+        attachments: attachments,
+        interrupted: (_safeColumnInt(row, 'interrupted') ?? 0) == 1,
+        thinkingContent: _safeColumn(row, 'thinking_content'),
+      );
+
+      return DbChatMessage(id: id, message: message);
     }).toList();
   }
 
@@ -176,8 +284,8 @@ class ConversationsDao {
         : jsonEncode(message.attachments.map((a) => a.toJson()).toList());
 
     db.execute(
-      '''INSERT INTO chat_messages (conversation_id, role, content, tool_calls, tool_call_id, attachments, interrupted, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+      '''INSERT INTO chat_messages (conversation_id, role, content, tool_calls, tool_call_id, attachments, interrupted, thinking_content, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
       [
         conversationId,
         message.role.name,
@@ -186,6 +294,7 @@ class ConversationsDao {
         message.toolCallId,
         attachmentsJson,
         message.interrupted ? 1 : 0,
+        message.thinkingContent, // 新增：保存 thinking 内容
         now,
       ],
     );

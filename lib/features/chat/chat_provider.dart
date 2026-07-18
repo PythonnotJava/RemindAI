@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_context.dart';
@@ -141,6 +142,7 @@ class ChatState {
   final bool isLoading;
   final bool isLoadingHistory;
   final String streamingText;
+  final String streamingThinking; // 新增：流式思考内容缓冲
   final List<ToolCallDisplay> activeToolCalls;
   final String? error;
   final int? currentConversationId;
@@ -156,11 +158,18 @@ class ChatState {
   /// `/sub-readers` 当前运行状态；null 表示当前没有正在展示的 sub-readers 卡片
   final SubReadersRun? subReadersRun;
 
+  /// 消息分页：是否还有更早的历史消息
+  final bool hasMoreHistory;
+
+  /// 消息分页：当前显示的第一条消息的数据库 ID（用于加载更早消息）
+  final int? firstMessageId;
+
   const ChatState({
     this.messages = const [],
     this.isLoading = false,
     this.isLoadingHistory = false,
     this.streamingText = '',
+    this.streamingThinking = '', // 新增
     this.activeToolCalls = const [],
     this.error,
     this.currentConversationId,
@@ -171,6 +180,8 @@ class ChatState {
     this.loopMaxIterations = 10,
     this.loopRunning = false,
     this.subReadersRun,
+    this.hasMoreHistory = false,
+    this.firstMessageId,
   });
 
   ChatState copyWith({
@@ -178,6 +189,7 @@ class ChatState {
     bool? isLoading,
     bool? isLoadingHistory,
     String? streamingText,
+    String? streamingThinking, // 新增
     List<ToolCallDisplay>? activeToolCalls,
     String? error,
     int? currentConversationId,
@@ -191,11 +203,14 @@ class ChatState {
     bool? loopRunning,
     SubReadersRun? subReadersRun,
     bool clearSubReadersRun = false,
+    bool? hasMoreHistory,
+    int? firstMessageId,
   }) => ChatState(
     messages: messages ?? this.messages,
     isLoading: isLoading ?? this.isLoading,
     isLoadingHistory: isLoadingHistory ?? this.isLoadingHistory,
     streamingText: streamingText ?? this.streamingText,
+    streamingThinking: streamingThinking ?? this.streamingThinking, // 新增
     activeToolCalls: activeToolCalls ?? this.activeToolCalls,
     error: error,
     currentConversationId: clearConversationId
@@ -212,6 +227,8 @@ class ChatState {
     subReadersRun: clearSubReadersRun
         ? null
         : (subReadersRun ?? this.subReadersRun),
+    hasMoreHistory: hasMoreHistory ?? this.hasMoreHistory,
+    firstMessageId: firstMessageId ?? this.firstMessageId,
   );
 }
 
@@ -265,9 +282,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final StringBuffer _streamBuffer = StringBuffer();
   Timer? _flushTimer;
 
+  /// 思考内容的流式缓冲（与 _streamBuffer 类似）
+  final StringBuffer _thinkingBuffer = StringBuffer();
+  Timer? _thinkingFlushTimer;
+
   /// 流式刷新间隔。约 50ms（≈20fps）足够顺滑，又把每秒 setState 次数从
   /// 数百次降到 ~20 次。
   static const _flushInterval = Duration(milliseconds: 50);
+
+  /// 思考内容的刷新间隔。可以设置得更长，因为用户不太关注思考的实时性。
+  /// 200ms = 每秒最多 5 次更新，大幅减少 UI 重建。
+  static const _thinkingFlushInterval = Duration(milliseconds: 200);
 
   /// 把累积的流式缓冲合并进 state.streamingText 并清空缓冲、停掉计时器。
   /// 在任何需要读取完整 streamingText 的时机（工具开始、完成、出错、中断、新会话、销毁）
@@ -281,6 +306,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
     state = state.copyWith(streamingText: state.streamingText + pending);
   }
 
+  /// 把累积的思考缓冲合并进 state.streamingThinking 并清空缓冲、停掉计时器。
+  void _flushThinkingBuffer() {
+    _thinkingFlushTimer?.cancel();
+    _thinkingFlushTimer = null;
+    if (_thinkingBuffer.isEmpty) return;
+    final pending = _thinkingBuffer.toString();
+    _thinkingBuffer.clear();
+    state = state.copyWith(streamingThinking: state.streamingThinking + pending);
+  }
+
   ChatNotifier(this._ref) : super(const ChatState());
 
   ConversationsDao get _conversationsDao => _ref.read(conversationsDaoProvider);
@@ -292,6 +327,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _flushTimer?.cancel();
     _flushTimer = null;
     _streamBuffer.clear();
+    _thinkingFlushTimer?.cancel();  // ✅ 清理思考缓冲定时器
+    _thinkingFlushTimer = null;
+    _thinkingBuffer.clear();
     // hooks: onSessionEnd
     await _fireSessionEnd();
     _agentMessages.clear();
@@ -316,7 +354,18 @@ class ChatNotifier extends StateNotifier<ChatState> {
     // 进入加载状态，让 UI 显示过渡动画
     state = state.copyWith(isLoadingHistory: true);
 
-    final messages = await _conversationsDao.getMessages(conversationId);
+    // 分页加载：初始加载最近 30 条消息
+    const initialPageSize = 30;
+    final dbMessages = await _conversationsDao.getMessagesPage(
+      conversationId,
+      limit: initialPageSize,
+    );
+    final totalCount = await _conversationsDao.getMessageCount(conversationId);
+    final hasMore = dbMessages.length < totalCount;
+
+    // 提取消息和第一条消息的 ID
+    final messages = dbMessages.map((dm) => dm.message).toList();
+    final firstMsgId = dbMessages.isNotEmpty ? dbMessages.first.id : null;
 
     // 重建 agentMessages 用于继续对话
     final contextBuilder = AgentContextBuilder(_ref);
@@ -341,6 +390,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
       messages: displayMessages,
       currentConversationId: conversationId,
       isLoadingHistory: true, // 保持 loading，让 UI 有一帧缓冲
+      hasMoreHistory: hasMore,
+      firstMessageId: firstMsgId,
     );
 
     // 延迟一帧后关闭 loading，让布局在遮罩下完成
@@ -455,6 +506,74 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   bool _sessionAutoApprove = false;
+
+  /// 加载更早的历史消息（向上翻页）
+  Future<void> loadOlderMessages() async {
+    final conversationId = state.currentConversationId;
+    final firstMsgId = state.firstMessageId;
+
+    if (conversationId == null ||
+        firstMsgId == null ||
+        !state.hasMoreHistory ||
+        state.isLoadingHistory) {
+      return;
+    }
+
+    state = state.copyWith(isLoadingHistory: true);
+
+    try {
+      // 加载更早的一批消息（20条）
+      const pageSize = 20;
+      final dbMessages = await _conversationsDao.getMessagesPage(
+        conversationId,
+        limit: pageSize,
+        beforeMessageId: firstMsgId,
+      );
+
+      if (dbMessages.isEmpty) {
+        state = state.copyWith(
+          isLoadingHistory: false,
+          hasMoreHistory: false,
+        );
+        return;
+      }
+
+      final olderMessages = dbMessages.map((dm) => dm.message).toList();
+      final newFirstMsgId = dbMessages.first.id;
+
+      // 更新 _agentMessages（在 system prompt 后插入）
+      final systemMsgCount = _agentMessages.where((m) => m['role'] == 'system').length;
+      for (var i = olderMessages.length - 1; i >= 0; i--) {
+        final msg = olderMessages[i];
+        if (msg.role != ChatRole.system) {
+          _agentMessages.insert(systemMsgCount, msg.toMap());
+        }
+      }
+
+      // 过滤掉系统消息
+      final olderDisplayMessages = olderMessages
+          .where((m) => m.role != ChatRole.system)
+          .toList();
+
+      // 将新消息追加到现有消息前面
+      final currentMessages = state.messages;
+      final updatedMessages = [...olderDisplayMessages, ...currentMessages];
+
+      // 检查是否还有更多
+      final totalCount = await _conversationsDao.getMessageCount(conversationId);
+      final hasMore = updatedMessages.length < totalCount;
+
+      state = state.copyWith(
+        messages: updatedMessages,
+        isLoadingHistory: false,
+        hasMoreHistory: hasMore,
+        firstMessageId: newFirstMsgId,
+      );
+    } catch (e) {
+      AppLogger.instance.log('[加载历史消息失败] $e');
+      state = state.copyWith(isLoadingHistory: false);
+    }
+  }
 
   // ─── Loop 模式 ─────────────────────────────────────────────
 
@@ -1018,9 +1137,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void _handleEvent(AgentEvent event, int conversationId) {
     switch (event) {
       case AgentReasoningToken(text: final text):
-        // 推理过程单独展示在当前流区域，但不在 AgentDone 时作为最终正文兜底。
-        // 后续可扩展为独立的可折叠“思考过程”面板。
+        // 推理过程流式累积到 streamingThinking
         _currentTokenCount += ComputeService.estimateTokens(text);
+
+        // 使用缓冲机制，减少 UI 更新频率
+        _thinkingBuffer.write(text);
+        _thinkingFlushTimer?.cancel();
+        _thinkingFlushTimer = Timer(_thinkingFlushInterval, _flushThinkingBuffer);
       case AgentToken(text: final text):
         _currentTokenCount += ComputeService.estimateTokens(text);
         // 合并写入缓冲，由计时器周期性刷新到 state，避免每 token 一次全量 rebuild
@@ -1067,11 +1190,24 @@ class ChatNotifier extends StateNotifier<ChatState> {
       case AgentDone(content: final content):
         // 刷净缓冲，确保 state.streamingText 含全部已流式文本
         _flushStreamBuffer();
+        _flushThinkingBuffer();  // ✅ 刷新思考缓冲
+
         // 如果最终 content 为空，使用之前流式累积的文本
         // (某些模型在 tool_call 后的回复轮次不返回 content)
         final finalContent = content.isNotEmpty ? content : state.streamingText;
-        final assistantMsg = ChatMessage.assistant(finalContent);
-        // 把工具调用历史也追加为消息（展示用）
+        final finalThinking = state.streamingThinking.isNotEmpty
+            ? state.streamingThinking
+            : null;
+
+        // ✅ 分帧渲染：避免在同一帧做太多事情
+        // 第1帧：标记流式结束（让 UI 知道不再有新内容）
+        state = state.copyWith(isLoading: false);
+
+        // 第2帧：准备消息对象
+        final assistantMsg = ChatMessage.assistant(
+          finalContent,
+          thinkingContent: finalThinking,
+        );
         final toolMessages = state.activeToolCalls.map((tc) {
           return ChatMessage(
             role: ChatRole.assistant,
@@ -1081,44 +1217,60 @@ class ChatNotifier extends StateNotifier<ChatState> {
             ],
           );
         }).toList();
-        state = state.copyWith(
-          messages: [...state.messages, ...toolMessages, assistantMsg],
-          isLoading: false,
-          streamingText: '',
-          activeToolCalls: [],
-        );
-        // 保存助手消息到数据库
-        _conversationsDao.saveMessage(conversationId, assistantMsg);
-        // 触发 hooks: onAgentDone (记忆存储等后处理)
-        for (final hook in _activeHooks) {
-          hook.onAgentDone(finalContent, []);
-        }
-        // 窗口失焦时发送系统通知 (受设置开关控制)
-        final notifyEnabled =
-            _ref.read(settingsProvider).valueOrNull?.notifyOnBlur ?? true;
-        if (notifyEnabled) {
-          NotificationService.instance.notify(
-            title: 'RemindAI 对话完成',
-            body: finalContent.isEmpty ? '助手已完成回复' : finalContent,
+
+        // 第3帧：清空流式状态（让 StreamingBubble 消失）
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          state = state.copyWith(
+            streamingText: '',
+            streamingThinking: '',
+            activeToolCalls: [],
           );
-        }
-        PetObserver.instance.notifyAiCompleted(
-          summary: finalContent.length > 50
-              ? '${finalContent.substring(0, 50)}...'
-              : finalContent,
-        );
-        // 宠物经济：根据 token 消耗奖励宠物币
-        if (_currentTokenCount > 0) {
-          PetEconomy.instance.rewardForTokens(_currentTokenCount).then((
-            reward,
-          ) {
-            if (reward > 0) {
-              // 通过宠物气泡通知用户
-              PetChatService.instance.showCoinReward(reward);
-            }
+
+          // 第4帧：添加到消息列表（MessageBubble 出现）
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            state = state.copyWith(
+              messages: [...state.messages, ...toolMessages, assistantMsg],
+            );
+
+            // 第5帧（异步）：数据库保存和其他耗时操作
+            // 使用 Future.microtask 将耗时操作推到微任务队列，不阻塞当前帧
+            Future.microtask(() async {
+              // 保存助手消息到数据库（可能耗时）
+              await _conversationsDao.saveMessage(conversationId, assistantMsg);
+
+              // 触发 hooks: onAgentDone (记忆存储等后处理，可能耗时)
+              for (final hook in _activeHooks) {
+                await hook.onAgentDone(finalContent, []);
+              }
+
+              // 窗口失焦时发送系统通知 (受设置开关控制)
+              final notifyEnabled =
+                  _ref.read(settingsProvider).valueOrNull?.notifyOnBlur ?? true;
+              if (notifyEnabled) {
+                NotificationService.instance.notify(
+                  title: 'RemindAI 对话完成',
+                  body: finalContent.isEmpty ? '助手已完成回复' : finalContent,
+                );
+              }
+              PetObserver.instance.notifyAiCompleted(
+                summary: finalContent.length > 50
+                    ? '${finalContent.substring(0, 50)}...'
+                    : finalContent,
+              );
+              // 宠物经济：根据 token 消耗奖励宠物币
+              if (_currentTokenCount > 0) {
+                final reward = await PetEconomy.instance.rewardForTokens(_currentTokenCount);
+                if (reward > 0) {
+                  // 通过宠物气泡通知用户
+                  PetChatService.instance.showCoinReward(reward);
+                }
+                _currentTokenCount = 0;
+              }
+            });
           });
-          _currentTokenCount = 0;
-        }
+        });
       case AgentError(message: final message):
         // 刷净缓冲，保留出错前已生成的部分文本
         _flushStreamBuffer();
@@ -1126,14 +1278,71 @@ class ChatNotifier extends StateNotifier<ChatState> {
         PetObserver.instance.notifyAiError(error: message);
         _setError(message);
       case AgentLoopLimitReached(rounds: final rounds):
-        // 单轮对话内部工具调用轮次熔断：保留已生成的部分文本，明确提示原因，
-        // 与真正的 LLM/网络错误(AgentError)区分开，不走 _friendlyError 的
-        // 异常文案启发式匹配。
+        // 单轮对话内部工具调用轮次熔断：保留已生成的部分文本和工具调用记录，
+        // 生成友好的总结消息并保存到对话历史，让用户看到 AI 做了什么。
         _flushStreamBuffer();
-        final message = '本次回复内部工具调用次数过多(已达上限 $rounds 次)，已自动中止';
-        AppLogger.instance.log('[ChatProvider] AgentLoopLimitReached: $rounds');
-        PetObserver.instance.notifyAiError(error: message);
-        _setError(message);
+        _flushThinkingBuffer();
+
+        final hasContent = state.streamingText.isNotEmpty;
+        final hasThinking = state.streamingThinking.isNotEmpty;
+        final hasToolCalls = state.activeToolCalls.isNotEmpty;
+
+        // 统计工具调用次数
+        final toolStats = <String, int>{};
+        for (final tc in state.activeToolCalls) {
+          toolStats[tc.name] = (toolStats[tc.name] ?? 0) + 1;
+        }
+
+        // 构建工具调用列表文本
+        String toolCallsSection = '';
+        if (hasToolCalls) {
+          final statsText = toolStats.entries
+              .map((e) => '- **${e.key}**: ${e.value}次')
+              .join('\n');
+          toolCallsSection = '\n\n📋 **已执行的工具调用**（共 ${state.activeToolCalls.length} 次）：\n$statsText';
+        }
+
+        // 构建熔断总结消息
+        final summaryMessage = '''
+⚠️ **工具调用次数已达上限（$rounds 次），已自动中止**
+${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamingText}' : ''}$toolCallsSection
+
+💡 **建议：**
+- 请将任务拆分为更小的步骤
+- 提供更明确的目标描述
+- 或者手动执行部分步骤后再继续
+'''.trim();
+
+        // 保存工具调用记录
+        final toolCallsData = state.activeToolCalls.map((tc) {
+          return ChatToolCall(
+            id: tc.id,
+            name: tc.name,
+            arguments: tc.arguments,
+          );
+        }).toList();
+
+        // 创建 assistant 消息（包含工具调用记录）
+        final assistantMsg = ChatMessage.assistant(
+          summaryMessage,
+          thinkingContent: hasThinking ? state.streamingThinking : null,
+          toolCalls: toolCallsData.isNotEmpty ? toolCallsData : null,
+        );
+
+        // 更新 UI 状态
+        state = state.copyWith(
+          messages: [...state.messages, assistantMsg],
+          streamingText: '',
+          streamingThinking: '',
+          activeToolCalls: [],
+          isLoading: false,
+        );
+
+        // 保存到数据库
+        _conversationsDao.saveMessage(conversationId, assistantMsg);
+
+        AppLogger.instance.log('[ChatProvider] AgentLoopLimitReached: $rounds，已保存总结消息');
+        PetObserver.instance.notifyAiError(error: '工具调用熔断: $rounds 次');
     }
   }
 
@@ -1141,8 +1350,21 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void cancelResponse() {
     _subscription?.cancel();
     _subscription = null;
+
+    // 先判断是否有任何输出（在刷缓冲之前）
+    final hasContent = state.streamingText.isNotEmpty || _streamBuffer.isNotEmpty;
+    final hasThinking = state.streamingThinking.isNotEmpty || _thinkingBuffer.isNotEmpty;
+    final hasToolCalls = state.activeToolCalls.isNotEmpty;
+
+    AppLogger.instance.log(
+      '[cancelResponse] hasContent=$hasContent, hasThinking=$hasThinking, '
+      'hasToolCalls=$hasToolCalls, streamingText.length=${state.streamingText.length}, '
+      'buffer.length=${_streamBuffer.length}',
+    );
+
     // 中断前刷净缓冲，保留已生成的部分输出
     _flushStreamBuffer();
+    _flushThinkingBuffer();  // ✅ 刷新思考缓冲
     // 清理 AgentLoop 可能已写入的不完整 tool_calls 序列
     _sanitizeAgentMessages();
 
@@ -1150,47 +1372,97 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final convId = state.currentConversationId;
 
     // 只要有部分文本或正在执行的工具调用，都应保留到消息列表
-    if (partial.isNotEmpty || state.activeToolCalls.isNotEmpty) {
+    if (hasContent || hasToolCalls) {
       // 构建已中断的助手消息
       final content = partial.isNotEmpty
           ? partial
           : state.activeToolCalls.map((tc) => '[工具调用中] ${tc.name}').join('\n');
-      final assistantMsg = ChatMessage.assistant(content, interrupted: true);
+      final thinkingContent = state.streamingThinking.isNotEmpty
+          ? state.streamingThinking
+          : null;
 
-      // 把工具调用历史也追加为消息（展示用）
-      final toolMessages = state.activeToolCalls
-          .where((tc) => tc.status == ToolCallStatus.done)
-          .map(
-            (tc) => ChatMessage(
-              role: ChatRole.assistant,
-              content: '[工具调用] ${tc.name}',
-              toolCalls: [
-                ChatToolCall(id: tc.id, name: tc.name, arguments: tc.arguments),
-              ],
-            ),
-          )
+      // 将工具调用历史包含到消息中（用于持久化和恢复显示）
+      final toolCalls = state.activeToolCalls
+          .where((tc) => tc.status == ToolCallStatus.done || tc.status == ToolCallStatus.executing)
+          .map((tc) => ChatToolCall(id: tc.id, name: tc.name, arguments: tc.arguments))
           .toList();
 
+      final assistantMsg = ChatMessage.assistant(
+        content,
+        interrupted: true,
+        thinkingContent: thinkingContent,
+        toolCalls: toolCalls.isNotEmpty ? toolCalls : null,
+      );
+
       state = state.copyWith(
-        messages: [...state.messages, ...toolMessages, assistantMsg],
+        messages: [...state.messages, assistantMsg],
         isLoading: false,
         streamingText: '',
+        streamingThinking: '', // 清空 thinking 缓冲
         activeToolCalls: [],
       );
 
-      // 持久化
+      // 持久化（包含工具调用信息）
       if (convId != null) {
         _conversationsDao.saveMessage(convId, assistantMsg);
       }
       // 同步 agentMessages 上下文 (让后续对话知道之前的部分回复)
       _agentMessages.add({'role': 'assistant', 'content': content});
     } else {
-      // 连思考阶段都没开始输出，直接恢复空闲
-      state = state.copyWith(
-        isLoading: false,
-        streamingText: '',
-        activeToolCalls: [],
-      );
+      // 完全没有 content，但可能有 thinking
+      if (hasThinking) {
+        // 有 thinking 但无 content：保存 thinking
+        final assistantMsg = ChatMessage.assistant(
+          '',  // content 为空
+          interrupted: true,
+          thinkingContent: state.streamingThinking,
+        );
+
+        state = state.copyWith(
+          messages: [...state.messages, assistantMsg],
+          isLoading: false,
+          streamingText: '',
+          streamingThinking: '',
+          activeToolCalls: [],
+        );
+
+        // 持久化
+        if (convId != null) {
+          _conversationsDao.saveMessage(convId, assistantMsg);
+        }
+      } else {
+        // 完全没有任何输出：显示"用户中断了输出"的消息
+        AppLogger.instance.log('[cancelResponse] 走入"完全没有输出"分支');
+
+        final assistantMsg = ChatMessage.assistant(
+          '[用户中断了输出]',
+          interrupted: true,
+          thinkingContent: null,
+        );
+
+        AppLogger.instance.log(
+          '[cancelResponse] 创建中断消息: content="${assistantMsg.content}", '
+          'interrupted=${assistantMsg.interrupted}',
+        );
+
+        state = state.copyWith(
+          messages: [...state.messages, assistantMsg],
+          isLoading: false,
+          streamingText: '',
+          streamingThinking: '',
+          activeToolCalls: [],
+        );
+
+        AppLogger.instance.log(
+          '[cancelResponse] 状态已更新，消息数量=${state.messages.length}',
+        );
+
+        // 持久化（让用户知道确实点了停止）
+        if (convId != null) {
+          _conversationsDao.saveMessage(convId, assistantMsg);
+          AppLogger.instance.log('[cancelResponse] 消息已保存到数据库');
+        }
+      }
     }
 
     // ─── 延迟防御清理 ───
@@ -1330,6 +1602,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   void dispose() {
     _subscription?.cancel();
     _flushTimer?.cancel();
+    _thinkingFlushTimer?.cancel();  // ✅ 取消思考缓冲定时器
     _errorTimer?.cancel();
     _fireSessionEnd();
     super.dispose();

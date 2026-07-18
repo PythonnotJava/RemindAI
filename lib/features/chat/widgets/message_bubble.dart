@@ -8,6 +8,7 @@ import '../../../core/export/conversation_exporter.dart';
 import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/llm/models.dart';
 import '../../../providers/settings_provider.dart';
+import '../chat_provider.dart';
 import 'markdown_view.dart';
 import 'message_attachments.dart';
 
@@ -34,6 +35,8 @@ class MessageBubble extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final hasText = (message.content ?? '').trim().isNotEmpty;
     final hasAttachments = message.attachments.isNotEmpty;
+    final hasThinking = (message.thinkingContent ?? '').trim().isNotEmpty;
+    final hasToolCalls = message.toolCalls != null && message.toolCalls!.isNotEmpty;
     final chatFont = ref.watch(chatFontProvider);
     final chatFontSize = ref.watch(chatFontSizeProvider);
 
@@ -55,7 +58,24 @@ class MessageBubble extends ConsumerWidget {
                 attachments: message.attachments,
                 isUser: isUser,
               ),
-              if (hasText) const SizedBox(height: 6),
+              if (hasText || hasThinking || hasToolCalls) const SizedBox(height: 6),
+            ],
+            // Thinking 区域（助手消息且有思考内容）
+            if (!isUser && hasThinking) ...[
+              _ThinkingSection(
+                content: message.thinkingContent!,
+                colorScheme: colorScheme,
+              ),
+              const SizedBox(height: 6),
+            ],
+            // 工具调用区域（助手消息且有工具调用）
+            if (!isUser && hasToolCalls) ...[
+              _ToolCallsSection(
+                toolCalls: message.toolCalls!,
+                colorScheme: colorScheme,
+                interrupted: message.interrupted,
+              ),
+              const SizedBox(height: 6),
             ],
             // 消息气泡（无文本且只有附件时不渲染空气泡）
             if (hasText)
@@ -88,7 +108,11 @@ class MessageBubble extends ConsumerWidget {
                 onEdit: onEdit,
               ),
             // 中断标记
-            if (message.interrupted) _InterruptedTag(colorScheme: colorScheme),
+            if (message.interrupted)
+              _InterruptedTag(
+                colorScheme: colorScheme,
+                hasThinking: hasThinking,
+              ),
           ],
         ),
       ),
@@ -265,43 +289,277 @@ class _MessageActions extends ConsumerWidget {
 /// 用户手动中断标记 — 气泡底部的小标签
 class _InterruptedTag extends StatelessWidget {
   final ColorScheme colorScheme;
+  final bool hasThinking;
 
-  const _InterruptedTag({required this.colorScheme});
+  const _InterruptedTag({
+    required this.colorScheme,
+    this.hasThinking = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final message = hasThinking ? '思考过程已中断' : '回复已中断';
+
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: colorScheme.errorContainer.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.pause_circle_outline,
+              size: 14,
+              color: colorScheme.error,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              message,
+              style: TextStyle(
+                fontSize: 11,
+                color: colorScheme.error,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Thinking 思考过程展示组件（可折叠）
+class _ThinkingSection extends StatefulWidget {
+  final String content;
+  final ColorScheme colorScheme;
+
+  const _ThinkingSection({
+    required this.content,
+    required this.colorScheme,
+  });
+
+  @override
+  State<_ThinkingSection> createState() => _ThinkingSectionState();
+}
+
+class _ThinkingSectionState extends State<_ThinkingSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: widget.colorScheme.surfaceContainerLow.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: widget.colorScheme.outline.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.pause_circle_outline,
-            size: 12,
-            color: colorScheme.outline,
+          // 标题行
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.lightbulb_outline,
+                  size: 16,
+                  color: widget.colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '思考过程',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: widget.colorScheme.primary,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: widget.colorScheme.outline,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 4),
-          Text(
-            context.s.msgInterrupted,
-            style: TextStyle(fontSize: 11, color: colorScheme.outline),
-          ),
+          // 思考内容（可展开）
+          if (_expanded) ...[
+            const SizedBox(height: 8),
+            Divider(height: 1, color: widget.colorScheme.outline.withOpacity(0.2)),
+            const SizedBox(height: 8),
+            Text(
+              widget.content,
+              style: TextStyle(
+                fontSize: 12,
+                color: widget.colorScheme.onSurface.withOpacity(0.7),
+                fontStyle: FontStyle.italic,
+                height: 1.4,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
+/// 工具调用区域（折叠显示历史工具调用）
+class _ToolCallsSection extends StatefulWidget {
+  final List<ChatToolCall> toolCalls;
+  final ColorScheme colorScheme;
+  final bool interrupted;
+
+  const _ToolCallsSection({
+    required this.toolCalls,
+    required this.colorScheme,
+    required this.interrupted,
+  });
+
+  @override
+  State<_ToolCallsSection> createState() => _ToolCallsSectionState();
+}
+
+class _ToolCallsSectionState extends State<_ToolCallsSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: widget.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: widget.colorScheme.outline.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 标题栏（点击展开/折叠）
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.build_circle_outlined,
+                  size: 16,
+                  color: widget.interrupted
+                      ? widget.colorScheme.error
+                      : widget.colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '工具调用 (${widget.toolCalls.length})',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: widget.interrupted
+                        ? widget.colorScheme.error
+                        : widget.colorScheme.primary,
+                  ),
+                ),
+                if (widget.interrupted) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '已中断',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: widget.colorScheme.error.withOpacity(0.7),
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: widget.colorScheme.outline,
+                ),
+              ],
+            ),
+          ),
+          // 工具调用列表（可展开）
+          if (_expanded) ...[
+            const SizedBox(height: 8),
+            Divider(height: 1, color: widget.colorScheme.outline.withOpacity(0.2)),
+            const SizedBox(height: 8),
+            ...widget.toolCalls.map((tc) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.arrow_right,
+                    size: 16,
+                    color: widget.colorScheme.outline,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tc.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: widget.colorScheme.onSurface,
+                          ),
+                        ),
+                        if (tc.arguments.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatArguments(tc.arguments),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: widget.colorScheme.onSurface.withOpacity(0.6),
+                              fontFamily: 'monospace',
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatArguments(Map<String, dynamic> args) {
+    if (args.isEmpty) return '()';
+    final entries = args.entries.take(3).map((e) => '${e.key}: ${e.value}');
+    return entries.join(', ');
+  }
+}
+
 /// 流式输出气泡 (正在生成中的助手消息)
-class StreamingBubble extends StatefulWidget {
+class StreamingBubble extends ConsumerStatefulWidget {
   final String text;
 
   const StreamingBubble({super.key, required this.text});
 
   @override
-  State<StreamingBubble> createState() => _StreamingBubbleState();
+  ConsumerState<StreamingBubble> createState() => _StreamingBubbleState();
 }
 
-class _StreamingBubbleState extends State<StreamingBubble>
+class _StreamingBubbleState extends ConsumerState<StreamingBubble>
     with SingleTickerProviderStateMixin {
   /// 思考计时器 — 每秒 +1
   Timer? _thinkingTimer;
@@ -363,6 +621,14 @@ class _StreamingBubbleState extends State<StreamingBubble>
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    // ✅ 直接监听 streamingThinking，不触发整个页面重建
+    final thinkingContent = ref.watch(
+      chatProvider.select((s) => s.streamingThinking),
+    );
+
+    // 如果有思考内容，显示思考区域
+    final hasThinking = thinkingContent.isNotEmpty;
+
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -380,9 +646,43 @@ class _StreamingBubbleState extends State<StreamingBubble>
             bottomRight: Radius.circular(16),
           ),
         ),
-        child: widget.text.isEmpty
-            ? _buildThinkingIndicator(context, colorScheme)
-            : MarkdownView(data: widget.text, textColor: colorScheme.onSurface),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 思考区域（如果有）
+            if (hasThinking) ...[
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainer.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline, size: 14, color: colorScheme.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      '思考中...',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            // 主要内容
+            if (widget.text.isEmpty && !hasThinking)
+              _buildThinkingIndicator(context, colorScheme)
+            else if (widget.text.isNotEmpty)
+              MarkdownView(data: widget.text, textColor: colorScheme.onSurface)
+            else
+              const SizedBox.shrink(),
+          ],
+        ),
       ),
     );
   }

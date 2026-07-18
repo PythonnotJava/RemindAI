@@ -438,42 +438,86 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final activeToolCalls = chatState.activeToolCalls;
     final isLoading = chatState.isLoading;
     final subReadersRun = chatState.subReadersRun;
+    final hasMoreHistory = chatState.hasMoreHistory;
+    final isLoadingHistory = chatState.isLoadingHistory;
 
-    // 总 item 数 = 消息 + sub-readers 卡片(可选) + 活跃 tool calls + 流式输出(可选)
+    // 总 item 数 = 加载指示器(可选) + 消息 + sub-readers 卡片(可选) + 活跃 tool calls + 流式输出(可选)
     final hasSubReadersCard = subReadersRun != null;
+    final hasLoadingIndicator = hasMoreHistory || isLoadingHistory;
     final itemCount =
+        (hasLoadingIndicator ? 1 : 0) +
         messages.length +
         (hasSubReadersCard ? 1 : 0) +
         activeToolCalls.length +
         (isLoading && !hasSubReadersCard ? 1 : 0);
 
-    return Scrollbar(
-      controller: _scrollController,
-      thumbVisibility: true,
-      child: ListView.builder(
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        // 检测滚动到顶部，触发加载更多
+        if (notification is ScrollUpdateNotification) {
+          final metrics = notification.metrics;
+          if (metrics.pixels <= metrics.minScrollExtent + 100 &&
+              hasMoreHistory &&
+              !isLoadingHistory) {
+            // 触发加载更早的消息
+            Future.microtask(() {
+              ref.read(chatProvider.notifier).loadOlderMessages();
+            });
+          }
+        }
+        return false;
+      },
+      child: Scrollbar(
         controller: _scrollController,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        itemCount: itemCount,
-        // 预渲染 500px 区域外的项，减少快速滚动白屏
-        scrollCacheExtent: ScrollCacheExtent.pixels(500),
-        itemBuilder: (context, index) {
-          // 消息区
-          if (index < messages.length) {
-            return _buildMessageItem(messages[index], index);
-          }
-          // sub-readers 进度卡片（跟在消息区之后，展示规划+并行执行进度）
-          if (hasSubReadersCard && index == messages.length) {
-            return SubReadersCard(run: subReadersRun);
-          }
-          final afterSubReaders =
-              index - messages.length - (hasSubReadersCard ? 1 : 0);
-          // 活跃 tool calls 区
-          if (afterSubReaders < activeToolCalls.length) {
-            return ToolCallCard(toolCall: activeToolCalls[afterSubReaders]);
-          }
-          // 流式输出 bubble
-          return StreamingBubble(text: chatState.streamingText);
-        },
+        thumbVisibility: true,
+        child: ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          itemCount: itemCount,
+          // 预渲染 500px 区域外的项，减少快速滚动白屏
+          scrollCacheExtent: ScrollCacheExtent.pixels(500),
+          itemBuilder: (context, index) {
+            // 加载指示器（顶部）
+            if (hasLoadingIndicator && index == 0) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: isLoadingHistory
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : TextButton(
+                          onPressed: () {
+                            ref.read(chatProvider.notifier).loadOlderMessages();
+                          },
+                          child: const Text('加载更早的消息'),
+                        ),
+                ),
+              );
+            }
+
+            final offsetIndex = index - (hasLoadingIndicator ? 1 : 0);
+
+            // 消息区
+            if (offsetIndex < messages.length) {
+              return _buildMessageItem(messages[offsetIndex], offsetIndex);
+            }
+            // sub-readers 进度卡片（跟在消息区之后，展示规划+并行执行进度）
+            if (hasSubReadersCard && offsetIndex == messages.length) {
+              return SubReadersCard(run: subReadersRun);
+            }
+            final afterSubReaders =
+                offsetIndex - messages.length - (hasSubReadersCard ? 1 : 0);
+            // 活跃 tool calls 区
+            if (afterSubReaders < activeToolCalls.length) {
+              return ToolCallCard(toolCall: activeToolCalls[afterSubReaders]);
+            }
+            // 流式输出 bubble
+            return StreamingBubble(text: chatState.streamingText);
+          },
+        ),
       ),
     );
   }
