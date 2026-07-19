@@ -48,6 +48,13 @@ class DatabaseHelper {
     }
 
     final db = sqlite3.open(dbPath);
+
+    // 性能优化配置
+    db.execute('PRAGMA journal_mode = WAL');  // WAL 模式，写入不阻塞读取
+    db.execute('PRAGMA synchronous = NORMAL');  // 平衡性能和安全
+    db.execute('PRAGMA cache_size = -64000');  // 64MB 缓存
+    db.execute('PRAGMA temp_store = MEMORY');  // 临时表存内存
+
     _createTables(db);
     return db;
   }
@@ -162,6 +169,12 @@ class DatabaseHelper {
       'context_window',
       "INTEGER NOT NULL DEFAULT 0",
     );
+
+    // 性能优化：为 model_cards 的 is_default 字段创建索引
+    db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_model_cards_default
+      ON model_cards(is_default)
+    ''');
 
     // 记忆持久化表 (SQLite 备份层)
     db.execute('''

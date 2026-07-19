@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:path/path.dart' as p;
 import '../settings/app_settings.dart';
 
@@ -51,7 +52,11 @@ class AppLogger {
         '${now.hour.toString().padLeft(2, '0')}:'
         '${now.minute.toString().padLeft(2, '0')}:'
         '${now.second.toString().padLeft(2, '0')}';
-    _sink?.writeln('[$time] $line');
+    try {
+      _sink?.writeln('[$time] $line');
+    } catch (e) {
+      // 忽略写入错误，避免崩溃
+    }
   }
 
   /// 确保当前写入的是今天的日志文件
@@ -62,7 +67,7 @@ class AppLogger {
     _closeSinkSafely();
     _currentDate = today;
     final file = File(p.join(_logDir, '$today.log'));
-    _sink = file.openWrite(mode: FileMode.append);
+    _sink = file.openWrite(mode: FileMode.append, encoding: utf8);
   }
 
   /// 安全关闭当前 sink。
@@ -83,7 +88,13 @@ class AppLogger {
     if (!_initialized) return '';
     final file = File(p.join(_logDir, '${_todayStr()}.log'));
     if (!await file.exists()) return '';
-    return file.readAsString();
+    try {
+      return await file.readAsString(encoding: utf8);
+    } catch (e) {
+      // 如果 UTF-8 解码失败，尝试以字节方式读取
+      final bytes = await file.readAsBytes();
+      return utf8.decode(bytes, allowMalformed: true);
+    }
   }
 
   /// 列出所有日志文件 (按时间倒序)
@@ -103,7 +114,13 @@ class AppLogger {
   Future<String> readFile(String fileName) async {
     final file = File(p.join(_logDir, fileName));
     if (!await file.exists()) return '';
-    return file.readAsString();
+    try {
+      return await file.readAsString(encoding: utf8);
+    } catch (e) {
+      // 如果 UTF-8 解码失败，尝试以字节方式读取
+      final bytes = await file.readAsBytes();
+      return utf8.decode(bytes, allowMalformed: true);
+    }
   }
 
   /// 清空所有日志

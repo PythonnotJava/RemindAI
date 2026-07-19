@@ -131,13 +131,40 @@ class ContextCompactor extends MessageTransformer {
       ...recent,
     ];
 
-    final newTokens = _estimateTokens(result);
+    // ─── 第四步：清理孤立的工具结果 ───
+    // 收集所有 assistant 消息中的 tool_call_id
+    final validToolCallIds = <String>{};
+    for (final msg in result) {
+      if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
+        for (final tc in msg['tool_calls'] as List) {
+          final id = tc['id'] as String?;
+          if (id != null) validToolCallIds.add(id);
+        }
+      }
+    }
+
+    // 过滤掉没有对应工具调用的 tool 消息
+    final cleaned = result.where((msg) {
+      if (msg['role'] == 'tool') {
+        final toolCallId = msg['tool_call_id'] as String?;
+        final isValid = toolCallId != null && validToolCallIds.contains(toolCallId);
+        if (!isValid) {
+          AppLogger.instance.log(
+            '[Compactor] 移除孤立的工具结果: tool_call_id=$toolCallId'
+          );
+        }
+        return isValid;
+      }
+      return true;
+    }).toList();
+
+    final newTokens = _estimateTokens(cleaned);
     AppLogger.instance.log(
-      '[Compactor] 压缩完成: ${messages.length}条→${result.length}条, '
+      '[Compactor] 压缩完成: ${messages.length}条→${cleaned.length}条, '
       '估算 token: $newTokens',
     );
 
-    return result;
+    return cleaned;
   }
 
   /// 重置轮次标记（每次新消息开始时由外部重置）
@@ -196,6 +223,8 @@ class ContextCompactor extends MessageTransformer {
 
   /// 找到保真区的起始位置：保留最近 keepRecentTurns 轮完整对话
   /// 一轮 = user + assistant（可能包含中间的 tool 消息）
+  ///
+  /// 特别处理：确保工具调用和工具结果成对保留，避免孤立的 tool 消息。
   int _findRecentBoundary(List<Map<String, dynamic>> messages) {
     int turnsFound = 0;
     int idx = messages.length - 1;
@@ -206,8 +235,52 @@ class ContextCompactor extends MessageTransformer {
       idx--;
     }
 
-    // idx+1 是保真区的起始位置，确保不包含 system (index 0)
-    final boundary = messages.length - (idx + 1);
+    // idx+1 是初步的保真区起始位置
+    int boundaryIdx = idx + 1;
+
+    // 向前扩展：确保所有 tool 消息都有对应的 assistant 工具调用
+    // 从边界开始向后扫描，收集所有 tool_call_id
+    final toolCallIdsInRecent = <String>{};
+    for (int i = boundaryIdx; i < messages.length; i++) {
+      final msg = messages[i];
+      if (msg['role'] == 'tool') {
+        final toolCallId = msg['tool_call_id'] as String?;
+        if (toolCallId != null) {
+          toolCallIdsInRecent.add(toolCallId);
+        }
+      }
+    }
+
+    // 如果有 tool 消息，向前查找对应的 assistant 工具调用
+    if (toolCallIdsInRecent.isNotEmpty) {
+      for (int i = boundaryIdx - 1; i > 0; i--) {
+        final msg = messages[i];
+        if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
+          final toolCalls = msg['tool_calls'] as List;
+          for (final tc in toolCalls) {
+            final id = tc['id'] as String?;
+            if (id != null && toolCallIdsInRecent.contains(id)) {
+              // 找到了对应的工具调用，扩展边界到这里
+              boundaryIdx = i;
+              // 移除已匹配的 ID
+              toolCallIdsInRecent.remove(id);
+              if (toolCallIdsInRecent.isEmpty) break;
+            }
+          }
+        }
+        if (toolCallIdsInRecent.isEmpty) break;
+      }
+
+      // 如果仍有未匹配的 tool_call_id，记录警告
+      if (toolCallIdsInRecent.isNotEmpty) {
+        AppLogger.instance.log(
+          '[Compactor] 警告: 发现 ${toolCallIdsInRecent.length} 个孤立的工具结果，'
+          '将在压缩时移除: ${toolCallIdsInRecent.join(", ")}'
+        );
+      }
+    }
+
+    final boundary = messages.length - boundaryIdx;
     return min(boundary, messages.length - 1); // 至少保留 system
   }
 

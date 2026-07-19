@@ -286,13 +286,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final StringBuffer _thinkingBuffer = StringBuffer();
   Timer? _thinkingFlushTimer;
 
-  /// 流式刷新间隔。约 50ms（≈20fps）足够顺滑，又把每秒 setState 次数从
-  /// 数百次降到 ~20 次。
-  static const _flushInterval = Duration(milliseconds: 50);
+  /// 流式刷新间隔。100ms（≈10fps）已经足够顺滑，把每秒 setState 次数
+  /// 从数百次降到 ~10 次，大幅减少 UI 重建开销。
+  static const _flushInterval = Duration(milliseconds: 100);
 
-  /// 思考内容的刷新间隔。可以设置得更长，因为用户不太关注思考的实时性。
-  /// 200ms = 每秒最多 5 次更新，大幅减少 UI 重建。
-  static const _thinkingFlushInterval = Duration(milliseconds: 200);
+  /// 思考内容的刷新间隔。300ms = 每秒最多 3-4 次更新，大幅减少 UI 重建。
+  /// 思考内容用户不太关注实时性，可以设置得更长。
+  static const _thinkingFlushInterval = Duration(milliseconds: 300);
 
   /// 把累积的流式缓冲合并进 state.streamingText 并清空缓冲、停掉计时器。
   /// 在任何需要读取完整 streamingText 的时机（工具开始、完成、出错、中断、新会话、销毁）
@@ -1190,7 +1190,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       case AgentDone(content: final content):
         // 刷净缓冲，确保 state.streamingText 含全部已流式文本
         _flushStreamBuffer();
-        _flushThinkingBuffer();  // ✅ 刷新思考缓冲
+        _flushThinkingBuffer();
 
         // 如果最终 content 为空，使用之前流式累积的文本
         // (某些模型在 tool_call 后的回复轮次不返回 content)
@@ -1199,11 +1199,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             ? state.streamingThinking
             : null;
 
-        // ✅ 分帧渲染：避免在同一帧做太多事情
-        // 第1帧：标记流式结束（让 UI 知道不再有新内容）
-        state = state.copyWith(isLoading: false);
-
-        // 第2帧：准备消息对象
+        // 准备消息对象
         final assistantMsg = ChatMessage.assistant(
           finalContent,
           thinkingContent: finalThinking,
@@ -1218,58 +1214,49 @@ class ChatNotifier extends StateNotifier<ChatState> {
           );
         }).toList();
 
-        // 第3帧：清空流式状态（让 StreamingBubble 消失）
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          state = state.copyWith(
-            streamingText: '',
-            streamingThinking: '',
-            activeToolCalls: [],
-          );
+        // ✅ 原子性更新：一次性完成状态切换，避免中间帧出现"空白"
+        // 同时清空流式状态 + 添加最终消息，让工具UI消失的同时总结内容立即出现
+        state = state.copyWith(
+          messages: [...state.messages, ...toolMessages, assistantMsg],
+          isLoading: false,
+          streamingText: '',
+          streamingThinking: '',
+          activeToolCalls: [],
+        );
 
-          // 第4帧：添加到消息列表（MessageBubble 出现）
-          SchedulerBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            state = state.copyWith(
-              messages: [...state.messages, ...toolMessages, assistantMsg],
+        // 异步：数据库保存和其他耗时操作（不阻塞UI）
+        Future.microtask(() async {
+          // 保存助手消息到数据库（可能耗时）
+          await _conversationsDao.saveMessage(conversationId, assistantMsg);
+
+          // 触发 hooks: onAgentDone (记忆存储等后处理，可能耗时)
+          for (final hook in _activeHooks) {
+            await hook.onAgentDone(finalContent, []);
+          }
+
+          // 窗口失焦时发送系统通知 (受设置开关控制)
+          final notifyEnabled =
+              _ref.read(settingsProvider).valueOrNull?.notifyOnBlur ?? true;
+          if (notifyEnabled) {
+            NotificationService.instance.notify(
+              title: 'RemindAI 对话完成',
+              body: finalContent.isEmpty ? '助手已完成回复' : finalContent,
             );
-
-            // 第5帧（异步）：数据库保存和其他耗时操作
-            // 使用 Future.microtask 将耗时操作推到微任务队列，不阻塞当前帧
-            Future.microtask(() async {
-              // 保存助手消息到数据库（可能耗时）
-              await _conversationsDao.saveMessage(conversationId, assistantMsg);
-
-              // 触发 hooks: onAgentDone (记忆存储等后处理，可能耗时)
-              for (final hook in _activeHooks) {
-                await hook.onAgentDone(finalContent, []);
-              }
-
-              // 窗口失焦时发送系统通知 (受设置开关控制)
-              final notifyEnabled =
-                  _ref.read(settingsProvider).valueOrNull?.notifyOnBlur ?? true;
-              if (notifyEnabled) {
-                NotificationService.instance.notify(
-                  title: 'RemindAI 对话完成',
-                  body: finalContent.isEmpty ? '助手已完成回复' : finalContent,
-                );
-              }
-              PetObserver.instance.notifyAiCompleted(
-                summary: finalContent.length > 50
-                    ? '${finalContent.substring(0, 50)}...'
-                    : finalContent,
-              );
-              // 宠物经济：根据 token 消耗奖励宠物币
-              if (_currentTokenCount > 0) {
-                final reward = await PetEconomy.instance.rewardForTokens(_currentTokenCount);
-                if (reward > 0) {
-                  // 通过宠物气泡通知用户
-                  PetChatService.instance.showCoinReward(reward);
-                }
-                _currentTokenCount = 0;
-              }
-            });
-          });
+          }
+          PetObserver.instance.notifyAiCompleted(
+            summary: finalContent.length > 50
+                ? '${finalContent.substring(0, 50)}...'
+                : finalContent,
+          );
+          // 宠物经济：根据 token 消耗奖励宠物币
+          if (_currentTokenCount > 0) {
+            final reward = await PetEconomy.instance.rewardForTokens(_currentTokenCount);
+            if (reward > 0) {
+              // 通过宠物气泡通知用户
+              PetChatService.instance.showCoinReward(reward);
+            }
+            _currentTokenCount = 0;
+          }
         });
       case AgentError(message: final message):
         // 刷净缓冲，保留出错前已生成的部分文本
@@ -1402,12 +1389,59 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
         activeToolCalls: [],
       );
 
-      // 持久化（包含工具调用信息）
+      // 持久化（包含工具调用信息，供 UI 展示历史）
       if (convId != null) {
         _conversationsDao.saveMessage(convId, assistantMsg);
       }
-      // 同步 agentMessages 上下文 (让后续对话知道之前的部分回复)
-      _agentMessages.add({'role': 'assistant', 'content': content});
+
+      // 同步 agentMessages 上下文（给 LLM 的历史）
+      // ⚠️ 关键决策：中断时如果有 tool_calls，有两种选择：
+      // 1. 只保存 content，不保存 tool_calls（避免 400 错误）
+      // 2. 保存 tool_calls + 为每个添加虚拟 tool response
+      //
+      // 这里选择方案 1：中断的工具调用不应该影响后续对话的消息链完整性。
+      // UI 层（state.messages）仍然会展示工具调用记录，但 LLM 看不到。
+      if (toolCalls.isNotEmpty) {
+        // 有工具调用时，为每个已完成的工具添加 tool response
+        // 只保留真正执行完成的工具结果
+        final completedToolCalls = state.activeToolCalls
+            .where((tc) => tc.status == ToolCallStatus.done && tc.result != null)
+            .toList();
+
+        if (completedToolCalls.isNotEmpty) {
+          // 添加 assistant 消息（带 tool_calls）
+          final agentMsg = <String, dynamic>{
+            'role': 'assistant',
+            'content': content,
+            'tool_calls': completedToolCalls.map((tc) {
+              return {
+                'id': tc.id,
+                'type': 'function',
+                'function': {
+                  'name': tc.name,
+                  'arguments': jsonEncode(tc.arguments),
+                },
+              };
+            }).toList(),
+          };
+          _agentMessages.add(agentMsg);
+
+          // 为每个完成的工具添加 tool response
+          for (final tc in completedToolCalls) {
+            _agentMessages.add({
+              'role': 'tool',
+              'tool_call_id': tc.id,
+              'content': tc.result ?? '',
+            });
+          }
+        } else {
+          // 所有工具都未完成，只保存 content（不含 tool_calls）
+          _agentMessages.add({'role': 'assistant', 'content': content});
+        }
+      } else {
+        // 没有工具调用，正常添加
+        _agentMessages.add({'role': 'assistant', 'content': content});
+      }
     } else {
       // 完全没有 content，但可能有 thinking
       if (hasThinking) {

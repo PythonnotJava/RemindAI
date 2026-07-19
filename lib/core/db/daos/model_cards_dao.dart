@@ -120,8 +120,17 @@ class ModelCardsDao {
 
   Future<void> setDefault(String id) async {
     final db = await _dbHelper.database;
-    db.execute('UPDATE model_cards SET is_default = 0');
-    db.execute('UPDATE model_cards SET is_default = 1 WHERE id = ?', [id]);
+
+    // 使用事务一次性执行两条 SQL，性能更好
+    try {
+      db.execute('BEGIN IMMEDIATE');
+      db.execute('UPDATE model_cards SET is_default = 0');
+      db.execute('UPDATE model_cards SET is_default = 1 WHERE id = ?', [id]);
+      db.execute('COMMIT');
+    } catch (e) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
   }
 
   /// 按给定 id 顺序重写 sort_index

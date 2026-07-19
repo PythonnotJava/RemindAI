@@ -663,6 +663,16 @@ class SEn extends S {
   String get modelsSearchHint => 'Type to search models...';
 
   @override
+  String get modelsContextWindow => 'Context window (tokens)';
+
+  @override
+  String get modelsContextWindowHint => 'Default to 128000 if left empty or 0';
+
+  @override
+  String get modelsContextWindowHelper =>
+      'Model\'s max context length for auto-compression';
+
+  @override
   String get skillsTitle => 'Skill Management';
 
   @override

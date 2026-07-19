@@ -514,8 +514,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             if (afterSubReaders < activeToolCalls.length) {
               return ToolCallCard(toolCall: activeToolCalls[afterSubReaders]);
             }
-            // 流式输出 bubble
-            return StreamingBubble(text: chatState.streamingText);
+            // 流式输出 bubble（用 RepaintBoundary 隔离）
+            return RepaintBoundary(
+              child: StreamingBubble(text: chatState.streamingText),
+            );
           },
         ),
       ),

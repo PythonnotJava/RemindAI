@@ -599,9 +599,10 @@ class _StreamingBubbleState extends ConsumerState<StreamingBubble>
   void _startTimer() {
     _elapsedSeconds = 0;
     _thinkingTimer?.cancel();
-    _thinkingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    // 每 2 秒更新一次计时，减少 setState 频率
+    _thinkingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (!mounted) return;
-      setState(() => _elapsedSeconds++);
+      setState(() => _elapsedSeconds += 2);
     });
   }
 
@@ -678,7 +679,15 @@ class _StreamingBubbleState extends ConsumerState<StreamingBubble>
             if (widget.text.isEmpty && !hasThinking)
               _buildThinkingIndicator(context, colorScheme)
             else if (widget.text.isNotEmpty)
-              MarkdownView(data: widget.text, textColor: colorScheme.onSurface)
+              // 流式输出时使用纯文本，避免频繁解析 Markdown
+              SelectableText(
+                widget.text,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: colorScheme.onSurface,
+                  height: 1.5,
+                ),
+              )
             else
               const SizedBox.shrink(),
           ],
@@ -692,34 +701,41 @@ class _StreamingBubbleState extends ConsumerState<StreamingBubble>
     ColorScheme colorScheme,
   ) {
     final timeLabel = _formatElapsed(_elapsedSeconds);
-    return FadeTransition(
-      opacity: _pulseAnimation,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 14,
-            height: 14,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colorScheme.primary,
+    // 使用 RepaintBoundary 隔离动画，避免影响父组件
+    return RepaintBoundary(
+      child: FadeTransition(
+        opacity: _pulseAnimation,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 使用更轻量的加载指示器
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colorScheme.primary,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            context.s.msgThinking,
-            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            timeLabel,
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-              fontSize: 12,
-              fontFeatures: const [FontFeature.tabularFigures()],
+            const SizedBox(width: 8),
+            Text(
+              context.s.msgThinking,
+              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
             ),
-          ),
-        ],
+            const SizedBox(width: 6),
+            // 计时器也用 RepaintBoundary 隔离
+            RepaintBoundary(
+              child: Text(
+                timeLabel,
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  fontSize: 12,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

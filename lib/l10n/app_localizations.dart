@@ -1327,6 +1327,24 @@ abstract class S {
   /// **'输入关键词搜索模型...'**
   String get modelsSearchHint;
 
+  /// No description provided for @modelsContextWindow.
+  ///
+  /// In zh, this message translates to:
+  /// **'上下文窗口 (tokens)'**
+  String get modelsContextWindow;
+
+  /// No description provided for @modelsContextWindowHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'不填或填 0 时默认取 128000'**
+  String get modelsContextWindowHint;
+
+  /// No description provided for @modelsContextWindowHelper.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型的最大上下文长度，用于自动压缩判断'**
+  String get modelsContextWindowHelper;
+
   /// No description provided for @skillsTitle.
   ///
   /// In zh, this message translates to:

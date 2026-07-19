@@ -985,6 +985,7 @@ class AgentContextBuilder {
   ///
   /// 使用统一的 [SkillInjector] API 对当前用户输入进行相关性匹配，
   /// 只注入相关的 skill（最多 10 个），避免 token 浪费。
+  /// **特别处理**：项目级技能（.toolshell/skills/）始终全部注入，不参与相关性筛选。
   /// 每次载入的 skill 会打印到终端方便调试验证。
   Future<String> _buildSkillsSection({
     String userInput = '',
@@ -992,29 +993,58 @@ class AgentContextBuilder {
     MemoryManager? memoryManager,
   }) async {
     final registry = _ref.read(skillRegistryProvider);
-    final skills = _collectAllSkills().where((s) => s.isActive).toList();
+    final allSkills = _collectAllSkills().where((s) => s.isActive).toList();
 
-    if (skills.isEmpty) return '';
+    if (allSkills.isEmpty) return '';
 
-    // 初始化/复用 SkillInjector
-    _skillInjector ??= SkillInjector(
-      registry: registry,
-      memoryManager: memoryManager,
-      source: 'Chat',
-    );
+    // 分离全局技能和项目级技能
+    final globalSkills = _ref.read(skillsProvider).valueOrNull ?? const [];
+    final projectSkills = _ref.read(projectSkillsProvider).valueOrNull ?? const [];
+    final globalSkillNames = globalSkills.map((s) => s.name).toSet();
 
-    // 提取最近上下文
-    final recentContext = _extractRecentContext(existingMessages);
+    final globalActive = allSkills.where((s) => globalSkillNames.contains(s.name)).toList();
+    final projectActive = allSkills.where((s) => !globalSkillNames.contains(s.name)).toList();
 
-    // 统一调用 SkillInjector
-    final injection = await _skillInjector!.inject(
-      userInput: userInput,
-      skillPool: skills,
-      context: recentContext,
-      forceAll: userInput.isEmpty,
-    );
+    final promptParts = <String>[];
 
-    return injection.systemPrompt;
+    // 1. 项目级技能：始终全部注入（为当前项目定制的，必须可用）
+    if (projectActive.isNotEmpty) {
+      print('[SKILL] 项目级技能(始终注入): ${projectActive.map((s) => s.name).join(", ")}');
+      AppLogger.instance.log(
+        '[SkillInjection] 项目级技能: ${projectActive.map((s) => s.name).join(", ")} (始终注入)',
+      );
+      for (final skill in projectActive) {
+        final prompt = await registry.loadSkillPrompt(skill);
+        promptParts.add('\n\n---\n# 技能: ${skill.name}\n$prompt');
+      }
+    }
+
+    // 2. 全局技能：按相关性路由
+    if (globalActive.isNotEmpty) {
+      // 初始化/复用 SkillInjector
+      _skillInjector ??= SkillInjector(
+        registry: registry,
+        memoryManager: memoryManager,
+        source: 'Chat',
+      );
+
+      // 提取最近上下文
+      final recentContext = _extractRecentContext(existingMessages);
+
+      // 统一调用 SkillInjector
+      final injection = await _skillInjector!.inject(
+        userInput: userInput,
+        skillPool: globalActive,
+        context: recentContext,
+        forceAll: userInput.isEmpty,
+      );
+
+      if (injection.isNotEmpty) {
+        promptParts.add(injection.systemPrompt);
+      }
+    }
+
+    return promptParts.join();
   }
 
   /// 从消息历史中提取最近 2 轮用户/助手内容作为辅助上下文

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../core/db/tables/model_cards.dart';
 import '../../core/l10n/l10n_ext.dart';
@@ -8,6 +7,7 @@ import '../../core/llm/llm_provider.dart';
 import '../../providers/database_provider.dart';
 import '../../widgets/reorderable_card_grid.dart';
 import '../../widgets/model_logo.dart';
+import 'model_card_tile_optimized.dart';
 
 /// 模型检测结果：id + 上下文窗口大小 (0=未知)
 class _DetectedModel {
@@ -101,7 +101,7 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
                     onReorder: (reordered) => ref
                         .read(modelCardsProvider.notifier)
                         .reorder(reordered),
-                    itemBuilder: (context, card) => _ModelCardTile(card: card),
+                    itemBuilder: (context, card) => OptimizedModelCardTile(card: card),
                     trailing: _AddModelCard(
                       onTap: () => _showAddDialog(context, ref),
                     ),
@@ -112,7 +112,11 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
                     runSpacing: 12,
                     children: [
                       for (final card in cards)
-                        SizedBox(width: 280, child: _ModelCardTile(card: card)),
+                        SizedBox(
+                          key: ValueKey(card.id),
+                          width: 280,
+                          child: OptimizedModelCardTile(card: card),
+                        ),
                       SizedBox(
                         width: 280,
                         child: _AddModelCard(
@@ -137,29 +141,18 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
   void _showAddDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (ctx) => _ModelCardDialog(
-        onSave:
-            (
-              name,
-              baseUrl,
-              apiKey,
-              modelId,
-              logoPath,
-              provider,
-              contextWindow,
-            ) {
-              ref
-                  .read(modelCardsProvider.notifier)
-                  .addCard(
-                    name: name,
-                    baseUrl: baseUrl,
-                    apiKey: apiKey,
-                    modelId: modelId,
-                    logoPath: logoPath,
-                    provider: provider,
-                    contextWindow: contextWindow,
-                  );
-            },
+      builder: (ctx) => ModelCardDialog(
+        onSave: (name, baseUrl, apiKey, modelId, logoPath, provider, contextWindow) {
+          ref.read(modelCardsProvider.notifier).addCard(
+            name: name,
+            baseUrl: baseUrl,
+            apiKey: apiKey,
+            modelId: modelId,
+            logoPath: logoPath,
+            provider: provider,
+            contextWindow: contextWindow,
+          );
+        },
       ),
     );
   }
@@ -207,218 +200,17 @@ class _AddModelCard extends StatelessWidget {
   }
 }
 
-class _ModelCardTile extends ConsumerWidget {
-  final ModelCard card;
-  const _ModelCardTile({required this.card});
+// 已废弃：旧的卡片组件，现使用 OptimizedModelCardTile
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final maskedUrl = _maskUrl(card.baseUrl);
-
-    return Material(
-      color: card.isDefault
-          ? colorScheme.primaryContainer
-          : colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => ref.read(modelCardsProvider.notifier).setDefault(card.id),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: card.isDefault ? colorScheme.primary : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    card.isDefault
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
-                    size: 18,
-                    color: card.isDefault
-                        ? colorScheme.primary
-                        : colorScheme.outline,
-                  ),
-                  const SizedBox(width: 8),
-                  ModelLogo(
-                    logoPath: card.logoPath,
-                    name: card.name,
-                    modelId: card.modelId,
-                    size: 32,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      card.name,
-                      style: textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (card.isDefault)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        context.s.modelsDefault,
-                        style: textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onPrimary,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _kv(context, 'Model', card.modelId),
-              const SizedBox(height: 2),
-              _kv(context, 'URL', maskedUrl),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    tooltip: context.s.commonEdit,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => _showEditDialog(context, ref),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    tooltip: context.s.commonDelete,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => _confirmDelete(context, ref),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _kv(BuildContext context, String k, String v) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 44,
-          child: Text(
-            k,
-            style: TextStyle(fontSize: 12, color: colorScheme.outline),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            v.isEmpty ? '—' : v,
-            style: TextStyle(
-              fontSize: 12,
-              fontFamily: 'Consolas',
-              color: colorScheme.onSurfaceVariant,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _maskUrl(String url) {
-    try {
-      final uri = Uri.parse(url);
-      return '${uri.scheme}://${uri.host}/***';
-    } catch (_) {
-      if (url.length > 20) return '${url.substring(0, 20)}***';
-      return url;
-    }
-  }
-
-  void _showEditDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => _ModelCardDialog(
-        initialName: card.name,
-        initialBaseUrl: card.baseUrl,
-        initialApiKey: card.apiKey,
-        initialModelId: card.modelId,
-        initialLogoPath: card.logoPath,
-        initialProvider: card.provider,
-        onSave:
-            (
-              name,
-              baseUrl,
-              apiKey,
-              modelId,
-              logoPath,
-              provider,
-              contextWindow,
-            ) {
-              final updated = card.copyWith(
-                name: name,
-                baseUrl: baseUrl,
-                apiKey: apiKey,
-                modelId: modelId,
-                logoPath: logoPath,
-                provider: provider,
-                contextWindow: contextWindow,
-              );
-              ref.read(modelCardsProvider.notifier).updateCard(updated);
-            },
-      ),
-    );
-  }
-
-  void _confirmDelete(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.s.modelsDeleteTitle),
-        content: Text(context.s.modelsDeleteConfirm(card.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.s.commonCancel),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(modelCardsProvider.notifier).deleteCard(card.id);
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(context.s.commonDelete),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModelCardDialog extends StatefulWidget {
+class ModelCardDialog extends StatefulWidget {
   final String? initialName;
   final String? initialBaseUrl;
   final String? initialApiKey;
   final String? initialModelId;
   final String? initialLogoPath;
   final String? initialProvider;
+  final int? initialContextWindow;
+  final String? cardId; // 用于区分是新建还是编辑
   final void Function(
     String name,
     String baseUrl,
@@ -427,24 +219,26 @@ class _ModelCardDialog extends StatefulWidget {
     String logoPath,
     String provider,
     int contextWindow,
-  )
-  onSave;
+  ) onSave;
 
-  const _ModelCardDialog({
+  const ModelCardDialog({
     this.initialName,
     this.initialBaseUrl,
     this.initialApiKey,
     this.initialModelId,
     this.initialLogoPath,
     this.initialProvider,
+    this.initialContextWindow,
+    this.cardId,
     required this.onSave,
+    super.key,
   });
 
   @override
-  State<_ModelCardDialog> createState() => _ModelCardDialogState();
+  State<ModelCardDialog> createState() => _ModelCardDialogState();
 }
 
-class _ModelCardDialogState extends State<_ModelCardDialog> {
+class _ModelCardDialogState extends State<ModelCardDialog> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _urlCtrl;
   late final TextEditingController _keyCtrl;
@@ -460,8 +254,10 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
   // 模型检测相关
   List<_DetectedModel> _availableModels = [];
   String? _selectedModel;
-  bool _isFetchingModels = false;
-  String? _fetchError;
+
+  // 上下文窗口大小
+  int _contextWindow = 0;
+  late final TextEditingController _contextWindowCtrl;
 
   @override
   void initState() {
@@ -472,8 +268,12 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
     _logoPath = widget.initialLogoPath ?? '';
     _provider = LlmProviderX.fromId(widget.initialProvider);
     _selectedModel = widget.initialModelId;
+    _contextWindow = widget.initialContextWindow ?? 0;
+    _contextWindowCtrl = TextEditingController(
+      text: _contextWindow > 0 ? _contextWindow.toString() : '',
+    );
     if (widget.initialModelId != null && widget.initialModelId!.isNotEmpty) {
-      _availableModels = [_DetectedModel(widget.initialModelId!)];
+      _availableModels = [_DetectedModel(widget.initialModelId!, _contextWindow)];
     }
   }
 
@@ -482,197 +282,8 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
     _nameCtrl.dispose();
     _urlCtrl.dispose();
     _keyCtrl.dispose();
+    _contextWindowCtrl.dispose();
     super.dispose();
-  }
-
-  /// 调用各协议的模型列表接口检测可用模型
-  Future<void> _fetchModels() async {
-    final url = _urlCtrl.text.trim();
-    final key = _keyCtrl.text.trim();
-    if (url.isEmpty || key.isEmpty) {
-      setState(() => _fetchError = '请先填写 Base URL 和 API Key');
-      return;
-    }
-
-    setState(() {
-      _isFetchingModels = true;
-      _fetchError = null;
-    });
-
-    try {
-      final dio = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
-        ),
-      );
-      final baseUrl = url.endsWith('/')
-          ? url.substring(0, url.length - 1)
-          : url;
-
-      final List<_DetectedModel> models;
-      switch (_provider) {
-        case LlmProvider.anthropic:
-          models = await _fetchAnthropicModels(dio, baseUrl, key);
-          break;
-        case LlmProvider.gemini:
-          models = await _fetchGeminiModels(dio, baseUrl, key);
-          break;
-        case LlmProvider.openai:
-          models = await _fetchOpenAiModels(dio, baseUrl, key);
-          break;
-      }
-
-      models.sort((a, b) => a.id.compareTo(b.id));
-      setState(() {
-        _availableModels = models;
-        _isFetchingModels = false;
-        if (models.isNotEmpty && _selectedModel == null) {
-          _selectedModel = models.first.id;
-        }
-        if (models.isEmpty) {
-          _fetchError = '接口返回空模型列表';
-        }
-      });
-    } on DioException catch (e) {
-      setState(() {
-        _isFetchingModels = false;
-        _fetchError = e.response?.statusCode != null
-            ? 'HTTP ${e.response!.statusCode}'
-            : (e.message ?? '网络请求失败');
-      });
-    } catch (e) {
-      setState(() {
-        _isFetchingModels = false;
-        _fetchError = e.toString();
-      });
-    }
-  }
-
-  /// OpenAI: GET {base}/models, Bearer
-  /// 兼容 OpenRouter/OneAPI 等中转站返回的 context_length 字段。
-  Future<List<_DetectedModel>> _fetchOpenAiModels(
-    Dio dio,
-    String baseUrl,
-    String key,
-  ) async {
-    final response = await dio.get(
-      '$baseUrl/models',
-      options: Options(headers: {'Authorization': 'Bearer $key'}),
-    );
-    final data = response.data;
-    if (data is Map && data['data'] is List) {
-      return (data['data'] as List)
-          .map((m) {
-            final id = (m['id'] ?? m['name'] ?? '').toString();
-            final ctx = _extractContextWindow(m);
-            return id.isNotEmpty ? _DetectedModel(id, ctx) : null;
-          })
-          .whereType<_DetectedModel>()
-          .toList();
-    } else if (data is List) {
-      return data
-          .map((m) {
-            if (m is Map) {
-              final id = (m['id'] ?? m['name'] ?? '').toString();
-              final ctx = _extractContextWindow(m);
-              return id.isNotEmpty ? _DetectedModel(id, ctx) : null;
-            }
-            final id = m.toString();
-            return id.isNotEmpty ? _DetectedModel(id) : null;
-          })
-          .whereType<_DetectedModel>()
-          .toList();
-    }
-    return [];
-  }
-
-  /// Anthropic: 用户填的是完整 endpoint URL (如 https://api.anthropic.com/v1/messages)
-  /// 从中推导出模型列表地址 (把 /messages 替换为 /models)。
-  Future<List<_DetectedModel>> _fetchAnthropicModels(
-    Dio dio,
-    String baseUrl,
-    String key,
-  ) async {
-    // 从 endpoint URL 推导 models 列表 URL
-    // e.g. https://api.anthropic.com/v1/messages → https://api.anthropic.com/v1/models
-    String modelsUrl;
-    if (baseUrl.endsWith('/messages')) {
-      modelsUrl =
-          '${baseUrl.substring(0, baseUrl.length - '/messages'.length)}/models';
-    } else if (baseUrl.endsWith('/v1')) {
-      modelsUrl = '$baseUrl/models';
-    } else {
-      modelsUrl = '$baseUrl/v1/models';
-    }
-
-    final response = await dio.get(
-      modelsUrl,
-      options: Options(
-        headers: {'x-api-key': key, 'anthropic-version': '2023-06-01'},
-      ),
-    );
-    final data = response.data;
-    if (data is Map && data['data'] is List) {
-      return (data['data'] as List)
-          .map((m) {
-            final id = (m['id'] ?? '').toString();
-            final ctx = _extractContextWindow(m);
-            return id.isNotEmpty ? _DetectedModel(id, ctx) : null;
-          })
-          .whereType<_DetectedModel>()
-          .toList();
-    }
-    return [];
-  }
-
-  /// Gemini: GET {base}/models?key=, 返回 models[].name (去掉 "models/" 前缀)
-  /// Gemini API 返回 inputTokenLimit 字段。
-  Future<List<_DetectedModel>> _fetchGeminiModels(
-    Dio dio,
-    String baseUrl,
-    String key,
-  ) async {
-    final response = await dio.get(
-      '$baseUrl/models',
-      queryParameters: {'key': key},
-    );
-    final data = response.data;
-    if (data is Map && data['models'] is List) {
-      return (data['models'] as List)
-          .map((m) {
-            var id = (m['name'] ?? '').toString();
-            if (id.startsWith('models/')) id = id.substring(7);
-            // Gemini 返回 inputTokenLimit
-            final ctx = (m['inputTokenLimit'] as int?) ?? 0;
-            return id.isNotEmpty ? _DetectedModel(id, ctx) : null;
-          })
-          .whereType<_DetectedModel>()
-          .toList();
-    }
-    return [];
-  }
-
-  /// 从模型对象中尝试提取 context window 大小。
-  /// 兼容多种 API 返回格式:
-  /// - OpenRouter/OneAPI: `context_length`
-  /// - 部分中转站: `max_context`, `context_window`, `max_tokens`
-  /// - Gemini: `inputTokenLimit` (在 _fetchGeminiModels 中单独处理)
-  static int _extractContextWindow(dynamic model) {
-    if (model is! Map) return 0;
-    // 按优先级尝试多种字段名
-    for (final key in [
-      'context_length',
-      'context_window',
-      'max_context',
-      'inputTokenLimit',
-      'max_model_len',
-    ]) {
-      final val = model[key];
-      if (val is int && val > 0) return val;
-      if (val is num && val > 0) return val.toInt();
-    }
-    return 0;
   }
 
   /// 选择 logo 图片文件 (可为空)。
@@ -767,7 +378,6 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
                         _selectedModel != null && _selectedModel!.isNotEmpty
                         ? [_DetectedModel(_selectedModel!)]
                         : [];
-                    _fetchError = null;
                   });
                 },
               ),
@@ -811,85 +421,81 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
               ),
               const SizedBox(height: 16),
               // 模型选择区
-              Row(
-                children: [
-                  Expanded(
-                    child: _availableModels.isEmpty
-                        ? TextFormField(
-                            initialValue: _selectedModel,
-                            decoration: InputDecoration(
-                              labelText: '模型 ID',
-                              hintText: context.s.modelsDetectHint,
-                              errorText: _fetchError,
-                            ),
-                            onChanged: (v) => _selectedModel = v.trim(),
-                            validator: (v) {
-                              if (_selectedModel == null ||
-                                  _selectedModel!.isEmpty) {
-                                return '请选择或输入模型';
-                              }
-                              return null;
-                            },
-                          )
-                        : Autocomplete<_DetectedModel>(
-                            displayStringForOption: (m) => m.id,
-                            optionsBuilder: (textEditingValue) {
-                              final query = textEditingValue.text.toLowerCase();
-                              if (query.isEmpty) return _availableModels;
-                              return _availableModels.where(
-                                (m) => m.id.toLowerCase().contains(query),
-                              );
-                            },
-                            initialValue: _selectedModel != null
-                                ? TextEditingValue(text: _selectedModel!)
-                                : null,
-                            onSelected: (v) =>
-                                setState(() => _selectedModel = v.id),
-                            optionsMaxHeight: 240,
-                            fieldViewBuilder:
-                                (context, controller, focusNode, onSubmitted) {
-                                  return TextFormField(
-                                    controller: controller,
-                                    focusNode: focusNode,
-                                    decoration: InputDecoration(
-                                      labelText:
-                                          '模型 (${_availableModels.length} 个可用)',
-                                      hintText: context.s.modelsSearchHint,
-                                      errorText: _fetchError,
-                                      suffixIcon: const Icon(
-                                        Icons.search,
-                                        size: 20,
-                                      ),
-                                    ),
-                                    style: const TextStyle(fontSize: 13),
-                                    onChanged: (v) => _selectedModel = v.trim(),
-                                    validator: (v) =>
-                                        (v == null || v.trim().isEmpty)
-                                        ? '请选择模型'
-                                        : null,
-                                  );
-                                },
-                          ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    height: 48,
-                    child: _isFetchingModels
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : IconButton.filledTonal(
-                            onPressed: _fetchModels,
-                            icon: const Icon(Icons.refresh),
-                            tooltip: context.s.modelsDetect,
-                          ),
-                  ),
-                ],
+              _availableModels.isEmpty
+                  ? TextFormField(
+                      initialValue: _selectedModel,
+                      decoration: const InputDecoration(
+                        labelText: '模型 ID',
+                        hintText: '例如：gpt-4o, claude-3-5-sonnet',
+                      ),
+                      onChanged: (v) => _selectedModel = v.trim(),
+                      validator: (v) {
+                        if (_selectedModel == null || _selectedModel!.isEmpty) {
+                          return '请输入模型 ID';
+                        }
+                        return null;
+                      },
+                    )
+                  : Autocomplete<_DetectedModel>(
+                      displayStringForOption: (m) => m.id,
+                      optionsBuilder: (textEditingValue) {
+                        final query = textEditingValue.text.toLowerCase();
+                        if (query.isEmpty) return _availableModels;
+                        return _availableModels.where(
+                          (m) => m.id.toLowerCase().contains(query),
+                        );
+                      },
+                      initialValue: _selectedModel != null
+                          ? TextEditingValue(text: _selectedModel!)
+                          : null,
+                      onSelected: (v) => setState(() {
+                        _selectedModel = v.id;
+                        _contextWindow = v.contextWindow;
+                      }),
+                      optionsMaxHeight: 240,
+                      fieldViewBuilder:
+                          (context, controller, focusNode, onSubmitted) {
+                            return TextFormField(
+                              controller: controller,
+                              focusNode: focusNode,
+                              decoration: InputDecoration(
+                                labelText: '模型 (${_availableModels.length} 个可用)',
+                                hintText: context.s.modelsSearchHint,
+                                suffixIcon: const Icon(
+                                  Icons.search,
+                                  size: 20,
+                                ),
+                              ),
+                              style: const TextStyle(fontSize: 13),
+                              onChanged: (v) => _selectedModel = v.trim(),
+                              validator: (v) =>
+                                  (v == null || v.trim().isEmpty)
+                                  ? '请选择模型'
+                                  : null,
+                            );
+                          },
+                    ),
+              const SizedBox(height: 16),
+              // 上下文窗口配置
+              TextFormField(
+                controller: _contextWindowCtrl,
+                decoration: InputDecoration(
+                  labelText: context.s.modelsContextWindow,
+                  hintText: context.s.modelsContextWindowHint,
+                  helperText: context.s.modelsContextWindowHelper,
+                ),
+                keyboardType: TextInputType.number,
+                onChanged: (v) {
+                  final parsed = int.tryParse(v.trim());
+                  _contextWindow = parsed ?? 0;
+                },
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null; // 允许为空
+                  final parsed = int.tryParse(v.trim());
+                  if (parsed == null) return '请输入有效数字';
+                  if (parsed <= 0) return '必须大于 0';
+                  return null;
+                },
               ),
             ],
           ),
@@ -905,11 +511,12 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
             if (_formKey.currentState!.validate() &&
                 _selectedModel != null &&
                 _selectedModel!.isNotEmpty) {
-              // 尝试从已检测列表中获取 contextWindow
-              final detected = _availableModels
-                  .where((m) => m.id == _selectedModel)
-                  .firstOrNull;
-              final ctxWindow = detected?.contextWindow ?? 0;
+              // 解析上下文窗口：用户输入 > 检测值 > 默认 128K
+              int finalContextWindow = _contextWindow;
+              if (_contextWindowCtrl.text.trim().isEmpty && finalContextWindow == 0) {
+                finalContextWindow = 128000; // 默认 128K
+              }
+
               widget.onSave(
                 _nameCtrl.text.trim(),
                 _urlCtrl.text.trim(),
@@ -917,7 +524,7 @@ class _ModelCardDialogState extends State<_ModelCardDialog> {
                 _selectedModel!,
                 _logoPath,
                 _provider.id,
-                ctxWindow,
+                finalContextWindow,
               );
               Navigator.pop(context);
             }

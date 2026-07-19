@@ -220,6 +220,9 @@
   "modelsDetect": "Detect available models",
   "modelsReorderHint": "Tap card to set default, long press to reorder",
   "modelsSearchHint": "Type to search models...",
+  "modelsContextWindow": "Context window (tokens)",
+  "modelsContextWindowHint": "Default to 128000 if left empty or 0",
+  "modelsContextWindowHelper": "Model's max context length for auto-compression",
 
   "skillsTitle": "Skill Management",
   "skillsImport": "Import skill",

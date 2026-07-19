@@ -187,7 +187,7 @@
     "type": "function",
     "function": {
       "name": "toolshell_worktree_start",
-      "description": "开启一个隔离的 Git 工作树，用于做实验性/风险较高的改动(如大范围重构、尝试性方案、升级可能不兼容的依赖)而不污染主工作目录。基于当前 HEAD 新建一个分支+独立工作目录，位于 <工作目录>/.toolshell/worktrees/ 下。调用成功后，你后续的文件读写/命令执行会自动定向到这个隔离工作树，直到你调用 toolshell_worktree_finish 结束隔离。要求工作目录是一个 git 仓库；不是的话会报错，可先用 toolshell_exec 执行 git init。推荐的完整流程: start → (做改动) → 可选 toolshell_worktree_checkpoint 存档关键节点 → 若某步走偏可 toolshell_worktree_revert 退回上一个存档重试 → 验证通过后 finish(action=merge)，不满意则 finish(action=discard)。何时使用完全由你判断，框架不会自动触发或提示。若系统未安装 git，这一整套工具不会出现在你的工具列表里。",
+      "description": "开启一个隔离的 Git 工作树，用于做实验性/风险较高的改动(如大范围重构、尝试性方案、升级可能不兼容的依赖)而不污染主工作目录。基于当前 HEAD 新建一个分支+独立工作目录，位于 <工作目录>/.toolshell/worktrees/ 下。调用成功后，你后续的文件读写/命令执行会自动定向到这个隔离工作树，直到你调用 toolshell_worktree_finish 结束隔离。如果工作目录不是 Git 仓库但系统有 Git，会自动初始化仓库(创建 .gitignore 和初始 commit)。推荐的完整流程: start → (做改动) → 可选 toolshell_worktree_checkpoint 存档关键节点 → 若某步走偏可 toolshell_worktree_revert 退回上一个存档重试 → 验证通过后 finish(action=merge)，不满意则 finish(action=discard)。何时使用完全由你判断，框架不会自动触发或提示。若系统未安装 git，这一整套工具不会出现在你的工具列表里。",
       "parameters": {
         "type": "object",
         "properties": {

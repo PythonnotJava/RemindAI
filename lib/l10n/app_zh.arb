@@ -227,6 +227,9 @@
   "modelsDetect": "检测可用模型",
   "modelsReorderHint": "点击卡片设为默认，长按拖动可调整顺序",
   "modelsSearchHint": "输入关键词搜索模型...",
+  "modelsContextWindow": "上下文窗口 (tokens)",
+  "modelsContextWindowHint": "不填或填 0 时默认取 128000",
+  "modelsContextWindowHelper": "模型的最大上下文长度，用于自动压缩判断",
 
   "skillsTitle": "技能管理",
   "skillsImport": "导入技能",

@@ -23,20 +23,31 @@ class WorktreeManager {
   String get _worktreesRoot => p.join(workDir, '.toolshell', 'worktrees');
 
   /// 启动一个隔离工作树：
-  /// 1. 校验 workDir 处于一个 git 工作区内
+  /// 1. 校验 workDir 处于一个 git 工作区内（如果不是但系统有 git，自动初始化）
   /// 2. 在 `.toolshell/worktrees/<folder>/` 新建工作树 + 新分支(基于当前 HEAD)
   ///
   /// [name] 可选，用作分支/目录名的可读前缀；不传则用 `exp`。
   Future<Map<String, dynamic>> start({String? name}) async {
     final isRepo = await _isInsideGitWorkTree(workDir);
+
     if (!isRepo) {
-      return {
-        'status': 'error',
-        'code': 'NOT_GIT_REPO',
-        'detail':
-            '当前工作目录不是 git 仓库(或未初始化)，worktree 隔离需要 git 仓库支持。'
-            '可先执行 `git init` 后重试。',
-      };
+      // 检查系统是否有 git 命令
+      final hasGit = await _checkGitAvailable();
+      if (!hasGit) {
+        return {
+          'status': 'error',
+          'code': 'GIT_NOT_FOUND',
+          'detail':
+              '系统未安装 Git，无法使用 worktree 隔离功能。\n'
+              '请先安装 Git: https://git-scm.com/downloads',
+        };
+      }
+
+      // 自动初始化 Git 仓库
+      final initResult = await _initGitRepo();
+      if (initResult['status'] != 'ok') {
+        return initResult;
+      }
     }
 
     await _ensureToolshellExcluded();
@@ -555,7 +566,84 @@ class WorktreeManager {
     return !await Directory(worktreePath).exists();
   }
 
-  String _stderr(ProcessResult result) {
+    // ═══════════════════════════════════════════════════════════════════════════
+  // 私有辅助方法
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// 检查系统是否有 git 命令
+  Future<bool> _checkGitAvailable() async {
+    try {
+      final result = await Process.run('git', ['--version']);
+      return result.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 自动初始化 Git 仓库
+  Future<Map<String, dynamic>> _initGitRepo() async {
+    try {
+      // 1. 初始化仓库
+      final initResult = await Process.run('git', ['-C', workDir, 'init']);
+      if (initResult.exitCode != 0) {
+        return {
+          'status': 'error',
+          'code': 'INIT_FAILED',
+          'detail': 'Git 初始化失败: ${_stderr(initResult)}',
+        };
+      }
+
+      // 2. 配置 .gitignore（如果不存在）
+      final gitignorePath = p.join(workDir, '.gitignore');
+      final gitignoreFile = File(gitignorePath);
+      if (!await gitignoreFile.exists()) {
+        await gitignoreFile.writeAsString(
+          '# Agent 自动生成的 .gitignore\n'
+          '.toolshell/worktrees/\n'
+          'node_modules/\n'
+          '.env\n'
+          '.env.*\n'
+          '*.log\n'
+          '.DS_Store\n'
+          'Thumbs.db\n',
+        );
+      }
+
+      // 3. 创建初始提交（worktree 需要至少一个 commit）
+      await Process.run('git', ['-C', workDir, 'add', '.']);
+      final commitResult = await Process.run('git', [
+        '-C',
+        workDir,
+        'commit',
+        '-m',
+        'Initial commit (auto-created for worktree support)',
+        '--allow-empty',
+      ]);
+
+      if (commitResult.exitCode != 0) {
+        return {
+          'status': 'error',
+          'code': 'COMMIT_FAILED',
+          'detail': '初始提交失败: ${_stderr(commitResult)}',
+        };
+      }
+
+      return {
+        'status': 'ok',
+        'message': 'Git 仓库已自动初始化，可以使用 worktree 功能了。',
+      };
+    } catch (e) {
+      return {
+        'status': 'error',
+        'code': 'INIT_ERROR',
+        'detail': 'Git 初始化异常: $e',
+      };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
+String _stderr(ProcessResult result) {
     final err = result.stderr.toString().trim();
     return err.isEmpty ? result.stdout.toString().trim() : err;
   }

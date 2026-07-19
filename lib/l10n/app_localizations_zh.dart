@@ -646,6 +646,15 @@ class SZh extends S {
   String get modelsSearchHint => '输入关键词搜索模型...';
 
   @override
+  String get modelsContextWindow => '上下文窗口 (tokens)';
+
+  @override
+  String get modelsContextWindowHint => '不填或填 0 时默认取 128000';
+
+  @override
+  String get modelsContextWindowHelper => '模型的最大上下文长度，用于自动压缩判断';
+
+  @override
   String get skillsTitle => '技能管理';
 
   @override

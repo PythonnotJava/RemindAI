@@ -96,7 +96,7 @@ class ModelCardsNotifier extends AsyncNotifier<List<ModelCard>> {
     ref.invalidateSelf();
   }
 
-  Future<void> setDefault(String id) async {
+  void setDefault(String id) {
     // 乐观更新：立即修改本地状态让 UI 瞬间响应，不等 DB
     final current = state.valueOrNull;
     if (current != null) {
@@ -105,14 +105,27 @@ class ModelCardsNotifier extends AsyncNotifier<List<ModelCard>> {
           .toList();
       state = AsyncData(updated);
     }
-    // 后台持久化
-    await _dao.setDefault(id);
+
+    // 后台异步持久化（不阻塞）
+    _dao.setDefault(id).catchError((e) {
+      // 如果失败，回滚状态
+      if (current != null) {
+        state = AsyncData(current);
+      }
+    });
   }
 
   /// 按新顺序重排卡片 (orderedIds 为重排后的 id 序列)
-  Future<void> reorder(List<ModelCard> ordered) async {
+  void reorder(List<ModelCard> ordered) {
+    final previous = state.valueOrNull;
     // 乐观更新本地状态，立即反映拖拽结果
     state = AsyncData(ordered);
-    await _dao.reorder(ordered.map((c) => c.id).toList());
+    // 后台异步持久化（不阻塞）
+    _dao.reorder(ordered.map((c) => c.id).toList()).catchError((e) {
+      // 如果失败，回滚状态
+      if (previous != null) {
+        state = AsyncData(previous);
+      }
+    });
   }
 }
