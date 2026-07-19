@@ -36,7 +36,8 @@ class MessageBubble extends ConsumerWidget {
     final hasText = (message.content ?? '').trim().isNotEmpty;
     final hasAttachments = message.attachments.isNotEmpty;
     final hasThinking = (message.thinkingContent ?? '').trim().isNotEmpty;
-    final hasToolCalls = message.toolCalls != null && message.toolCalls!.isNotEmpty;
+    final hasToolCalls =
+        message.toolCalls != null && message.toolCalls!.isNotEmpty;
     final chatFont = ref.watch(chatFontProvider);
     final chatFontSize = ref.watch(chatFontSizeProvider);
 
@@ -58,7 +59,8 @@ class MessageBubble extends ConsumerWidget {
                 attachments: message.attachments,
                 isUser: isUser,
               ),
-              if (hasText || hasThinking || hasToolCalls) const SizedBox(height: 6),
+              if (hasText || hasThinking || hasToolCalls)
+                const SizedBox(height: 6),
             ],
             // Thinking 区域（助手消息且有思考内容）
             if (!isUser && hasThinking) ...[
@@ -291,10 +293,7 @@ class _InterruptedTag extends StatelessWidget {
   final ColorScheme colorScheme;
   final bool hasThinking;
 
-  const _InterruptedTag({
-    required this.colorScheme,
-    this.hasThinking = false,
-  });
+  const _InterruptedTag({required this.colorScheme, this.hasThinking = false});
 
   @override
   Widget build(BuildContext context) {
@@ -305,7 +304,7 @@ class _InterruptedTag extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: colorScheme.errorContainer.withOpacity(0.3),
+          color: colorScheme.errorContainer.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -337,10 +336,7 @@ class _ThinkingSection extends StatefulWidget {
   final String content;
   final ColorScheme colorScheme;
 
-  const _ThinkingSection({
-    required this.content,
-    required this.colorScheme,
-  });
+  const _ThinkingSection({required this.content, required this.colorScheme});
 
   @override
   State<_ThinkingSection> createState() => _ThinkingSectionState();
@@ -354,11 +350,9 @@ class _ThinkingSectionState extends State<_ThinkingSection> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: widget.colorScheme.surfaceContainerLow.withOpacity(0.5),
+        color: widget.colorScheme.surfaceContainerLow.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: widget.colorScheme.outline.withOpacity(0.2),
-        ),
+        border: Border.all(color: widget.colorScheme.outline.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -394,13 +388,16 @@ class _ThinkingSectionState extends State<_ThinkingSection> {
           // 思考内容（可展开）
           if (_expanded) ...[
             const SizedBox(height: 8),
-            Divider(height: 1, color: widget.colorScheme.outline.withOpacity(0.2)),
+            Divider(
+              height: 1,
+              color: widget.colorScheme.outline.withValues(alpha: 0.2),
+            ),
             const SizedBox(height: 8),
             Text(
               widget.content,
               style: TextStyle(
                 fontSize: 12,
-                color: widget.colorScheme.onSurface.withOpacity(0.7),
+                color: widget.colorScheme.onSurface.withValues(alpha: 0.7),
                 fontStyle: FontStyle.italic,
                 height: 1.4,
               ),
@@ -436,10 +433,10 @@ class _ToolCallsSectionState extends State<_ToolCallsSection> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: widget.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        color: widget.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: widget.colorScheme.outline.withOpacity(0.2),
+          color: widget.colorScheme.outline.withValues(alpha: 0.2),
           width: 1,
         ),
       ),
@@ -476,7 +473,7 @@ class _ToolCallsSectionState extends State<_ToolCallsSection> {
                     '已中断',
                     style: TextStyle(
                       fontSize: 11,
-                      color: widget.colorScheme.error.withOpacity(0.7),
+                      color: widget.colorScheme.error.withValues(alpha: 0.7),
                     ),
                   ),
                 ],
@@ -492,50 +489,57 @@ class _ToolCallsSectionState extends State<_ToolCallsSection> {
           // 工具调用列表（可展开）
           if (_expanded) ...[
             const SizedBox(height: 8),
-            Divider(height: 1, color: widget.colorScheme.outline.withOpacity(0.2)),
+            Divider(
+              height: 1,
+              color: widget.colorScheme.outline.withValues(alpha: 0.2),
+            ),
             const SizedBox(height: 8),
-            ...widget.toolCalls.map((tc) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.arrow_right,
-                    size: 16,
-                    color: widget.colorScheme.outline,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tc.name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: widget.colorScheme.onSurface,
-                          ),
-                        ),
-                        if (tc.arguments.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            _formatArguments(tc.arguments),
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: widget.colorScheme.onSurface.withOpacity(0.6),
-                              fontFamily: 'monospace',
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
+            ...widget.toolCalls.map(
+              (tc) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.arrow_right,
+                      size: 16,
+                      color: widget.colorScheme.outline,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tc.name,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: widget.colorScheme.onSurface,
+                            ),
+                          ),
+                          if (tc.arguments.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatArguments(tc.arguments),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: widget.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
+                                fontFamily: 'monospace',
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            )),
+            ),
           ],
         ],
       ),
@@ -655,12 +659,16 @@ class _StreamingBubbleState extends ConsumerState<StreamingBubble>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainer.withOpacity(0.5),
+                  color: colorScheme.surfaceContainer.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.lightbulb_outline, size: 14, color: colorScheme.primary),
+                    Icon(
+                      Icons.lightbulb_outline,
+                      size: 14,
+                      color: colorScheme.primary,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       '思考中...',
@@ -720,7 +728,10 @@ class _StreamingBubbleState extends ConsumerState<StreamingBubble>
             const SizedBox(width: 8),
             Text(
               context.s.msgThinking,
-              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(width: 6),
             // 计时器也用 RepaintBoundary 隔离

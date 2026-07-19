@@ -147,10 +147,11 @@ class ContextCompactor extends MessageTransformer {
     final cleaned = result.where((msg) {
       if (msg['role'] == 'tool') {
         final toolCallId = msg['tool_call_id'] as String?;
-        final isValid = toolCallId != null && validToolCallIds.contains(toolCallId);
+        final isValid =
+            toolCallId != null && validToolCallIds.contains(toolCallId);
         if (!isValid) {
           AppLogger.instance.log(
-            '[Compactor] 移除孤立的工具结果: tool_call_id=$toolCallId'
+            '[Compactor] 移除孤立的工具结果: tool_call_id=$toolCallId',
           );
         }
         return isValid;
@@ -275,7 +276,7 @@ class ContextCompactor extends MessageTransformer {
       if (toolCallIdsInRecent.isNotEmpty) {
         AppLogger.instance.log(
           '[Compactor] 警告: 发现 ${toolCallIdsInRecent.length} 个孤立的工具结果，'
-          '将在压缩时移除: ${toolCallIdsInRecent.join(", ")}'
+          '将在压缩时移除: ${toolCallIdsInRecent.join(", ")}',
         );
       }
     }

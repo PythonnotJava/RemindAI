@@ -50,10 +50,10 @@ class DatabaseHelper {
     final db = sqlite3.open(dbPath);
 
     // 性能优化配置
-    db.execute('PRAGMA journal_mode = WAL');  // WAL 模式，写入不阻塞读取
-    db.execute('PRAGMA synchronous = NORMAL');  // 平衡性能和安全
-    db.execute('PRAGMA cache_size = -64000');  // 64MB 缓存
-    db.execute('PRAGMA temp_store = MEMORY');  // 临时表存内存
+    db.execute('PRAGMA journal_mode = WAL'); // WAL 模式，写入不阻塞读取
+    db.execute('PRAGMA synchronous = NORMAL'); // 平衡性能和安全
+    db.execute('PRAGMA cache_size = -64000'); // 64MB 缓存
+    db.execute('PRAGMA temp_store = MEMORY'); // 临时表存内存
 
     _createTables(db);
     return db;

@@ -89,6 +89,9 @@ class AutonomousLoop {
   /// 模型的上下文窗口大小（token 数）。用于对话中压缩的阈值计算。
   final int contextWindow;
 
+  /// 追踪每轮是否包含失败标记，用于连续失败检测
+  final List<bool> _roundFailures = [];
+
   AutonomousLoop({
     required this.llm,
     required this.executor,
@@ -106,17 +109,74 @@ class AutonomousLoop {
 [LOOP MODE ACTIVE]
 你当前处于 Loop 模式 — 你可以自主迭代直到任务完成。
 
-规则：
-1. 每轮清晰说明：目标 → 操作 → 验证 → 结果
-2. 主动验证你的修改（运行测试、检查输出、重新编译等）
-3. 如果验证失败，先分析根因再修复，不要盲目重试相同方案
-4. 连续失败时换一个完全不同的思路
-5. 任务完成时，你必须输出标记 [LOOP_DONE]，后面跟你的完成总结（做了什么、结果如何）
-6. 如果你判断任务无法完成，输出 [LOOP_ABORT]，后面跟原因
+每一轮必须遵循以下流程，使用清晰的分段标记：
 
-示例输出格式：
-- 完成时: "...验证通过。[LOOP_DONE] 修复了3个测试失败：1) xxx 2) yyy 3) zzz，全部测试现在通过。"
-- 放弃时: "[LOOP_ABORT] 该问题需要升级依赖版本，超出当前任务范围。"
+【第 1 轮】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 分析目标
+理解任务需求，制定初步计划
+
+🛠️ 实现操作
+执行具体的工具调用或代码修改
+
+✅ 测试验证
+运行测试、检查输出、验证结果
+
+📊 评估结果
+本轮完成了什么、是否符合预期、是否需要继续
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【第 2+ 轮】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔍 评估上一轮
+- 上一轮做了什么？
+- 结果如何？（成功/失败/部分完成）
+- 问题在哪里？（如果失败）
+
+📋 调整计划
+基于评估结果，决定下一步行动
+
+🛠️ 实现操作
+执行新的工具调用或修改
+
+✅ 测试验证
+验证本轮的修改是否有效
+
+📊 评估结果
+是否完成任务或需要继续
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+输出格式要求：
+1. 每个阶段单独成段，使用对应的 emoji 标记开头
+2. 阶段之间用空行分隔，保持清晰层次
+3. 不要把多个阶段混在一句话里
+
+示例（正确格式）：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔍 评估上一轮
+上一轮修复了文件 A，但测试仍然失败。
+错误信息显示配置文件 B 中缺少必要的参数。
+
+📋 调整计划
+需要修改配置文件 B，添加缺失的参数。
+
+🛠️ 实现操作
+（调用工具修改配置文件 B）
+
+✅ 测试验证
+重新运行测试套件...
+
+📊 评估结果
+所有测试通过。[LOOP_DONE] 完成任务：修复了配置错误并通过验证。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+关键规则：
+- ⚠️ 不要重复上一轮已经成功的操作
+- ⚠️ 如果连续2轮失败，必须换一个完全不同的方案
+- ⚠️ 先分析为什么失败，再尝试修复（不要盲目重试）
+- ✅ 每轮必须实际验证结果（运行测试、检查输出、编译代码等）
+- ✅ 任务完成且验证通过时，输出 [LOOP_DONE] + 总结
+- ❌ 任务无法完成时，输出 [LOOP_ABORT] + 原因
 ''';
 
   /// 执行自治循环
@@ -178,14 +238,18 @@ class AutonomousLoop {
             yield LoopError(iteration: iteration, message: msg);
             return;
           case AgentLoopLimitReached(rounds: final rounds):
-            // 单次 chat() 内部的 tool_call 轮次熔断，等同于这一"迭代"内
-            // LLM 未能收敛 —— 按错误处理，终止整个 AutonomousLoop。
-            hasError = true;
-            yield LoopError(
-              iteration: iteration,
-              message: '单轮对话内 tool_call 轮次达到上限($rounds)，LLM 未能收敛到最终回复',
+            // 单次 chat() 内部达到 tool_call 轮次上限。
+            // 这表示当前迭代内 LLM 调用了大量工具但未收敛到最终文本回复，
+            // 不算致命错误 —— 只是本轮"未完成"，应继续下一轮 Loop 迭代，
+            // 让 Agent 基于已执行的工具结果重新规划。
+            AppLogger.instance.log(
+              '[Loop] 第 $iteration 轮内 tool_call 达到上限($rounds)，进入下一轮',
             );
-            return;
+            // 标记为一个特殊的"未完成"输出，触发下一轮继续
+            buffer.write(
+              '\n[系统提示] 本轮工具调用达到上限($rounds次)，请在下一轮基于已执行结果继续推进',
+            );
+            break; // 继续循环，不终止
         }
       }
 
@@ -194,6 +258,21 @@ class AutonomousLoop {
       lastOutput = output;
 
       AppLogger.instance.log('[Loop] 第 $iteration 轮完成, 输出长度=${output.length}');
+
+      // 连续失败检测：检查输出中是否包含失败标记
+      final hasFailed = _containsFailureMarkers(output);
+      _roundFailures.add(hasFailed);
+
+      // 连续3轮失败 → 注入强制反思提示
+      if (_roundFailures.length >= 3 &&
+          _roundFailures.sublist(_roundFailures.length - 3).every((f) => f)) {
+        AppLogger.instance.log('[Loop] 检测到连续3轮失败，注入反思提示');
+        messages.add({
+          'role': 'system',
+          'content':
+              '⚠️ 系统提示：已连续3轮出现失败。请停下来深入分析根本原因，尝试完全不同的方案。不要再重复相同的失败操作。',
+        });
+      }
 
       // 检查终止条件
       if (_isDone(output)) {
@@ -211,7 +290,7 @@ class AutonomousLoop {
       }
 
       // 无进展检测：至少完成 3 轮，并且连续两次检测均高度相似才停止。
-      // 避免第 2 轮因固定的“目标/操作/验证/结果”模板而被误判。
+      // 避免第 2 轮因固定的”目标/操作/验证/结果”模板而被误判。
       if (iteration >= 3 &&
           previousOutput != null &&
           _isStalledOutput(previousOutput, output)) {
@@ -251,24 +330,74 @@ class AutonomousLoop {
   /// 构建后续轮次的 continue prompt
   String _buildContinuePrompt(int iteration, String? lastOutput) {
     final buffer = StringBuffer();
-    buffer.writeln('[Loop 第 $iteration 轮 — 请继续]');
-    buffer.writeln('上一轮尚未声明任务完成。请基于已执行的工具结果继续推进，');
-    buffer.writeln('不要重复上一轮的说明或原样重做已经成功的步骤。');
+    buffer.writeln('═══ Loop 第 $iteration 轮 ═══');
+    buffer.writeln();
+    buffer.writeln('⚠️ 上一轮尚未完成任务。请按照以下步骤继续：');
+    buffer.writeln();
+    buffer.writeln('步骤 0: 【评估上一轮】');
+    buffer.writeln('  - 上一轮做了什么操作？');
+    buffer.writeln('  - 结果如何？哪些成功了？哪些失败了？');
+    buffer.writeln('  - 如果失败，根本原因是什么？');
+    buffer.writeln();
+
     if (lastOutput != null && lastOutput.trim().isNotEmpty) {
-      final compact = lastOutput.length > 1200
-          ? lastOutput.substring(lastOutput.length - 1200)
+      final compact = lastOutput.length > 800
+          ? '...${lastOutput.substring(lastOutput.length - 800)}'
           : lastOutput;
-      buffer.writeln('\n上一轮最终输出摘要（仅供识别未完成项）：');
+      buffer.writeln('【上一轮输出摘要】：');
       buffer.writeln(compact);
+      buffer.writeln();
     }
-    buffer.writeln('\n请优先执行尚未完成的下一步，并验证实际结果。');
-    buffer.writeln('只有任务整体完成且验证通过时，才输出 [LOOP_DONE] + 总结。');
-    buffer.writeln('如果需要继续，请直接执行下一步操作。');
+
+    buffer.writeln('步骤 1: 【调整计划】基于评估结果，决定本轮的行动');
+    buffer.writeln('步骤 2: 【实现】执行具体操作');
+    buffer.writeln('步骤 3: 【测试】验证结果是否符合预期');
+    buffer.writeln('步骤 4: 【评估】判断任务是否完成');
+    buffer.writeln();
+    buffer.writeln('⚠️ 注意：');
+    buffer.writeln('- 不要重复已经成功的操作');
+    buffer.writeln('- 必须实际验证结果（运行测试/检查输出）');
+    buffer.writeln('- 只有整体完成且验证通过时，才输出 [LOOP_DONE]');
+
     return buffer.toString();
   }
 
-  bool _isDone(String output) => output.contains('[LOOP_DONE]');
-  bool _isAbort(String output) => output.contains('[LOOP_ABORT]');
+  /// 检查是否真正完成（避免误判）
+  bool _isDone(String output) {
+    if (!output.contains('[LOOP_DONE]')) return false;
+
+    // 必须在输出的后半部分出现（避免在规划/示例中提到）
+    final index = output.indexOf('[LOOP_DONE]');
+    final position = index / output.length;
+
+    // [LOOP_DONE] 必须出现在输出的后 40% 位置
+    return position >= 0.6;
+  }
+
+  /// 检查是否放弃（避免误判）
+  bool _isAbort(String output) {
+    if (!output.contains('[LOOP_ABORT]')) return false;
+
+    // 必须在输出的后半部分出现
+    final index = output.indexOf('[LOOP_ABORT]');
+    final position = index / output.length;
+
+    // [LOOP_ABORT] 必须出现在输出的后 40% 位置
+    return position >= 0.6;
+  }
+
+  /// 检测输出中是否包含失败标记
+  bool _containsFailureMarkers(String output) {
+    final lowerOutput = output.toLowerCase();
+    return lowerOutput.contains('失败') ||
+        lowerOutput.contains('错误') ||
+        lowerOutput.contains('error') ||
+        lowerOutput.contains('failed') ||
+        lowerOutput.contains('failure') ||
+        lowerOutput.contains('not found') ||
+        lowerOutput.contains('无法') ||
+        lowerOutput.contains('不能');
+  }
 
   /// 从输出中提取标记后的内容作为总结
   String _extractSummary(String output, String marker) {

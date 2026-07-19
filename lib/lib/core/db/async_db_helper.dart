@@ -25,10 +25,10 @@ class AsyncDbExecutor {
     if (_isolate != null) return;
 
     final receivePort = ReceivePort();
-    _isolate = await Isolate.spawn(
-      _isolateEntry,
-      [receivePort.sendPort, dbPath],
-    );
+    _isolate = await Isolate.spawn(_isolateEntry, [
+      receivePort.sendPort,
+      dbPath,
+    ]);
 
     // 等待 Isolate 初始化完成
     final completer = Completer<SendPort>();
@@ -58,11 +58,13 @@ class AsyncDbExecutor {
     await _readyCompleter.future;
 
     final receivePort = ReceivePort();
-    _sendPort!.send(_DbMessage(
-      'BEGIN;${sqlList.join(';')};COMMIT;',
-      null,
-      receivePort.sendPort,
-    ));
+    _sendPort!.send(
+      _DbMessage(
+        'BEGIN;${sqlList.join(';')};COMMIT;',
+        null,
+        receivePort.sendPort,
+      ),
+    );
 
     await receivePort.first;
   }

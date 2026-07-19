@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_context.dart';
@@ -313,7 +312,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (_thinkingBuffer.isEmpty) return;
     final pending = _thinkingBuffer.toString();
     _thinkingBuffer.clear();
-    state = state.copyWith(streamingThinking: state.streamingThinking + pending);
+    state = state.copyWith(
+      streamingThinking: state.streamingThinking + pending,
+    );
   }
 
   ChatNotifier(this._ref) : super(const ChatState());
@@ -327,7 +328,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _flushTimer?.cancel();
     _flushTimer = null;
     _streamBuffer.clear();
-    _thinkingFlushTimer?.cancel();  // ✅ 清理思考缓冲定时器
+    _thinkingFlushTimer?.cancel(); // ✅ 清理思考缓冲定时器
     _thinkingFlushTimer = null;
     _thinkingBuffer.clear();
     // hooks: onSessionEnd
@@ -531,10 +532,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       );
 
       if (dbMessages.isEmpty) {
-        state = state.copyWith(
-          isLoadingHistory: false,
-          hasMoreHistory: false,
-        );
+        state = state.copyWith(isLoadingHistory: false, hasMoreHistory: false);
         return;
       }
 
@@ -542,7 +540,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final newFirstMsgId = dbMessages.first.id;
 
       // 更新 _agentMessages（在 system prompt 后插入）
-      final systemMsgCount = _agentMessages.where((m) => m['role'] == 'system').length;
+      final systemMsgCount = _agentMessages
+          .where((m) => m['role'] == 'system')
+          .length;
       for (var i = olderMessages.length - 1; i >= 0; i--) {
         final msg = olderMessages[i];
         if (msg.role != ChatRole.system) {
@@ -560,7 +560,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final updatedMessages = [...olderDisplayMessages, ...currentMessages];
 
       // 检查是否还有更多
-      final totalCount = await _conversationsDao.getMessageCount(conversationId);
+      final totalCount = await _conversationsDao.getMessageCount(
+        conversationId,
+      );
       final hasMore = updatedMessages.length < totalCount;
 
       state = state.copyWith(
@@ -1057,7 +1059,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
           _handleEvent(agentEvent, conversationId);
           // AgentError/熔断由 AutonomousLoop 随后的 LoopError 统一结束。
           if (agentEvent is AgentError || agentEvent is AgentLoopLimitReached) {
-            state = state.copyWith(isLoading: true);
+            // Loop 模式下熔断后清空工具调用，避免跨轮累积
+            state = state.copyWith(
+              isLoading: true,
+              activeToolCalls: agentEvent is AgentLoopLimitReached ? [] : state.activeToolCalls,
+            );
           }
         }
       case LoopDone(totalIterations: final iters, summary: final summary):
@@ -1143,7 +1149,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
         // 使用缓冲机制，减少 UI 更新频率
         _thinkingBuffer.write(text);
         _thinkingFlushTimer?.cancel();
-        _thinkingFlushTimer = Timer(_thinkingFlushInterval, _flushThinkingBuffer);
+        _thinkingFlushTimer = Timer(
+          _thinkingFlushInterval,
+          _flushThinkingBuffer,
+        );
       case AgentToken(text: final text):
         _currentTokenCount += ComputeService.estimateTokens(text);
         // 合并写入缓冲，由计时器周期性刷新到 state，避免每 token 一次全量 rebuild
@@ -1250,7 +1259,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
           );
           // 宠物经济：根据 token 消耗奖励宠物币
           if (_currentTokenCount > 0) {
-            final reward = await PetEconomy.instance.rewardForTokens(_currentTokenCount);
+            final reward = await PetEconomy.instance.rewardForTokens(
+              _currentTokenCount,
+            );
             if (reward > 0) {
               // 通过宠物气泡通知用户
               PetChatService.instance.showCoinReward(reward);
@@ -1286,11 +1297,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
           final statsText = toolStats.entries
               .map((e) => '- **${e.key}**: ${e.value}次')
               .join('\n');
-          toolCallsSection = '\n\n📋 **已执行的工具调用**（共 ${state.activeToolCalls.length} 次）：\n$statsText';
+          toolCallsSection =
+              '\n\n📋 **已执行的工具调用**（共 ${state.activeToolCalls.length} 次）：\n$statsText';
         }
 
         // 构建熔断总结消息
-        final summaryMessage = '''
+        final summaryMessage =
+            '''
 ⚠️ **工具调用次数已达上限（$rounds 次），已自动中止**
 ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamingText}' : ''}$toolCallsSection
 
@@ -1298,7 +1311,8 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
 - 请将任务拆分为更小的步骤
 - 提供更明确的目标描述
 - 或者手动执行部分步骤后再继续
-'''.trim();
+'''
+                .trim();
 
         // 保存工具调用记录
         final toolCallsData = state.activeToolCalls.map((tc) {
@@ -1328,7 +1342,9 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
         // 保存到数据库
         _conversationsDao.saveMessage(conversationId, assistantMsg);
 
-        AppLogger.instance.log('[ChatProvider] AgentLoopLimitReached: $rounds，已保存总结消息');
+        AppLogger.instance.log(
+          '[ChatProvider] AgentLoopLimitReached: $rounds，已保存总结消息',
+        );
         PetObserver.instance.notifyAiError(error: '工具调用熔断: $rounds 次');
     }
   }
@@ -1339,8 +1355,10 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
     _subscription = null;
 
     // 先判断是否有任何输出（在刷缓冲之前）
-    final hasContent = state.streamingText.isNotEmpty || _streamBuffer.isNotEmpty;
-    final hasThinking = state.streamingThinking.isNotEmpty || _thinkingBuffer.isNotEmpty;
+    final hasContent =
+        state.streamingText.isNotEmpty || _streamBuffer.isNotEmpty;
+    final hasThinking =
+        state.streamingThinking.isNotEmpty || _thinkingBuffer.isNotEmpty;
     final hasToolCalls = state.activeToolCalls.isNotEmpty;
 
     AppLogger.instance.log(
@@ -1351,7 +1369,7 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
 
     // 中断前刷净缓冲，保留已生成的部分输出
     _flushStreamBuffer();
-    _flushThinkingBuffer();  // ✅ 刷新思考缓冲
+    _flushThinkingBuffer(); // ✅ 刷新思考缓冲
     // 清理 AgentLoop 可能已写入的不完整 tool_calls 序列
     _sanitizeAgentMessages();
 
@@ -1370,8 +1388,15 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
 
       // 将工具调用历史包含到消息中（用于持久化和恢复显示）
       final toolCalls = state.activeToolCalls
-          .where((tc) => tc.status == ToolCallStatus.done || tc.status == ToolCallStatus.executing)
-          .map((tc) => ChatToolCall(id: tc.id, name: tc.name, arguments: tc.arguments))
+          .where(
+            (tc) =>
+                tc.status == ToolCallStatus.done ||
+                tc.status == ToolCallStatus.executing,
+          )
+          .map(
+            (tc) =>
+                ChatToolCall(id: tc.id, name: tc.name, arguments: tc.arguments),
+          )
           .toList();
 
       final assistantMsg = ChatMessage.assistant(
@@ -1405,7 +1430,9 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
         // 有工具调用时，为每个已完成的工具添加 tool response
         // 只保留真正执行完成的工具结果
         final completedToolCalls = state.activeToolCalls
-            .where((tc) => tc.status == ToolCallStatus.done && tc.result != null)
+            .where(
+              (tc) => tc.status == ToolCallStatus.done && tc.result != null,
+            )
             .toList();
 
         if (completedToolCalls.isNotEmpty) {
@@ -1447,7 +1474,7 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
       if (hasThinking) {
         // 有 thinking 但无 content：保存 thinking
         final assistantMsg = ChatMessage.assistant(
-          '',  // content 为空
+          '', // content 为空
           interrupted: true,
           thinkingContent: state.streamingThinking,
         );
@@ -1636,7 +1663,7 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
   void dispose() {
     _subscription?.cancel();
     _flushTimer?.cancel();
-    _thinkingFlushTimer?.cancel();  // ✅ 取消思考缓冲定时器
+    _thinkingFlushTimer?.cancel(); // ✅ 取消思考缓冲定时器
     _errorTimer?.cancel();
     _fireSessionEnd();
     super.dispose();

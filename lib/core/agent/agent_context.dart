@@ -999,17 +999,22 @@ class AgentContextBuilder {
 
     // 分离全局技能和项目级技能
     final globalSkills = _ref.read(skillsProvider).valueOrNull ?? const [];
-    final projectSkills = _ref.read(projectSkillsProvider).valueOrNull ?? const [];
     final globalSkillNames = globalSkills.map((s) => s.name).toSet();
 
-    final globalActive = allSkills.where((s) => globalSkillNames.contains(s.name)).toList();
-    final projectActive = allSkills.where((s) => !globalSkillNames.contains(s.name)).toList();
+    final globalActive = allSkills
+        .where((s) => globalSkillNames.contains(s.name))
+        .toList();
+    final projectActive = allSkills
+        .where((s) => !globalSkillNames.contains(s.name))
+        .toList();
 
     final promptParts = <String>[];
 
     // 1. 项目级技能：始终全部注入（为当前项目定制的，必须可用）
     if (projectActive.isNotEmpty) {
-      print('[SKILL] 项目级技能(始终注入): ${projectActive.map((s) => s.name).join(", ")}');
+      print(
+        '[SKILL] 项目级技能(始终注入): ${projectActive.map((s) => s.name).join(", ")}',
+      );
       AppLogger.instance.log(
         '[SkillInjection] 项目级技能: ${projectActive.map((s) => s.name).join(", ")} (始终注入)',
       );

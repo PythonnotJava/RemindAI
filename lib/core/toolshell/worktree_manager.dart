@@ -566,7 +566,7 @@ class WorktreeManager {
     return !await Directory(worktreePath).exists();
   }
 
-    // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
   // 私有辅助方法
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -628,10 +628,7 @@ class WorktreeManager {
         };
       }
 
-      return {
-        'status': 'ok',
-        'message': 'Git 仓库已自动初始化，可以使用 worktree 功能了。',
-      };
+      return {'status': 'ok', 'message': 'Git 仓库已自动初始化，可以使用 worktree 功能了。'};
     } catch (e) {
       return {
         'status': 'error',
@@ -643,7 +640,7 @@ class WorktreeManager {
 
   // ─────────────────────────────────────────────────────────────────────────
 
-String _stderr(ProcessResult result) {
+  String _stderr(ProcessResult result) {
     final err = result.stderr.toString().trim();
     return err.isEmpty ? result.stdout.toString().trim() : err;
   }

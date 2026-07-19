@@ -101,7 +101,8 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
                     onReorder: (reordered) => ref
                         .read(modelCardsProvider.notifier)
                         .reorder(reordered),
-                    itemBuilder: (context, card) => OptimizedModelCardTile(card: card),
+                    itemBuilder: (context, card) =>
+                        OptimizedModelCardTile(card: card),
                     trailing: _AddModelCard(
                       onTap: () => _showAddDialog(context, ref),
                     ),
@@ -142,17 +143,28 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
     showDialog(
       context: context,
       builder: (ctx) => ModelCardDialog(
-        onSave: (name, baseUrl, apiKey, modelId, logoPath, provider, contextWindow) {
-          ref.read(modelCardsProvider.notifier).addCard(
-            name: name,
-            baseUrl: baseUrl,
-            apiKey: apiKey,
-            modelId: modelId,
-            logoPath: logoPath,
-            provider: provider,
-            contextWindow: contextWindow,
-          );
-        },
+        onSave:
+            (
+              name,
+              baseUrl,
+              apiKey,
+              modelId,
+              logoPath,
+              provider,
+              contextWindow,
+            ) {
+              ref
+                  .read(modelCardsProvider.notifier)
+                  .addCard(
+                    name: name,
+                    baseUrl: baseUrl,
+                    apiKey: apiKey,
+                    modelId: modelId,
+                    logoPath: logoPath,
+                    provider: provider,
+                    contextWindow: contextWindow,
+                  );
+            },
       ),
     );
   }
@@ -219,7 +231,8 @@ class ModelCardDialog extends StatefulWidget {
     String logoPath,
     String provider,
     int contextWindow,
-  ) onSave;
+  )
+  onSave;
 
   const ModelCardDialog({
     this.initialName,
@@ -273,7 +286,9 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
       text: _contextWindow > 0 ? _contextWindow.toString() : '',
     );
     if (widget.initialModelId != null && widget.initialModelId!.isNotEmpty) {
-      _availableModels = [_DetectedModel(widget.initialModelId!, _contextWindow)];
+      _availableModels = [
+        _DetectedModel(widget.initialModelId!, _contextWindow),
+      ];
     }
   }
 
@@ -459,17 +474,14 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                               controller: controller,
                               focusNode: focusNode,
                               decoration: InputDecoration(
-                                labelText: '模型 (${_availableModels.length} 个可用)',
+                                labelText:
+                                    '模型 (${_availableModels.length} 个可用)',
                                 hintText: context.s.modelsSearchHint,
-                                suffixIcon: const Icon(
-                                  Icons.search,
-                                  size: 20,
-                                ),
+                                suffixIcon: const Icon(Icons.search, size: 20),
                               ),
                               style: const TextStyle(fontSize: 13),
                               onChanged: (v) => _selectedModel = v.trim(),
-                              validator: (v) =>
-                                  (v == null || v.trim().isEmpty)
+                              validator: (v) => (v == null || v.trim().isEmpty)
                                   ? '请选择模型'
                                   : null,
                             );
@@ -513,7 +525,8 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                 _selectedModel!.isNotEmpty) {
               // 解析上下文窗口：用户输入 > 检测值 > 默认 128K
               int finalContextWindow = _contextWindow;
-              if (_contextWindowCtrl.text.trim().isEmpty && finalContextWindow == 0) {
+              if (_contextWindowCtrl.text.trim().isEmpty &&
+                  finalContextWindow == 0) {
                 finalContextWindow = 128000; // 默认 128K
               }
 

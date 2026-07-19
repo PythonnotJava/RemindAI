@@ -300,6 +300,11 @@ class AgentLoop {
         );
       }
 
+      // ✅ 对话中压缩检查：在添加新消息前检查，避免压缩刚添加的消息
+      if (round % 5 == 0) {
+        await _checkAndCompressIfNeeded(round, messages);
+      }
+
       // 追加 assistant 消息到历史
       messages.add(completed.toMessageJson());
 
@@ -321,11 +326,6 @@ class AgentLoop {
           'tool_call_id': tc.id,
           'content': result,
         });
-      }
-
-      // ✅ 对话中压缩检查：每 5 轮检查一次，防止单轮对话内上下文溢出
-      if (round % 5 == 0) {
-        await _checkAndCompressIfNeeded(round, messages);
       }
 
       // 循环 → 把工具结果交给 LLM 继续处理

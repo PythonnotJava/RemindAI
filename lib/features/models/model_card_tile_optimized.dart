@@ -28,7 +28,9 @@ class _OptimizedModelCardTileState extends State<OptimizedModelCardTile> {
     _isDefault = widget.card.isDefault;
 
     // 监听其他卡片的默认变化事件
-    _eventSubscription = ModelCardEventBus().onDefaultChanged.listen((newDefaultId) {
+    _eventSubscription = ModelCardEventBus().onDefaultChanged.listen((
+      newDefaultId,
+    ) {
       if (newDefaultId != widget.card.id && _isDefault) {
         // 其他卡片被设为默认，当前卡片取消默认
         if (mounted) {
@@ -179,7 +181,12 @@ class _OptimizedModelCardTileState extends State<OptimizedModelCardTile> {
     );
   }
 
-  Widget _kv(BuildContext context, String k, String v, ColorScheme colorScheme) {
+  Widget _kv(
+    BuildContext context,
+    String k,
+    String v,
+    ColorScheme colorScheme,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -228,19 +235,28 @@ class _OptimizedModelCardTileState extends State<OptimizedModelCardTile> {
         initialProvider: widget.card.provider,
         initialContextWindow: widget.card.contextWindow,
         cardId: widget.card.id,
-        onSave: (name, baseUrl, apiKey, modelId, logoPath, provider, contextWindow) {
-          final container = ProviderScope.containerOf(context);
-          final updated = widget.card.copyWith(
-            name: name,
-            baseUrl: baseUrl,
-            apiKey: apiKey,
-            modelId: modelId,
-            logoPath: logoPath,
-            provider: provider,
-            contextWindow: contextWindow,
-          );
-          container.read(modelCardsProvider.notifier).updateCard(updated);
-        },
+        onSave:
+            (
+              name,
+              baseUrl,
+              apiKey,
+              modelId,
+              logoPath,
+              provider,
+              contextWindow,
+            ) {
+              final container = ProviderScope.containerOf(context);
+              final updated = widget.card.copyWith(
+                name: name,
+                baseUrl: baseUrl,
+                apiKey: apiKey,
+                modelId: modelId,
+                logoPath: logoPath,
+                provider: provider,
+                contextWindow: contextWindow,
+              );
+              container.read(modelCardsProvider.notifier).updateCard(updated);
+            },
       ),
     );
   }
@@ -260,7 +276,9 @@ class _OptimizedModelCardTileState extends State<OptimizedModelCardTile> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              container.read(modelCardsProvider.notifier).deleteCard(widget.card.id);
+              container
+                  .read(modelCardsProvider.notifier)
+                  .deleteCard(widget.card.id);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: Text(context.s.commonDelete),
