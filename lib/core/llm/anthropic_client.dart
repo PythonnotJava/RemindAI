@@ -257,13 +257,35 @@ class AnthropicClient implements LlmClient {
     } on DioException catch (e) {
       String detail = e.response?.data?.toString() ?? e.message ?? e.type.name;
       final status = e.response?.statusCode;
-      if (status == 500 || status == 502) {
-        throw Exception(
-          'HTTP $status: $detail\n\n'
-          '提示: 如果你使用的是 API 中转站/代理，请将模型卡的「协议类型」改为 OpenAI，'
-          '中转站通常只兼容 OpenAI 格式。',
-        );
+
+      // 500/502/503: 中转站或上游服务问题
+      if (status == 500 || status == 502 || status == 503) {
+        String hint = '';
+        if (status == 503) {
+          hint =
+              '\n\n可能原因:\n'
+              '1. 中转站过载或限流\n'
+              '2. 上游 Anthropic API 暂时不可用\n'
+              '3. 中转站不支持 Anthropic 原生协议\n\n'
+              '建议: 切换到「OpenAI」协议类型，或更换中转站';
+        } else {
+          hint =
+              '\n\n提示: 如果你使用的是 API 中转站/代理，请将模型卡的「协议类型」改为 OpenAI，'
+              '中转站通常只兼容 OpenAI 格式。';
+        }
+        throw Exception('HTTP $status: $detail$hint');
       }
+
+      // 429: 速率限制
+      if (status == 429) {
+        throw Exception('HTTP 429: 请求过于频繁，请稍后重试\n\n$detail');
+      }
+
+      // 401/403: 认证问题
+      if (status == 401 || status == 403) {
+        throw Exception('HTTP $status: API Key 无效或权限不足\n\n$detail');
+      }
+
       throw Exception('HTTP ${status ?? '?'}: $detail');
     }
   }
@@ -320,14 +342,38 @@ class AnthropicClient implements LlmClient {
         } catch (_) {}
       }
       final status = e.response?.statusCode;
-      // 500/502 可能是中转站不兼容 Anthropic 原生协议
-      if (status == 500 || status == 502) {
-        throw Exception(
-          'HTTP $status: $detail\n\n'
-          '提示: 如果你使用的是 API 中转站/代理，请将模型卡的「协议类型」改为 OpenAI，'
-          '中转站通常只兼容 OpenAI 格式。',
-        );
+
+      // 500/502/503: 中转站或上游服务问题
+      if (status == 500 || status == 502 || status == 503) {
+        String hint = '';
+        if (status == 503) {
+          hint =
+              '\n\n可能原因:\n'
+              '1. 中转站过载或限流\n'
+              '2. 上游 Anthropic API 暂时不可用\n'
+              '3. 中转站不支持流式请求或 Anthropic 协议\n\n'
+              '建议:\n'
+              '- 切换到「OpenAI」协议类型\n'
+              '- 更换中转站\n'
+              '- 稍后重试';
+        } else {
+          hint =
+              '\n\n提示: 如果你使用的是 API 中转站/代理，请将模型卡的「协议类型」改为 OpenAI，'
+              '中转站通常只兼容 OpenAI 格式。';
+        }
+        throw Exception('HTTP $status: $detail$hint');
       }
+
+      // 429: 速率限制
+      if (status == 429) {
+        throw Exception('HTTP 429: 请求过于频繁，请稍后重试\n\n$detail');
+      }
+
+      // 401/403: 认证问题
+      if (status == 401 || status == 403) {
+        throw Exception('HTTP $status: API Key 无效或权限不足\n\n$detail');
+      }
+
       throw Exception('HTTP ${status ?? '?'}: $detail');
     }
 

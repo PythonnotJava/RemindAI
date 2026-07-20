@@ -234,7 +234,9 @@ class ToolPipeline {
     // mcp__agent-memory__memory: append action 需要 "text" 参数，不是 "content"
     if (toolName == 'mcp__agent-memory__memory') {
       final action = args['action'];
-      if (action == 'append' && args.containsKey('content') && !args.containsKey('text')) {
+      if (action == 'append' &&
+          args.containsKey('content') &&
+          !args.containsKey('text')) {
         final corrected = Map<String, dynamic>.from(args);
         corrected['text'] = corrected.remove('content');
         print('[MCP] 自动修正参数: $toolName.content → text');

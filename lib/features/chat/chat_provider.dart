@@ -143,6 +143,12 @@ class ChatState {
   final String streamingText;
   final String streamingThinking; // 新增：流式思考内容缓冲
   final List<ToolCallDisplay> activeToolCalls;
+
+  /// 流式可视化文件列表（实时更新）
+  final List<String> streamingHtmlFiles;
+  final List<String> streamingSvgFiles;
+  final List<String> streamingVideoFiles;
+
   final String? error;
   final int? currentConversationId;
   final List<FileAttachment> attachments;
@@ -170,6 +176,9 @@ class ChatState {
     this.streamingText = '',
     this.streamingThinking = '', // 新增
     this.activeToolCalls = const [],
+    this.streamingHtmlFiles = const [],
+    this.streamingSvgFiles = const [],
+    this.streamingVideoFiles = const [],
     this.error,
     this.currentConversationId,
     this.attachments = const [],
@@ -190,6 +199,9 @@ class ChatState {
     String? streamingText,
     String? streamingThinking, // 新增
     List<ToolCallDisplay>? activeToolCalls,
+    List<String>? streamingHtmlFiles,
+    List<String>? streamingSvgFiles,
+    List<String>? streamingVideoFiles,
     String? error,
     int? currentConversationId,
     bool clearConversationId = false,
@@ -211,6 +223,9 @@ class ChatState {
     streamingText: streamingText ?? this.streamingText,
     streamingThinking: streamingThinking ?? this.streamingThinking, // 新增
     activeToolCalls: activeToolCalls ?? this.activeToolCalls,
+    streamingHtmlFiles: streamingHtmlFiles ?? this.streamingHtmlFiles,
+    streamingSvgFiles: streamingSvgFiles ?? this.streamingSvgFiles,
+    streamingVideoFiles: streamingVideoFiles ?? this.streamingVideoFiles,
     error: error,
     currentConversationId: clearConversationId
         ? null
@@ -792,6 +807,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
       messages: [...state.messages, userMsg],
       isLoading: true,
       streamingText: '',
+      streamingThinking: '',
+      streamingHtmlFiles: [],
+      streamingSvgFiles: [],
+      streamingVideoFiles: [],
       activeToolCalls: [],
       error: null,
       attachments: [],
@@ -1062,7 +1081,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
             // Loop 模式下熔断后清空工具调用，避免跨轮累积
             state = state.copyWith(
               isLoading: true,
-              activeToolCalls: agentEvent is AgentLoopLimitReached ? [] : state.activeToolCalls,
+              activeToolCalls: agentEvent is AgentLoopLimitReached
+                  ? []
+                  : state.activeToolCalls,
             );
           }
         }
@@ -1149,10 +1170,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
     switch (event) {
       case AgentHtmlGenerated(path: final path):
         _htmlFiles.add(path);
+        // 实时更新流式状态
+        state = state.copyWith(streamingHtmlFiles: List.from(_htmlFiles));
       case AgentSvgGenerated(path: final path):
         _svgFiles.add(path);
+        // 实时更新流式状态
+        state = state.copyWith(streamingSvgFiles: List.from(_svgFiles));
       case AgentVideoGenerated(path: final path):
         _videoFiles.add(path);
+        // 实时更新流式状态
+        state = state.copyWith(streamingVideoFiles: List.from(_videoFiles));
       case AgentReasoningToken(text: final text):
         // 推理过程流式累积到 streamingThinking
         _currentTokenCount += ComputeService.estimateTokens(text);
@@ -1244,6 +1271,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
           isLoading: false,
           streamingText: '',
           streamingThinking: '',
+          streamingHtmlFiles: [],
+          streamingSvgFiles: [],
+          streamingVideoFiles: [],
           activeToolCalls: [],
         );
 

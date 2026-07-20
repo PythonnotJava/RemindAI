@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
 import '../../core/db/tables/model_cards.dart';
 import '../../core/l10n/l10n_ext.dart';
 import '../../core/llm/llm_provider.dart';
@@ -267,6 +268,8 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
   // 模型检测相关
   List<_DetectedModel> _availableModels = [];
   String? _selectedModel;
+  bool _testing = false;
+  String? _testError;
 
   // 上下文窗口大小
   int _contextWindow = 0;
@@ -310,6 +313,143 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
     final path = result?.files.single.path;
     if (path != null) {
       setState(() => _logoPath = path);
+    }
+  }
+
+  /// 测试连接并检测可用模型
+  Future<void> _testConnection() async {
+    final url = _urlCtrl.text.trim();
+    final key = _keyCtrl.text.trim();
+
+    if (url.isEmpty || key.isEmpty) {
+      setState(() {
+        _testError = '请先填写 Base URL 和 API Key';
+      });
+      return;
+    }
+
+    setState(() {
+      _testing = true;
+      _testError = null;
+      _availableModels = [];
+    });
+
+    try {
+      // 调用 /v1/models 端点检测可用模型
+      final dio = Dio(
+        BaseOptions(
+          headers: {
+            'Authorization': 'Bearer $key',
+            'Content-Type': 'application/json',
+          },
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      );
+
+      // 规范化 URL
+      var baseUrl = url;
+      while (baseUrl.endsWith('/')) {
+        baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+      }
+      if (baseUrl.endsWith('/chat/completions')) {
+        baseUrl = baseUrl.substring(
+          0,
+          baseUrl.length - '/chat/completions'.length,
+        );
+      }
+      if (baseUrl.endsWith('/v1/messages')) {
+        baseUrl = baseUrl.substring(0, baseUrl.length - '/messages'.length);
+      }
+
+      final modelsUrl = '$baseUrl/models';
+      final response = await dio.get(modelsUrl);
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data is Map && data['data'] is List) {
+          final models = (data['data'] as List)
+              .map((m) {
+                if (m is Map) {
+                  final id = m['id']?.toString() ?? '';
+                  final contextWindow = m['context_window'] as int? ?? 0;
+                  return _DetectedModel(id, contextWindow);
+                }
+                return null;
+              })
+              .whereType<_DetectedModel>()
+              .toList();
+
+          if (models.isEmpty) {
+            throw Exception('未检测到可用模型');
+          }
+
+          setState(() {
+            _availableModels = models;
+            _testing = false;
+            // 自动选择第一个模型
+            if (_selectedModel == null || _selectedModel!.isEmpty) {
+              _selectedModel = models.first.id;
+              _contextWindow = models.first.contextWindow;
+            }
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✓ 连接成功，检测到 ${models.length} 个模型'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          throw Exception('响应格式不正确');
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      String errorMsg;
+      if (e is DioException) {
+        if (e.response?.statusCode == 404) {
+          errorMsg =
+              '端点不存在 (404)\n\n'
+              '提示：此服务商可能不支持 /v1/models 端点，\n'
+              '请手动输入模型 ID';
+        } else if (e.response?.statusCode == 401 ||
+            e.response?.statusCode == 403) {
+          errorMsg = 'API Key 无效或权限不足';
+        } else if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout) {
+          errorMsg = '连接超时，请检查网络或 Base URL 是否正确';
+        } else if (e.type == DioExceptionType.connectionError) {
+          errorMsg =
+              '无法连接到服务器\n\n'
+              '请检查：\n'
+              '1. Base URL 是否正确\n'
+              '2. 网络连接是否正常\n'
+              '3. 是否需要代理';
+        } else {
+          errorMsg = e.message ?? e.toString();
+        }
+      } else {
+        errorMsg = e.toString();
+      }
+
+      setState(() {
+        _testing = false;
+        _testError = errorMsg;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✗ 测试失败: $errorMsg'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 
@@ -434,6 +574,54 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? '请输入 API Key' : null,
               ),
+              const SizedBox(height: 16),
+              // 测试连接按钮
+              OutlinedButton.icon(
+                onPressed: _testing ? null : _testConnection,
+                icon: _testing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cable, size: 18),
+                label: Text(_testing ? '检测中...' : '测试连接并检测模型'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 40),
+                ),
+              ),
+              if (_testError != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _testError!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onErrorContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               // 模型选择区
               _availableModels.isEmpty

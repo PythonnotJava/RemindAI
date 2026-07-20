@@ -251,9 +251,7 @@ class AutonomousLoop {
               '[Loop] 第 $iteration 轮内 tool_call 达到上限($rounds)，进入下一轮',
             );
             // 标记为一个特殊的"未完成"输出，触发下一轮继续
-            buffer.write(
-              '\n[系统提示] 本轮工具调用达到上限($rounds次)，请在下一轮基于已执行结果继续推进',
-            );
+            buffer.write('\n[系统提示] 本轮工具调用达到上限($rounds次)，请在下一轮基于已执行结果继续推进');
             break; // 继续循环，不终止
         }
       }
@@ -274,8 +272,7 @@ class AutonomousLoop {
         AppLogger.instance.log('[Loop] 检测到连续3轮失败，注入反思提示');
         messages.add({
           'role': 'system',
-          'content':
-              '⚠️ 系统提示：已连续3轮出现失败。请停下来深入分析根本原因，尝试完全不同的方案。不要再重复相同的失败操作。',
+          'content': '⚠️ 系统提示：已连续3轮出现失败。请停下来深入分析根本原因，尝试完全不同的方案。不要再重复相同的失败操作。',
         });
       }
 

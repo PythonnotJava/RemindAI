@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../../core/export/conversation_exporter.dart';
 import '../../../core/l10n/l10n_ext.dart';
@@ -39,7 +41,8 @@ class MessageBubble extends ConsumerWidget {
     final hasThinking = (message.thinkingContent ?? '').trim().isNotEmpty;
     final hasToolCalls =
         message.toolCalls != null && message.toolCalls!.isNotEmpty;
-    final hasVisualizations = message.htmlFiles.isNotEmpty ||
+    final hasVisualizations =
+        message.htmlFiles.isNotEmpty ||
         message.svgFiles.isNotEmpty ||
         message.videoFiles.isNotEmpty;
     final chatFont = ref.watch(chatFontProvider);
@@ -387,7 +390,9 @@ class _ThinkingSectionState extends State<_ThinkingSection> {
       decoration: BoxDecoration(
         color: widget.colorScheme.surfaceContainerLow.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: widget.colorScheme.outline.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: widget.colorScheme.outline.withValues(alpha: 0.2),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,7 +473,9 @@ class _ToolCallsSectionState extends State<_ToolCallsSection> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: widget.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: widget.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.5,
+        ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: widget.colorScheme.outline.withValues(alpha: 0.2),
@@ -666,8 +673,23 @@ class _StreamingBubbleState extends ConsumerState<StreamingBubble>
       chatProvider.select((s) => s.streamingThinking),
     );
 
+    // ✅ 监听流式可视化文件
+    final streamingHtmlFiles = ref.watch(
+      chatProvider.select((s) => s.streamingHtmlFiles),
+    );
+    final streamingSvgFiles = ref.watch(
+      chatProvider.select((s) => s.streamingSvgFiles),
+    );
+    final streamingVideoFiles = ref.watch(
+      chatProvider.select((s) => s.streamingVideoFiles),
+    );
+
     // 如果有思考内容，显示思考区域
     final hasThinking = thinkingContent.isNotEmpty;
+    final hasVisualizations =
+        streamingHtmlFiles.isNotEmpty ||
+        streamingSvgFiles.isNotEmpty ||
+        streamingVideoFiles.isNotEmpty;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -733,10 +755,325 @@ class _StreamingBubbleState extends ConsumerState<StreamingBubble>
               )
             else
               const SizedBox.shrink(),
+            // 可视化文件链接（流式显示）
+            if (hasVisualizations) ...[
+              const SizedBox(height: 8),
+              _buildVisualizationLinks(
+                context,
+                colorScheme,
+                streamingHtmlFiles,
+                streamingSvgFiles,
+                streamingVideoFiles,
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  /// 构建可视化文件链接列表
+  Widget _buildVisualizationLinks(
+    BuildContext context,
+    ColorScheme colorScheme,
+    List<String> htmlFiles,
+    List<String> svgFiles,
+    List<String> videoFiles,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.insert_chart_outlined,
+                size: 16,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '已生成可视化',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          if (htmlFiles.isNotEmpty ||
+              svgFiles.isNotEmpty ||
+              videoFiles.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final file in htmlFiles)
+                  _buildFileChip(context, colorScheme, file, Icons.web, 'HTML'),
+                for (final file in svgFiles)
+                  _buildFileChip(
+                    context,
+                    colorScheme,
+                    file,
+                    Icons.image_outlined,
+                    'SVG',
+                  ),
+                for (final file in videoFiles)
+                  _buildFileChip(
+                    context,
+                    colorScheme,
+                    file,
+                    Icons.video_file_outlined,
+                    'Video',
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 构建单个文件芯片
+  Widget _buildFileChip(
+    BuildContext context,
+    ColorScheme colorScheme,
+    String filePath,
+    IconData icon,
+    String label,
+  ) {
+    final fileName = filePath.split(RegExp(r'[\\/]')).last;
+    return GestureDetector(
+      onSecondaryTapUp: (details) {
+        _showFileContextMenu(context, details.globalPosition, filePath);
+      },
+      child: InkWell(
+        onTap: () => _openFile(filePath),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: colorScheme.outline.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: colorScheme.primary),
+              const SizedBox(width: 4),
+              Text(
+                fileName,
+                style: TextStyle(fontSize: 11, color: colorScheme.onSurface),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.more_vert, size: 12, color: colorScheme.outline),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 显示文件操作菜单
+  void _showFileContextMenu(
+    BuildContext context,
+    Offset position,
+    String filePath,
+  ) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        position & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem<String>(
+          value: 'open',
+          child: Row(
+            children: [
+              Icon(Icons.open_in_new, size: 16),
+              const SizedBox(width: 8),
+              Text('打开文件'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'open_browser',
+          child: Row(
+            children: [
+              Icon(Icons.open_in_browser, size: 16),
+              const SizedBox(width: 8),
+              Text('在浏览器中打开'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'show_in_folder',
+          child: Row(
+            children: [
+              Icon(Icons.folder_open, size: 16),
+              const SizedBox(width: 8),
+              Text('在文件夹中显示'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'copy_path',
+          child: Row(
+            children: [
+              Icon(Icons.content_copy, size: 16),
+              const SizedBox(width: 8),
+              Text('复制路径'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'save_as',
+          child: Row(
+            children: [
+              Icon(Icons.save_as, size: 16),
+              const SizedBox(width: 8),
+              Text('另存为...'),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == null || !mounted) return;
+
+      switch (value) {
+        case 'open':
+          _openFile(filePath);
+          break;
+        case 'open_browser':
+          _openInBrowser(filePath);
+          break;
+        case 'show_in_folder':
+          _showInFolder(filePath);
+          break;
+        case 'copy_path':
+          _copyPathToClipboard(scaffoldMessenger, filePath);
+          break;
+        case 'save_as':
+          _saveAs(filePath);
+          break;
+      }
+    });
+  }
+
+  /// 打开文件（默认程序）
+  void _openFile(String path) {
+    if (Platform.isWindows) {
+      Process.run('cmd', ['/c', 'start', '', path]);
+    } else if (Platform.isMacOS) {
+      Process.run('open', [path]);
+    } else if (Platform.isLinux) {
+      Process.run('xdg-open', [path]);
+    }
+  }
+
+  /// 在浏览器中打开（适用于 HTML 文件）
+  void _openInBrowser(String path) {
+    if (Platform.isWindows) {
+      // 使用默认浏览器打开
+      Process.run('cmd', ['/c', 'start', 'chrome', path]).catchError((_) {
+        Process.run('cmd', ['/c', 'start', 'firefox', path]).catchError((_) {
+          Process.run('cmd', ['/c', 'start', 'msedge', path]).catchError((_) {
+            // 回退到默认程序
+            _openFile(path);
+            return Future.value(ProcessResult(0, 0, '', ''));
+          });
+          return Future.value(ProcessResult(0, 0, '', ''));
+        });
+        return Future.value(ProcessResult(0, 0, '', ''));
+      });
+    } else if (Platform.isMacOS) {
+      Process.run('open', ['-a', 'Safari', path]).catchError((_) {
+        Process.run('open', ['-a', 'Google Chrome', path]).catchError((_) {
+          _openFile(path);
+          return Future.value(ProcessResult(0, 0, '', ''));
+        });
+        return Future.value(ProcessResult(0, 0, '', ''));
+      });
+    } else if (Platform.isLinux) {
+      Process.run('xdg-open', [path]);
+    }
+  }
+
+  /// 在文件夹中显示
+  void _showInFolder(String path) {
+    if (Platform.isWindows) {
+      Process.run('explorer', ['/select,', path]);
+    } else if (Platform.isMacOS) {
+      Process.run('open', ['-R', path]);
+    } else if (Platform.isLinux) {
+      final dir = path.substring(0, path.lastIndexOf(Platform.pathSeparator));
+      Process.run('xdg-open', [dir]);
+    }
+  }
+
+  /// 复制路径到剪贴板
+  void _copyPathToClipboard(
+    ScaffoldMessengerState scaffoldMessenger,
+    String path,
+  ) {
+    Clipboard.setData(ClipboardData(text: path));
+    scaffoldMessenger.showSnackBar(
+      SnackBar(
+        content: Text('路径已复制: ${path.split(RegExp(r'[\\/]')).last}'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// 另存为
+  Future<void> _saveAs(String sourcePath) async {
+    try {
+      final fileName = sourcePath.split(RegExp(r'[\\/]')).last;
+      final result = await FilePicker.platform.saveFile(
+        dialogTitle: '另存为',
+        fileName: fileName,
+      );
+
+      if (result != null) {
+        final sourceFile = File(sourcePath);
+        await sourceFile.copy(result);
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('文件已保存'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('保存失败: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   Widget _buildThinkingIndicator(
@@ -800,10 +1137,7 @@ class _VideoPlaceholder extends StatelessWidget {
   final String videoPath;
   final ColorScheme colorScheme;
 
-  const _VideoPlaceholder({
-    required this.videoPath,
-    required this.colorScheme,
-  });
+  const _VideoPlaceholder({required this.videoPath, required this.colorScheme});
 
   @override
   Widget build(BuildContext context) {
@@ -813,11 +1147,7 @@ class _VideoPlaceholder extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(
-              Icons.video_library,
-              size: 32,
-              color: colorScheme.primary,
-            ),
+            Icon(Icons.video_library, size: 32, color: colorScheme.primary),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

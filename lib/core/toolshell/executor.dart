@@ -822,7 +822,7 @@ $code
         'exit_code': result.exitCode,
         'stdout': stdout,
         'stderr': stderr,
-        ...outputs,  // images, html_files, videos, svg_files
+        ...outputs, // images, html_files, videos, svg_files
         'truncated': rawStdout.length > 8000 || rawStderr.length > 4000,
       });
     } on TimeoutException {

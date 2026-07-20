@@ -19,6 +19,7 @@ import 'package:highlight/highlight.dart'
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_windows/webview_windows.dart' as wv;
+import 'package:webview_flutter/webview_flutter.dart' as wf;
 
 import '../../../core/l10n/l10n_ext.dart';
 import '../../../core/pet/pet_chat_service.dart';
@@ -309,6 +310,9 @@ class _ToggleButton extends StatelessWidget {
 }
 
 /// HTML 内嵌 WebView 预览组件
+/// Windows 使用 webview_windows (WebView2)
+/// macOS 使用 webview_flutter (WKWebView)
+/// Linux 使用 webview_all_linux (WebKitGTK)
 class _HtmlPreview extends StatefulWidget {
   final String html;
   final ColorScheme colorScheme;
@@ -316,11 +320,21 @@ class _HtmlPreview extends StatefulWidget {
   const _HtmlPreview({required this.html, required this.colorScheme});
 
   @override
-  State<_HtmlPreview> createState() => _HtmlPreviewState();
+  // ignore: no_logic_in_create_state
+  State<_HtmlPreview> createState() {
+    if (Platform.isWindows) {
+      return _HtmlPreviewWindowsState();
+    } else if (Platform.isMacOS || Platform.isLinux) {
+      return _HtmlPreviewUnixState();
+    } else {
+      return _HtmlPreviewUnsupportedState();
+    }
+  }
 }
 
-class _HtmlPreviewState extends State<_HtmlPreview> {
-  final _controller = wv.WebviewController();
+// ==================== Windows 实现（webview_windows）====================
+class _HtmlPreviewWindowsState extends State<_HtmlPreview> {
+  late final wv.WebviewController _controller;
   bool _ready = false;
   bool _failed = false;
   String? _error;
@@ -329,28 +343,19 @@ class _HtmlPreviewState extends State<_HtmlPreview> {
   @override
   void initState() {
     super.initState();
+    _controller = wv.WebviewController();
     _initWebView();
   }
 
   Future<void> _initWebView() async {
     try {
       await _controller.initialize();
-
-      // 安全设置：禁止新窗口弹出、禁止导航离开
       _controller.setPopupWindowPolicy(wv.WebviewPopupWindowPolicy.deny);
-
-      // 加载 HTML 内容
       await _controller.loadStringContent(widget.html);
-
-      // 延迟获取页面高度实现自适应
       Future.delayed(const Duration(milliseconds: 800), _adjustHeight);
-
       if (mounted) setState(() => _ready = true);
     } catch (e) {
-      // 打日志而非静默吞掉——WebView2 初始化失败的真实原因（Runtime 缺失/
-      // 版本不兼容/user data 目录权限/进程冲突等）差异很大，
-      // 只有把 e 落到日志文件里才能事后排查，UI 上的固定文案帮不上排障。
-      print('[HtmlPreview] WebView2 初始化失败: $e');
+      print('[HtmlPreview] Windows WebView2 初始化失败: $e');
       if (mounted) {
         setState(() {
           _failed = true;
@@ -360,7 +365,6 @@ class _HtmlPreviewState extends State<_HtmlPreview> {
     }
   }
 
-  /// 通过 JS 获取实际内容高度，自适应调整
   Future<void> _adjustHeight() async {
     if (!_ready || !mounted) return;
     try {
@@ -401,8 +405,6 @@ class _HtmlPreviewState extends State<_HtmlPreview> {
               style: TextStyle(color: widget.colorScheme.error, fontSize: 12),
               textAlign: TextAlign.center,
             ),
-            // 附带具体异常信息，方便排查（Runtime 已安装但仍失败的场景，
-            // 常见原因是 user data 目录被占用/权限问题/版本不兼容）。
             if (_error != null) ...[
               const SizedBox(height: 4),
               Text(
@@ -444,6 +446,138 @@ class _HtmlPreviewState extends State<_HtmlPreview> {
           bottomRight: Radius.circular(8),
         ),
         child: wv.Webview(_controller),
+      ),
+    );
+  }
+}
+
+// ==================== macOS/Linux 实现（webview_flutter API）====================
+// macOS 使用 webview_flutter (WKWebView)
+// Linux 使用 webview_all_linux (WebKitGTK)
+class _HtmlPreviewUnixState extends State<_HtmlPreview> {
+  late final wf.WebViewController _controller;
+  bool _failed = false;
+  String? _error;
+  double _height = 450;
+
+  @override
+  void initState() {
+    super.initState();
+    _initWebView();
+  }
+
+  void _initWebView() {
+    try {
+      _controller = wf.WebViewController()
+        ..setJavaScriptMode(wf.JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          wf.NavigationDelegate(
+            onPageFinished: (url) async {
+              // 获取页面高度
+              final result = await _controller.runJavaScriptReturningResult(
+                'Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)',
+              );
+              final h = double.tryParse(result.toString());
+              if (h != null && h > 0 && mounted) {
+                setState(() => _height = h.clamp(200, 600).toDouble());
+              }
+            },
+            onWebResourceError: (error) {
+              print('[HtmlPreview] macOS WKWebView 加载失败: ${error.description}');
+              if (mounted) {
+                setState(() {
+                  _failed = true;
+                  _error = error.description;
+                });
+              }
+            },
+          ),
+        );
+
+      // 加载 HTML 内容
+      _controller.loadHtmlString(widget.html);
+    } catch (e) {
+      print('[HtmlPreview] macOS WebView 初始化失败: $e');
+      if (mounted) {
+        setState(() {
+          _failed = true;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) {
+      return Container(
+        height: 120,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline,
+              color: widget.colorScheme.error,
+              size: 28,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'WebView 不可用',
+              style: TextStyle(color: widget.colorScheme.error, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                _error!,
+                style: TextStyle(
+                  color: widget.colorScheme.error.withValues(alpha: 0.7),
+                  fontSize: 10,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: _height,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
+        child: wf.WebViewWidget(controller: _controller),
+      ),
+    );
+  }
+}
+
+// ==================== Linux / 不支持平台 ====================
+class _HtmlPreviewUnsupportedState extends State<_HtmlPreview> {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 120,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.info_outline, color: widget.colorScheme.primary, size: 28),
+          const SizedBox(height: 8),
+          Text(
+            'Linux 平台 WebView 支持开发中',
+            style: TextStyle(color: widget.colorScheme.onSurface, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }

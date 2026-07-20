@@ -23,6 +23,10 @@ dependencies:
 
   # Networking
   dio: ^5.7.0
+  html: ^0.15.4
+
+  # Anthropic SDK
+  anthropic_sdk_dart: ^6.0.0
 
   # UI
   gpt_markdown:
@@ -63,7 +67,12 @@ dependencies:
 
   # System Notification
   local_notifier: ^0.1.6
-  webview_windows: ^0.4.0
+
+  # WebView - 平台隔离，webview组件选不好会造成污染，我用flutter_inappwebview给我把Windows上的渲染搞崩了
+  webview_windows: ^0.4.0  # Windows 专用
+  webview_flutter: ^4.14.1  # macOS 专用（官方 Flutter 插件，不包含 Windows 支持）
+  webview_all_linux: ^1.2.1  # Linux 专用（不包含 Windows 支持）
+
   fast_gbk: ^1.0.0
   flutter_svg: ^2.0.10+1
 
@@ -83,6 +92,7 @@ flutter:
     - assets/default_skills/system/
     - assets/web/
     - assets/icons/
+    - assets/scripts/
     - assets/scripts/paddle_ocr/
     - assets/scripts/volcano_tts/
     # archify (draw architecture/workflow/sequence/etc diagrams,
