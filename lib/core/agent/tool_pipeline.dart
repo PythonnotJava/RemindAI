@@ -82,7 +82,9 @@ class ToolPipeline {
       final client = _mcpClients[serverId];
       if (client != null && client.isConnected) {
         try {
-          final result = await client.callTool(toolName, args);
+          // 参数名自动修正：修复 Agent 常见的参数名混淆问题
+          final correctedArgs = _correctMcpArgs(toolName, args);
+          final result = await client.callTool(toolName, correctedArgs);
           return jsonEncode({'status': 'ok', 'content': result});
         } catch (e) {
           return jsonEncode({
@@ -219,6 +221,30 @@ class ToolPipeline {
     } catch (_) {
       return raw;
     }
+  }
+
+  /// MCP 工具参数名自动修正
+  ///
+  /// Agent 经常混淆不同工具的参数名。此方法检测并修正常见的参数名错误，
+  /// 避免工具调用失败并返回难以理解的错误信息。
+  Map<String, dynamic> _correctMcpArgs(
+    String toolName,
+    Map<String, dynamic> args,
+  ) {
+    // mcp__agent-memory__memory: append action 需要 "text" 参数，不是 "content"
+    if (toolName == 'mcp__agent-memory__memory') {
+      final action = args['action'];
+      if (action == 'append' && args.containsKey('content') && !args.containsKey('text')) {
+        final corrected = Map<String, dynamic>.from(args);
+        corrected['text'] = corrected.remove('content');
+        print('[MCP] 自动修正参数: $toolName.content → text');
+        return corrected;
+      }
+    }
+
+    // 可以在此添加更多工具的参数修正规则
+
+    return args;
   }
 }
 

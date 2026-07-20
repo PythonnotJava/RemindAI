@@ -692,14 +692,15 @@ class Executor {
     final outputDir = p.join(tmpDir.path, 'output');
     await Directory(outputDir).create();
 
-    // 注入 matplotlib 自动保存的 monkey-patch：
-    // 拦截 plt.show() 和 plt.savefig()，将图片保存到 outputDir
+    // 注入可视化库自动保存的 monkey-patch
     final patchedCode =
         '''
 import sys, os
 _output_dir = r"$outputDir"
 _fig_counter = [0]
+_html_counter = [0]
 
+# ===== Matplotlib =====
 try:
     import matplotlib
     matplotlib.use("Agg")  # 非交互后端，不弹窗
@@ -723,6 +724,57 @@ try:
 
     _plt.show = _patched_show
     _plt.Figure.savefig = _patched_savefig
+except ImportError:
+    pass
+
+# ===== Plotly =====
+try:
+    import plotly.graph_objs as _go
+    _original_plotly_show = _go.Figure.show
+
+    def _patched_plotly_show(self, *args, **kwargs):
+        _html_counter[0] += 1
+        html_path = os.path.join(_output_dir, f"plotly_{_html_counter[0]}.html")
+        self.write_html(html_path)
+        # 也生成静态图作为备份（需要 kaleido）
+        try:
+            png_path = os.path.join(_output_dir, f"plotly_{_html_counter[0]}.png")
+            self.write_image(png_path, width=1200, height=800)
+        except:
+            pass  # kaleido 未安装时跳过
+
+    _go.Figure.show = _patched_plotly_show
+except ImportError:
+    pass
+
+# ===== Bokeh =====
+try:
+    import bokeh.plotting as _bokeh_plt
+    import bokeh.io as _bokeh_io
+    _original_bokeh_show = _bokeh_plt.show
+
+    def _patched_bokeh_show(obj, *args, **kwargs):
+        _html_counter[0] += 1
+        html_path = os.path.join(_output_dir, f"bokeh_{_html_counter[0]}.html")
+        _bokeh_io.output_file(html_path)
+        _bokeh_io.save(obj)
+
+    _bokeh_plt.show = _patched_bokeh_show
+except ImportError:
+    pass
+
+# ===== Altair =====
+try:
+    import altair as _alt
+    _original_altair_show = _alt.Chart.show if hasattr(_alt.Chart, 'show') else None
+
+    def _patched_altair_save(self, *args, **kwargs):
+        _html_counter[0] += 1
+        html_path = os.path.join(_output_dir, f"altair_{_html_counter[0]}.html")
+        self.save(html_path)
+
+    # Altair 通常用 .save() 而不是 .show()
+    _alt.Chart.show = _patched_altair_save
 except ImportError:
     pass
 
@@ -750,17 +802,8 @@ $code
         stderrEncoding: null,
       ).timeout(timeout);
 
-      // 收集输出的图片文件
-      final outDir = Directory(outputDir);
-      final images = <String>[];
-      if (await outDir.exists()) {
-        await for (final entity in outDir.list()) {
-          if (entity is File && entity.path.endsWith('.png')) {
-            images.add(entity.path);
-          }
-        }
-        images.sort();
-      }
+      // 收集输出的可视化文件
+      final outputs = await _scanVisualizationOutputs(outputDir);
 
       final rawStdout = _decodeBytes(result.stdout);
       final rawStderr = _decodeBytes(result.stderr);
@@ -772,20 +815,68 @@ $code
           ? rawStderr.substring(rawStderr.length - 4000)
           : rawStderr;
 
-      // 清理脚本文件（保留图片）
+      // 清理脚本文件（保留可视化文件）
       await scriptFile.delete();
 
       return _ok({
         'exit_code': result.exitCode,
         'stdout': stdout,
         'stderr': stderr,
-        'images': images,
+        ...outputs,  // images, html_files, videos, svg_files
         'truncated': rawStdout.length > 8000 || rawStderr.length > 4000,
       });
     } on TimeoutException {
       await tmpDir.delete(recursive: true);
       return _err('TIMEOUT', 'Python 执行超时 (>${timeout.inSeconds}s)');
     }
+  }
+
+  /// 扫描输出目录，收集所有可视化文件
+  Future<Map<String, List<String>>> _scanVisualizationOutputs(
+    String outputDir,
+  ) async {
+    final images = <String>[];
+    final htmlFiles = <String>[];
+    final videos = <String>[];
+    final svgFiles = <String>[];
+
+    final outDir = Directory(outputDir);
+    if (await outDir.exists()) {
+      await for (final entity in outDir.list()) {
+        if (entity is File) {
+          final ext = p.extension(entity.path).toLowerCase();
+          switch (ext) {
+            case '.png':
+            case '.jpg':
+            case '.jpeg':
+            case '.webp':
+              images.add(entity.path);
+            case '.html':
+            case '.htm':
+              htmlFiles.add(entity.path);
+            case '.mp4':
+            case '.webm':
+            case '.mov':
+              videos.add(entity.path);
+            case '.svg':
+              svgFiles.add(entity.path);
+          }
+        }
+      }
+
+      // 排序保证顺序一致
+      images.sort();
+      htmlFiles.sort();
+      videos.sort();
+      svgFiles.sort();
+    }
+
+    return {
+      'images': images,
+      'html_files': htmlFiles,
+      'videos': videos,
+      'svg_files': svgFiles,
+    };
   }
 
   /// 查找系统中可用的 Python 解释器

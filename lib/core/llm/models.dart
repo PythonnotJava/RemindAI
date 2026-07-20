@@ -24,6 +24,11 @@ class ChatMessage {
   /// 不参与发给模型的 content parts 构建。
   final List<FileAttachment> attachments;
 
+  /// 可视化输出文件路径（HTML 交互图表、SVG 矢量图、视频动画等）
+  final List<String> htmlFiles;
+  final List<String> svgFiles;
+  final List<String> videoFiles;
+
   ChatMessage({
     required this.role,
     this.content,
@@ -33,6 +38,9 @@ class ChatMessage {
     this.attachments = const [],
     this.interrupted = false,
     this.thinkingContent,
+    this.htmlFiles = const [],
+    this.svgFiles = const [],
+    this.videoFiles = const [],
   }) : timestamp = timestamp ?? DateTime.now();
 
   /// 创建用户消息
@@ -51,12 +59,18 @@ class ChatMessage {
     List<ChatToolCall>? toolCalls,
     bool interrupted = false,
     String? thinkingContent,
+    List<String> htmlFiles = const [],
+    List<String> svgFiles = const [],
+    List<String> videoFiles = const [],
   }) => ChatMessage(
     role: ChatRole.assistant,
     content: content,
     toolCalls: toolCalls,
     interrupted: interrupted,
     thinkingContent: thinkingContent,
+    htmlFiles: htmlFiles,
+    svgFiles: svgFiles,
+    videoFiles: videoFiles,
   );
 
   /// 创建工具结果消息

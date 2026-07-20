@@ -1140,8 +1140,19 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  /// 可视化文件路径累积器
+  final List<String> _htmlFiles = [];
+  final List<String> _svgFiles = [];
+  final List<String> _videoFiles = [];
+
   void _handleEvent(AgentEvent event, int conversationId) {
     switch (event) {
+      case AgentHtmlGenerated(path: final path):
+        _htmlFiles.add(path);
+      case AgentSvgGenerated(path: final path):
+        _svgFiles.add(path);
+      case AgentVideoGenerated(path: final path):
+        _videoFiles.add(path);
       case AgentReasoningToken(text: final text):
         // 推理过程流式累积到 streamingThinking
         _currentTokenCount += ComputeService.estimateTokens(text);
@@ -1212,6 +1223,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         final assistantMsg = ChatMessage.assistant(
           finalContent,
           thinkingContent: finalThinking,
+          htmlFiles: List.from(_htmlFiles),
+          svgFiles: List.from(_svgFiles),
+          videoFiles: List.from(_videoFiles),
         );
         final toolMessages = state.activeToolCalls.map((tc) {
           return ChatMessage(
@@ -1232,6 +1246,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
           streamingThinking: '',
           activeToolCalls: [],
         );
+
+        // 清空可视化文件累积器
+        _htmlFiles.clear();
+        _svgFiles.clear();
+        _videoFiles.clear();
 
         // 异步：数据库保存和其他耗时操作（不阻塞UI）
         Future.microtask(() async {

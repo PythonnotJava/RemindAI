@@ -71,7 +71,7 @@ _engine/
 
 .qdrant-initialized
 
-assets/scripts/archify/node_modules
+_optimal/scripts/archify/node_modules
 
 docs/
 

@@ -685,6 +685,11 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
           case AgentToolResult():
             runtime.status = AgentStatus.thinking;
             _notifyUpdate();
+          case AgentHtmlGenerated():
+          case AgentSvgGenerated():
+          case AgentVideoGenerated():
+            // 可视化文件生成事件，多 Agent 场景不处理
+            break;
           case AgentDone(content: final content):
             _addAssistantMessage(agentId, content);
             // 自动路由：将此 Agent 的产出广播给其他 Agent

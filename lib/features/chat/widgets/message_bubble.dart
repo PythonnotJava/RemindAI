@@ -11,6 +11,7 @@ import '../../../providers/settings_provider.dart';
 import '../chat_provider.dart';
 import 'markdown_view.dart';
 import 'message_attachments.dart';
+import 'visualization_cards.dart';
 
 /// 消息气泡组件
 class MessageBubble extends ConsumerWidget {
@@ -38,6 +39,9 @@ class MessageBubble extends ConsumerWidget {
     final hasThinking = (message.thinkingContent ?? '').trim().isNotEmpty;
     final hasToolCalls =
         message.toolCalls != null && message.toolCalls!.isNotEmpty;
+    final hasVisualizations = message.htmlFiles.isNotEmpty ||
+        message.svgFiles.isNotEmpty ||
+        message.videoFiles.isNotEmpty;
     final chatFont = ref.watch(chatFontProvider);
     final chatFontSize = ref.watch(chatFontSizeProvider);
 
@@ -59,7 +63,7 @@ class MessageBubble extends ConsumerWidget {
                 attachments: message.attachments,
                 isUser: isUser,
               ),
-              if (hasText || hasThinking || hasToolCalls)
+              if (hasText || hasThinking || hasToolCalls || hasVisualizations)
                 const SizedBox(height: 6),
             ],
             // Thinking 区域（助手消息且有思考内容）
@@ -77,6 +81,37 @@ class MessageBubble extends ConsumerWidget {
                 colorScheme: colorScheme,
                 interrupted: message.interrupted,
               ),
+              const SizedBox(height: 6),
+            ],
+            // 可视化输出区域（助手消息且有可视化文件）
+            if (!isUser && hasVisualizations) ...[
+              // HTML 交互图表
+              for (final htmlPath in message.htmlFiles)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: HtmlVisualizationCard(
+                    htmlPath: htmlPath,
+                    colorScheme: colorScheme,
+                  ),
+                ),
+              // SVG 矢量图
+              for (final svgPath in message.svgFiles)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: SvgVisualizationCard(
+                    svgPath: svgPath,
+                    colorScheme: colorScheme,
+                  ),
+                ),
+              // 视频动画（暂时使用占位符）
+              for (final videoPath in message.videoFiles)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _VideoPlaceholder(
+                    videoPath: videoPath,
+                    colorScheme: colorScheme,
+                  ),
+                ),
               const SizedBox(height: 6),
             ],
             // 消息气泡（无文本且只有附件时不渲染空气泡）
@@ -757,5 +792,61 @@ class _StreamingBubbleState extends ConsumerState<StreamingBubble>
     final m = seconds ~/ 60;
     final s = seconds % 60;
     return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+/// 视频占位符（暂时展示文件路径，待实现完整视频播放器）
+class _VideoPlaceholder extends StatelessWidget {
+  final String videoPath;
+  final ColorScheme colorScheme;
+
+  const _VideoPlaceholder({
+    required this.videoPath,
+    required this.colorScheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.video_library,
+              size: 32,
+              color: colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '视频动画',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    videoPath,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

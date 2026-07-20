@@ -447,6 +447,11 @@ class ApiServer {
                 'remind_tool_result': {'id': cid, 'result': r},
               });
             }
+          case AgentHtmlGenerated():
+          case AgentSvgGenerated():
+          case AgentVideoGenerated():
+            // 可视化文件生成事件，仅本地 UI 使用，API 不暴露
+            break;
           case AgentError(message: final m):
             sendChunk({'content': '\n[错误] $m'});
           case AgentLoopLimitReached(rounds: final rounds):

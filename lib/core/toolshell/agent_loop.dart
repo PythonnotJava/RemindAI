@@ -133,6 +133,26 @@ class AgentLoopLimitReached extends AgentEvent {
   AgentLoopLimitReached(this.rounds);
 }
 
+/// HTML 可视化文件生成事件
+class AgentHtmlGenerated extends AgentEvent {
+  final String path;
+  final String? title;
+  AgentHtmlGenerated(this.path, {this.title});
+}
+
+/// 视频文件生成事件
+class AgentVideoGenerated extends AgentEvent {
+  final String path;
+  final String? thumbnail;
+  AgentVideoGenerated(this.path, {this.thumbnail});
+}
+
+/// SVG 矢量图生成事件
+class AgentSvgGenerated extends AgentEvent {
+  final String path;
+  AgentSvgGenerated(this.path);
+}
+
 /// ToolShell Agent 循环 - Dart 原生实现 (流式版)
 ///
 /// 所有轮次均使用 [LlmClient.chatStreamFull] 进行流式调用：
@@ -326,6 +346,45 @@ class AgentLoop {
           'tool_call_id': tc.id,
           'content': result,
         });
+
+        // 检测可视化输出（仅针对 Python 执行）
+        if (tc.name == 'toolshell_run_python') {
+          try {
+            final resultJson = jsonDecode(result) as Map<String, dynamic>;
+
+            // HTML 文件
+            final htmlFiles = resultJson['html_files'];
+            if (htmlFiles is List && htmlFiles.isNotEmpty) {
+              for (final htmlPath in htmlFiles) {
+                if (htmlPath is String) {
+                  yield AgentHtmlGenerated(htmlPath);
+                }
+              }
+            }
+
+            // 视频文件
+            final videos = resultJson['videos'];
+            if (videos is List && videos.isNotEmpty) {
+              for (final videoPath in videos) {
+                if (videoPath is String) {
+                  yield AgentVideoGenerated(videoPath);
+                }
+              }
+            }
+
+            // SVG 文件
+            final svgFiles = resultJson['svg_files'];
+            if (svgFiles is List && svgFiles.isNotEmpty) {
+              for (final svgPath in svgFiles) {
+                if (svgPath is String) {
+                  yield AgentSvgGenerated(svgPath);
+                }
+              }
+            }
+          } catch (_) {
+            // JSON 解析失败或字段不存在，跳过
+          }
+        }
       }
 
       // 循环 → 把工具结果交给 LLM 继续处理

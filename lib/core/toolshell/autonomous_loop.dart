@@ -228,6 +228,11 @@ class AutonomousLoop {
             break;
           case AgentToolResult(toolCallId: _, result: _):
             break;
+          case AgentHtmlGenerated():
+          case AgentSvgGenerated():
+          case AgentVideoGenerated():
+            // 可视化文件生成事件，仅透传给 UI，不影响 loop 逻辑
+            break;
           case AgentDone(content: final content):
             if (content.isNotEmpty) {
               buffer.clear();

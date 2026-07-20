@@ -302,6 +302,11 @@ class SubReadersOrchestrator {
           case AgentToolStart():
           case AgentToolResult():
             break;
+          case AgentHtmlGenerated():
+          case AgentSvgGenerated():
+          case AgentVideoGenerated():
+            // 可视化文件生成事件，子 Agent 不处理
+            break;
           case AgentLoopLimitReached(rounds: final rounds):
             throw Exception('子 Agent 单轮 tool_call 轮次达到上限($rounds)，未能收敛');
         }
