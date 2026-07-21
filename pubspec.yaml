@@ -57,6 +57,7 @@ dependencies:
   open_filex: ^4.7.0
   flutter_spinkit: ^5.2.1
   google_fonts: ^6.2.1
+  system_fonts: ^1.0.1
 
   # 虚拟滚动 - 性能优化
   scrollable_positioned_list: ^0.3.8

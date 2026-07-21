@@ -52,8 +52,13 @@ class AppLogger {
         '${now.hour.toString().padLeft(2, '0')}:'
         '${now.minute.toString().padLeft(2, '0')}:'
         '${now.second.toString().padLeft(2, '0')}';
+    final logLine = '[$time] $line';
+
+    // 只写入文件，不调用 print（避免与 Zone.print 递归）
+    // 控制台输出由 main.dart 的 Zone.print hook 中的 parent.print 处理
+
     try {
-      _sink?.writeln('[$time] $line');
+      _sink?.writeln(logLine);  // 写入文件
     } catch (e) {
       // 忽略写入错误，避免崩溃
     }

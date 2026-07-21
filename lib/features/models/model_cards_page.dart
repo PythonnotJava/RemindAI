@@ -515,9 +515,9 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
               // 协议类型选择
               DropdownButtonFormField<LlmProvider>(
                 initialValue: _provider,
-                decoration: const InputDecoration(
-                  labelText: '协议类型',
-                  helperText: '决定请求格式与模型检测方式',
+                decoration: InputDecoration(
+                  labelText: context.s.modelsProtocolType,
+                  helperText: context.s.modelsProtocolHelper,
                 ),
                 items: LlmProvider.values
                     .map(
@@ -540,12 +540,12 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
               TextFormField(
                 controller: _nameCtrl,
                 decoration: InputDecoration(
-                  labelText: '名称',
+                  labelText: context.s.modelsName,
                   hintText: context.s.modelsNameHint,
                 ),
                 onChanged: (_) => setState(() {}),
                 validator: (v) =>
-                    v == null || v.trim().isEmpty ? '请输入名称' : null,
+                    v == null || v.trim().isEmpty ? context.s.modelsNameRequired : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -555,7 +555,7 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                   hintText: _provider.baseUrlHint,
                 ),
                 validator: (v) =>
-                    v == null || v.trim().isEmpty ? '请输入 Base URL' : null,
+                    v == null || v.trim().isEmpty ? context.s.modelsBaseUrlRequired : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -572,7 +572,7 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                   ),
                 ),
                 validator: (v) =>
-                    v == null || v.trim().isEmpty ? '请输入 API Key' : null,
+                    v == null || v.trim().isEmpty ? context.s.modelsApiKeyRequired : null,
               ),
               const SizedBox(height: 16),
               // 测试连接按钮
@@ -585,7 +585,7 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.cable, size: 18),
-                label: Text(_testing ? '检测中...' : '测试连接并检测模型'),
+                label: Text(_testing ? context.s.modelsTestingConnection : context.s.modelsTestConnection),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 40),
                 ),
@@ -627,14 +627,14 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
               _availableModels.isEmpty
                   ? TextFormField(
                       initialValue: _selectedModel,
-                      decoration: const InputDecoration(
-                        labelText: '模型 ID',
-                        hintText: '例如：gpt-4o, claude-3-5-sonnet',
+                      decoration: InputDecoration(
+                        labelText: context.s.modelsModelId,
+                        hintText: context.s.modelsModelIdHint,
                       ),
                       onChanged: (v) => _selectedModel = v.trim(),
                       validator: (v) {
                         if (_selectedModel == null || _selectedModel!.isEmpty) {
-                          return '请输入模型 ID';
+                          return context.s.modelsModelIdRequired;
                         }
                         return null;
                       },
@@ -677,25 +677,43 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                     ),
               const SizedBox(height: 16),
               // 上下文窗口配置
-              TextFormField(
-                controller: _contextWindowCtrl,
-                decoration: InputDecoration(
-                  labelText: context.s.modelsContextWindow,
-                  hintText: context.s.modelsContextWindowHint,
-                  helperText: context.s.modelsContextWindowHelper,
+              Tooltip(
+                message: context.s.modelsContextWindowTooltip,
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: Colors.white,
                 ),
-                keyboardType: TextInputType.number,
-                onChanged: (v) {
-                  final parsed = int.tryParse(v.trim());
-                  _contextWindow = parsed ?? 0;
-                },
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null; // 允许为空
-                  final parsed = int.tryParse(v.trim());
-                  if (parsed == null) return '请输入有效数字';
-                  if (parsed <= 0) return '必须大于 0';
-                  return null;
-                },
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: TextFormField(
+                  controller: _contextWindowCtrl,
+                  decoration: InputDecoration(
+                    labelText: context.s.modelsContextWindow,
+                    hintText: context.s.modelsContextWindowHint,
+                    helperText: context.s.modelsContextWindowHelper,
+                    suffixIcon: Icon(
+                      Icons.warning_amber_rounded,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
+                  onChanged: (v) {
+                    final parsed = int.tryParse(v.trim());
+                    _contextWindow = parsed ?? 0;
+                  },
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null; // 允许为空
+                    final parsed = int.tryParse(v.trim());
+                    if (parsed == null) return context.s.modelsContextWindowValidNumber;
+                    if (parsed <= 0) return context.s.modelsContextWindowValidPositive;
+                    return null;
+                  },
+                ),
               ),
             ],
           ),

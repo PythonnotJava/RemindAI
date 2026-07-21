@@ -223,6 +223,12 @@ abstract class S {
   /// **'青色'**
   String get settingsAccentColorCyan;
 
+  /// No description provided for @settingsAccentColorTwilight.
+  ///
+  /// In zh, this message translates to:
+  /// **'最后的黄昏'**
+  String get settingsAccentColorTwilight;
+
   /// No description provided for @settingsNotifyOnBlur.
   ///
   /// In zh, this message translates to:
@@ -1344,6 +1350,168 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'模型的最大上下文长度，用于自动压缩判断'**
   String get modelsContextWindowHelper;
+
+  /// No description provided for @modelsContextWindowTooltip.
+  ///
+  /// In zh, this message translates to:
+  /// **'⚠️ 警告：必须填写模型的真实上下文窗口大小！\n\n• 填写过小 → 频繁压缩，模型\"健忘\"\n• 填写过大 → 请求超限，API 返回 400 错误\n• 不确定时留空，系统默认 128K\n\n配置错误导致的问题概不负责！'**
+  String get modelsContextWindowTooltip;
+
+  /// No description provided for @modelsContextWindowValidNumber.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入有效数字'**
+  String get modelsContextWindowValidNumber;
+
+  /// No description provided for @modelsContextWindowValidPositive.
+  ///
+  /// In zh, this message translates to:
+  /// **'必须大于 0'**
+  String get modelsContextWindowValidPositive;
+
+  /// No description provided for @modelsProtocolType.
+  ///
+  /// In zh, this message translates to:
+  /// **'协议类型'**
+  String get modelsProtocolType;
+
+  /// No description provided for @modelsProtocolHelper.
+  ///
+  /// In zh, this message translates to:
+  /// **'决定请求格式与模型检测方式'**
+  String get modelsProtocolHelper;
+
+  /// No description provided for @modelsName.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称'**
+  String get modelsName;
+
+  /// No description provided for @modelsNameRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入名称'**
+  String get modelsNameRequired;
+
+  /// No description provided for @modelsBaseUrlRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 Base URL'**
+  String get modelsBaseUrlRequired;
+
+  /// No description provided for @modelsApiKeyRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 API Key'**
+  String get modelsApiKeyRequired;
+
+  /// No description provided for @modelsTestConnection.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试连接并检测模型'**
+  String get modelsTestConnection;
+
+  /// No description provided for @modelsTestingConnection.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测中...'**
+  String get modelsTestingConnection;
+
+  /// No description provided for @modelsModelId.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型 ID'**
+  String get modelsModelId;
+
+  /// No description provided for @modelsModelIdHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：gpt-4o, claude-3-5-sonnet'**
+  String get modelsModelIdHint;
+
+  /// No description provided for @modelsModelIdRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入模型 ID'**
+  String get modelsModelIdRequired;
+
+  /// No description provided for @modelsLogoOptional.
+  ///
+  /// In zh, this message translates to:
+  /// **'Logo (可选)'**
+  String get modelsLogoOptional;
+
+  /// No description provided for @modelsSelectLogo.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择模型 Logo'**
+  String get modelsSelectLogo;
+
+  /// No description provided for @modelsTestSuccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'✓ 连接成功，检测到 {count} 个模型'**
+  String modelsTestSuccess(int count);
+
+  /// No description provided for @modelsTestFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'✗ 测试失败: {error}'**
+  String modelsTestFailed(String error);
+
+  /// No description provided for @modelsTestFillRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先填写 Base URL 和 API Key'**
+  String get modelsTestFillRequired;
+
+  /// No description provided for @modelsTestNoModels.
+  ///
+  /// In zh, this message translates to:
+  /// **'未检测到可用模型'**
+  String get modelsTestNoModels;
+
+  /// No description provided for @modelsTestInvalidResponse.
+  ///
+  /// In zh, this message translates to:
+  /// **'响应格式不正确'**
+  String get modelsTestInvalidResponse;
+
+  /// No description provided for @modelsTest404Hint.
+  ///
+  /// In zh, this message translates to:
+  /// **'端点不存在 (404)\n\n提示：此服务商可能不支持 /v1/models 端点，\n请手动输入模型 ID'**
+  String get modelsTest404Hint;
+
+  /// No description provided for @modelsTestInvalidKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'API Key 无效或权限不足'**
+  String get modelsTestInvalidKey;
+
+  /// No description provided for @modelsTestTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接超时，请检查网络或 Base URL 是否正确'**
+  String get modelsTestTimeout;
+
+  /// No description provided for @modelsTestConnectionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法连接到服务器\n\n请检查：\n1. Base URL 是否正确\n2. 网络连接是否正常\n3. 是否需要代理'**
+  String get modelsTestConnectionFailed;
+
+  /// No description provided for @modelsReorder.
+  ///
+  /// In zh, this message translates to:
+  /// **'拖拽排序'**
+  String get modelsReorder;
+
+  /// No description provided for @modelsReorderDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'完成排序'**
+  String get modelsReorderDone;
 
   /// No description provided for @skillsTitle.
   ///

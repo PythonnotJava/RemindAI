@@ -1321,77 +1321,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       case AgentError(message: final message):
         // 刷净缓冲，保留出错前已生成的部分文本
         _flushStreamBuffer();
-        _flushThinkingBuffer();
         AppLogger.instance.log('[ChatProvider] AgentError: $message');
-
-        final hasContent = state.streamingText.isNotEmpty;
-        final hasThinking = state.streamingThinking.isNotEmpty;
-        final hasToolCalls = state.activeToolCalls.isNotEmpty;
-
-        // 统计工具调用次数
-        final toolStats = <String, int>{};
-        for (final tc in state.activeToolCalls) {
-          toolStats[tc.name] = (toolStats[tc.name] ?? 0) + 1;
-        }
-
-        // 构建工具调用列表文本
-        String toolCallsSection = '';
-        if (hasToolCalls) {
-          final statsText = toolStats.entries
-              .map((e) => '- **${e.key}**: ${e.value}次')
-              .join('\n');
-          toolCallsSection =
-              '\n\n📋 **已执行的工具调用**（共 ${state.activeToolCalls.length} 次）：\n$statsText';
-        }
-
-        // 构建错误总结消息
-        final errorSummary =
-            '''
-⚠️ **LLM 响应异常中断**
-
-$message
-${hasContent ? '\n\n**已生成的部分内容：**\n\n${state.streamingText}' : ''}$toolCallsSection
-
-💡 **建议：**
-- 检查模型的 max_tokens 设置（可能输出超限）
-- 减少工具调用数量或简化任务
-- 检查网络连接和代理设置
-- 尝试重新发送消息
-'''
-                .trim();
-
-        // 保存工具调用记录
-        final toolCallsData = state.activeToolCalls.map((tc) {
-          return ChatToolCall(
-            id: tc.id,
-            name: tc.name,
-            arguments: tc.arguments,
-          );
-        }).toList();
-
-        // 创建 assistant 消息（包含工具调用记录）
-        final assistantMsg = ChatMessage.assistant(
-          errorSummary,
-          thinkingContent: hasThinking ? state.streamingThinking : null,
-          toolCalls: toolCallsData.isNotEmpty ? toolCallsData : null,
-        );
-
-        // 更新 UI 状态
-        state = state.copyWith(
-          messages: [...state.messages, assistantMsg],
-          streamingText: '',
-          streamingThinking: '',
-          activeToolCalls: [],
-          isLoading: false,
-        );
-
-        // 保存到数据库
-        _conversationsDao.saveMessage(conversationId, assistantMsg);
-
-        AppLogger.instance.log(
-          '[ChatProvider] AgentError 已保存总结消息到对话历史',
-        );
         PetObserver.instance.notifyAiError(error: message);
+        _setError(message);
       case AgentLoopLimitReached(rounds: final rounds):
         // 单轮对话内部工具调用轮次熔断：保留已生成的部分文本和工具调用记录，
         // 生成友好的总结消息并保存到对话历史，让用户看到 AI 做了什么。

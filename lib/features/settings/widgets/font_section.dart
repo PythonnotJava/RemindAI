@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:system_fonts/system_fonts.dart';
 
 import '../../../core/l10n/l10n_ext.dart';
 import '../../../providers/custom_fonts_provider.dart';
@@ -24,6 +25,22 @@ const _googleFontOptions = [
   'Fira Code',
 ];
 
+/// 系统字体 Provider（异步加载）
+final systemFontsProvider = FutureProvider<List<String>>((ref) async {
+  try {
+    final fontList = SystemFonts().getFontList();
+    // 过滤并排序系统字体
+    final filtered = fontList
+        .where((font) => font.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return filtered;
+  } catch (e) {
+    return [];
+  }
+});
+
 /// 字体设置区域 — 界面字体 + 交互字体 + 自定义字体管理
 class FontSection extends ConsumerWidget {
   const FontSection({super.key});
@@ -34,11 +51,64 @@ class FontSection extends ConsumerWidget {
     final chatFont = ref.watch(chatFontProvider);
     final chatFontSize = ref.watch(chatFontSizeProvider);
     final customFonts = ref.watch(customFontsProvider);
+    final systemFontsAsync = ref.watch(systemFontsProvider);
     final s = context.s;
 
-    // 合并列表：自定义字体在前，Google Fonts 在后
-    final allFonts = [...customFonts, ..._googleFontOptions];
+    return systemFontsAsync.when(
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (err, stack) {
+        // 系统字体加载失败时，只使用自定义字体 + Google Fonts
+        final allFonts = [...customFonts, ..._googleFontOptions];
+        return _buildFontContent(
+          context,
+          ref,
+          uiFont,
+          chatFont,
+          chatFontSize,
+          customFonts,
+          allFonts,
+          [],
+          s,
+        );
+      },
+      data: (systemFonts) {
+        // 合并列表：自定义字体 → 系统字体 → Google Fonts
+        final allFonts = [
+          ...customFonts,
+          ...systemFonts,
+          ..._googleFontOptions,
+        ];
+        return _buildFontContent(
+          context,
+          ref,
+          uiFont,
+          chatFont,
+          chatFontSize,
+          customFonts,
+          allFonts,
+          systemFonts,
+          s,
+        );
+      },
+    );
+  }
 
+  Widget _buildFontContent(
+      BuildContext context,
+      WidgetRef ref,
+      String uiFont,
+      String chatFont,
+      double chatFontSize,
+      List<String> customFonts,
+      List<String> allFonts,
+      List<String> systemFonts,
+      dynamic s,
+      ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -52,6 +122,7 @@ class FontSection extends ConsumerWidget {
           currentFont: uiFont,
           allFonts: allFonts,
           customFonts: customFonts,
+          systemFonts: systemFonts,
           onFontChanged: (font) =>
               ref.read(settingsProvider.notifier).updateUiFont(font),
         ),
@@ -65,6 +136,7 @@ class FontSection extends ConsumerWidget {
           sizeLabel: s.settingsChatFontSize,
           allFonts: allFonts,
           customFonts: customFonts,
+          systemFonts: systemFonts,
           onFontChanged: (font) =>
               ref.read(settingsProvider.notifier).updateChatFont(font),
           onSizeChanged: (size) =>
@@ -160,10 +232,10 @@ class _CustomFontsCard extends ConsumerWidget {
   }
 
   Future<void> _removeFont(
-    BuildContext context,
-    WidgetRef ref,
-    String font,
-  ) async {
+      BuildContext context,
+      WidgetRef ref,
+      String font,
+      ) async {
     await ref.read(customFontsProvider.notifier).removeFont(font);
   }
 }
@@ -175,6 +247,7 @@ class _FontOnlyCard extends StatelessWidget {
   final String currentFont;
   final List<String> allFonts;
   final List<String> customFonts;
+  final List<String> systemFonts;
   final ValueChanged<String> onFontChanged;
 
   const _FontOnlyCard({
@@ -183,6 +256,7 @@ class _FontOnlyCard extends StatelessWidget {
     required this.currentFont,
     required this.allFonts,
     required this.customFonts,
+    required this.systemFonts,
     required this.onFontChanged,
   });
 
@@ -216,6 +290,7 @@ class _FontOnlyCard extends StatelessWidget {
               currentFont,
               allFonts,
               customFonts,
+              systemFonts,
               onFontChanged,
             ),
             const SizedBox(height: 12),
@@ -229,7 +304,7 @@ class _FontOnlyCard extends StatelessWidget {
               ),
               child: Text(
                 s.settingsFontPreview,
-                style: _getPreviewStyle(currentFont, customFonts, 14),
+                style: _getPreviewStyle(currentFont, customFonts, systemFonts, 14),
               ),
             ),
           ],
@@ -247,6 +322,7 @@ class _FontCard extends StatelessWidget {
   final String sizeLabel;
   final List<String> allFonts;
   final List<String> customFonts;
+  final List<String> systemFonts;
   final ValueChanged<String> onFontChanged;
   final ValueChanged<double> onSizeChanged;
 
@@ -258,6 +334,7 @@ class _FontCard extends StatelessWidget {
     required this.sizeLabel,
     required this.allFonts,
     required this.customFonts,
+    required this.systemFonts,
     required this.onFontChanged,
     required this.onSizeChanged,
   });
@@ -294,6 +371,7 @@ class _FontCard extends StatelessWidget {
               currentFont,
               allFonts,
               customFonts,
+              systemFonts,
               onFontChanged,
             ),
             const SizedBox(height: 12),
@@ -330,7 +408,7 @@ class _FontCard extends StatelessWidget {
               ),
               child: Text(
                 s.settingsFontPreview,
-                style: _getPreviewStyle(currentFont, customFonts, currentSize),
+                style: _getPreviewStyle(currentFont, customFonts, systemFonts, currentSize),
               ),
             ),
           ],
@@ -342,11 +420,12 @@ class _FontCard extends StatelessWidget {
 
 /// 构建通用的字体下拉选择器
 Widget _buildFontDropdown(
-  String currentFont,
-  List<String> allFonts,
-  List<String> customFonts,
-  ValueChanged<String> onChanged,
-) {
+    String currentFont,
+    List<String> allFonts,
+    List<String> customFonts,
+    List<String> systemFonts,
+    ValueChanged<String> onChanged,
+    ) {
   final effectiveFont = allFonts.contains(currentFont)
       ? currentFont
       : allFonts.first;
@@ -355,7 +434,7 @@ Widget _buildFontDropdown(
     children: [
       Expanded(
         child: DropdownButtonFormField<String>(
-          initialValue: effectiveFont,
+          value: effectiveFont,
           decoration: InputDecoration(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
@@ -366,16 +445,26 @@ Widget _buildFontDropdown(
           ),
           items: allFonts.map((font) {
             final isCustom = customFonts.contains(font);
-            final style = isCustom
+            final isSystem = systemFonts.contains(font);
+
+            // 图标：自定义字体用文件夹图标，系统字体用电脑图标，Google Fonts 无图标
+            final icon = isCustom
+                ? const Icon(Icons.folder_outlined, size: 14)
+                : isSystem
+                    ? const Icon(Icons.computer, size: 14)
+                    : null;
+
+            final style = (isCustom || isSystem)
                 ? TextStyle(fontFamily: font, fontSize: 14)
                 : _safeGoogleFont(font, 14);
+
             return DropdownMenuItem(
               value: font,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isCustom) ...[
-                    const Icon(Icons.folder_outlined, size: 14),
+                  if (icon != null) ...[
+                    icon,
                     const SizedBox(width: 6),
                   ],
                   Flexible(
@@ -398,9 +487,14 @@ Widget _buildFontDropdown(
   );
 }
 
-/// 获取预览 style：自定义字体用 fontFamily，Google Fonts 用 getFont
-TextStyle _getPreviewStyle(String font, List<String> customFonts, double size) {
-  if (customFonts.contains(font)) {
+/// 获取预览 style：自定义字体和系统字体用 fontFamily，Google Fonts 用 getFont
+TextStyle _getPreviewStyle(
+    String font,
+    List<String> customFonts,
+    List<String> systemFonts,
+    double size,
+    ) {
+  if (customFonts.contains(font) || systemFonts.contains(font)) {
     return TextStyle(fontFamily: font, fontSize: size);
   }
   return _safeGoogleFont(font, size);

@@ -218,6 +218,9 @@ class AgentLoop {
         await hook.onBeforeLlmCall(effectiveMessages, tools);
       }
 
+      // 打印当前使用的模型
+      AppLogger.instance.log('[AgentLoop] 调用模型: ${llm.model}');
+
       // 流式调用 LLM
       StreamComplete? completed;
       final stopwatch = Stopwatch()..start();
@@ -239,7 +242,7 @@ class AgentLoop {
         }
       } catch (e, stackTrace) {
         stopwatch.stop();
-        AppLogger.instance.log('[AgentLoop] LLM 调用失败: $e');
+        AppLogger.instance.log('[AgentLoop] LLM 调用失败 (模型: ${llm.model}): $e');
         AppLogger.instance.log('[AgentLoop] StackTrace: $stackTrace');
         yield AgentError('LLM 调用失败: $e');
         messages.removeLast();

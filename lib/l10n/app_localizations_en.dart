@@ -72,6 +72,9 @@ class SEn extends S {
   String get settingsAccentColorCyan => 'Cyan';
 
   @override
+  String get settingsAccentColorTwilight => 'Afterglow';
+
+  @override
   String get settingsNotifyOnBlur => 'Notify when unfocused';
 
   @override
@@ -671,6 +674,98 @@ class SEn extends S {
   @override
   String get modelsContextWindowHelper =>
       'Model\'s max context length for auto-compression';
+
+  @override
+  String get modelsContextWindowTooltip =>
+      '⚠️ WARNING: You MUST enter the model\'s actual context window size!\n\n• Too small → Frequent compression, model becomes \"forgetful\"\n• Too large → Request exceeds limit, API returns 400 error\n• If unsure, leave empty for default 128K\n\nWe are NOT responsible for issues caused by misconfiguration!';
+
+  @override
+  String get modelsContextWindowValidNumber => 'Please enter a valid number';
+
+  @override
+  String get modelsContextWindowValidPositive => 'Must be greater than 0';
+
+  @override
+  String get modelsProtocolType => 'Protocol type';
+
+  @override
+  String get modelsProtocolHelper =>
+      'Determines request format and model detection method';
+
+  @override
+  String get modelsName => 'Name';
+
+  @override
+  String get modelsNameRequired => 'Please enter a name';
+
+  @override
+  String get modelsBaseUrlRequired => 'Please enter Base URL';
+
+  @override
+  String get modelsApiKeyRequired => 'Please enter API Key';
+
+  @override
+  String get modelsTestConnection => 'Test connection and detect models';
+
+  @override
+  String get modelsTestingConnection => 'Detecting...';
+
+  @override
+  String get modelsModelId => 'Model ID';
+
+  @override
+  String get modelsModelIdHint => 'e.g. gpt-4o, claude-3-5-sonnet';
+
+  @override
+  String get modelsModelIdRequired => 'Please enter model ID';
+
+  @override
+  String get modelsLogoOptional => 'Logo (optional)';
+
+  @override
+  String get modelsSelectLogo => 'Select model logo';
+
+  @override
+  String modelsTestSuccess(int count) {
+    return '✓ Connection successful, detected $count models';
+  }
+
+  @override
+  String modelsTestFailed(String error) {
+    return '✗ Test failed: $error';
+  }
+
+  @override
+  String get modelsTestFillRequired =>
+      'Please fill in Base URL and API Key first';
+
+  @override
+  String get modelsTestNoModels => 'No available models detected';
+
+  @override
+  String get modelsTestInvalidResponse => 'Invalid response format';
+
+  @override
+  String get modelsTest404Hint =>
+      'Endpoint not found (404)\n\nNote: This provider may not support the /v1/models endpoint.\nPlease enter the model ID manually.';
+
+  @override
+  String get modelsTestInvalidKey =>
+      'Invalid API Key or insufficient permissions';
+
+  @override
+  String get modelsTestTimeout =>
+      'Connection timeout, please check network or Base URL';
+
+  @override
+  String get modelsTestConnectionFailed =>
+      'Unable to connect to server\n\nPlease check:\n1. Is the Base URL correct?\n2. Is the network connection stable?\n3. Do you need a proxy?';
+
+  @override
+  String get modelsReorder => 'Reorder';
+
+  @override
+  String get modelsReorderDone => 'Done';
 
   @override
   String get skillsTitle => 'Skill Management';

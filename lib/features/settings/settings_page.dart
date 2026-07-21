@@ -409,6 +409,18 @@ class _ThemeSwitcher extends ConsumerWidget {
                       value: 'cyan',
                       label: Text(s.settingsAccentColorCyan),
                     ),
+                    // 独立主题：最后的黄昏
+                    ButtonSegment(
+                      value: 'last_twilight',
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.wb_twilight, size: 16),
+                          const SizedBox(width: 4),
+                          Text(s.settingsAccentColorTwilight),
+                        ],
+                      ),
+                    ),
                   ],
                   selected: {currentAccent},
                   onSelectionChanged: (set) async {

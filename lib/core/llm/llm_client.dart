@@ -68,6 +68,9 @@ class StreamComplete extends StreamEvent {
 /// 各协议实现负责在内部翻译成自己的原生请求，再把响应翻译回统一的
 /// [StreamEvent] / [ChatResponse]。
 abstract class LlmClient {
+  /// 获取当前使用的模型名称
+  String get model;
+
   /// 按协议类型创建对应的客户端实现。
   factory LlmClient({
     required String baseUrl,

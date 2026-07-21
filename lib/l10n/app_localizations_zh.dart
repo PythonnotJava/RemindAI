@@ -72,6 +72,9 @@ class SZh extends S {
   String get settingsAccentColorCyan => '青色';
 
   @override
+  String get settingsAccentColorTwilight => '最后的黄昏';
+
+  @override
   String get settingsNotifyOnBlur => '失焦时系统通知';
 
   @override
@@ -653,6 +656,94 @@ class SZh extends S {
 
   @override
   String get modelsContextWindowHelper => '模型的最大上下文长度，用于自动压缩判断';
+
+  @override
+  String get modelsContextWindowTooltip =>
+      '⚠️ 警告：必须填写模型的真实上下文窗口大小！\n\n• 填写过小 → 频繁压缩，模型\"健忘\"\n• 填写过大 → 请求超限，API 返回 400 错误\n• 不确定时留空，系统默认 128K\n\n配置错误导致的问题概不负责！';
+
+  @override
+  String get modelsContextWindowValidNumber => '请输入有效数字';
+
+  @override
+  String get modelsContextWindowValidPositive => '必须大于 0';
+
+  @override
+  String get modelsProtocolType => '协议类型';
+
+  @override
+  String get modelsProtocolHelper => '决定请求格式与模型检测方式';
+
+  @override
+  String get modelsName => '名称';
+
+  @override
+  String get modelsNameRequired => '请输入名称';
+
+  @override
+  String get modelsBaseUrlRequired => '请输入 Base URL';
+
+  @override
+  String get modelsApiKeyRequired => '请输入 API Key';
+
+  @override
+  String get modelsTestConnection => '测试连接并检测模型';
+
+  @override
+  String get modelsTestingConnection => '检测中...';
+
+  @override
+  String get modelsModelId => '模型 ID';
+
+  @override
+  String get modelsModelIdHint => '例如：gpt-4o, claude-3-5-sonnet';
+
+  @override
+  String get modelsModelIdRequired => '请输入模型 ID';
+
+  @override
+  String get modelsLogoOptional => 'Logo (可选)';
+
+  @override
+  String get modelsSelectLogo => '选择模型 Logo';
+
+  @override
+  String modelsTestSuccess(int count) {
+    return '✓ 连接成功，检测到 $count 个模型';
+  }
+
+  @override
+  String modelsTestFailed(String error) {
+    return '✗ 测试失败: $error';
+  }
+
+  @override
+  String get modelsTestFillRequired => '请先填写 Base URL 和 API Key';
+
+  @override
+  String get modelsTestNoModels => '未检测到可用模型';
+
+  @override
+  String get modelsTestInvalidResponse => '响应格式不正确';
+
+  @override
+  String get modelsTest404Hint =>
+      '端点不存在 (404)\n\n提示：此服务商可能不支持 /v1/models 端点，\n请手动输入模型 ID';
+
+  @override
+  String get modelsTestInvalidKey => 'API Key 无效或权限不足';
+
+  @override
+  String get modelsTestTimeout => '连接超时，请检查网络或 Base URL 是否正确';
+
+  @override
+  String get modelsTestConnectionFailed =>
+      '无法连接到服务器\n\n请检查：\n1. Base URL 是否正确\n2. 网络连接是否正常\n3. 是否需要代理';
+
+  @override
+  String get modelsReorder => '拖拽排序';
+
+  @override
+  String get modelsReorderDone => '完成排序';
 
   @override
   String get skillsTitle => '技能管理';

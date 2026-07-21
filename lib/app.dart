@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import 'core/font/custom_font_loader.dart';
 import 'core/logger/app_logger.dart';
 import 'core/shortcuts/shortcut_config.dart';
+import 'core/theme/independent_themes/independent_theme_registry.dart';
 import 'l10n/app_localizations.dart';
 import 'core/l10n/l10n_ext.dart';
 import 'providers/mcp_provider.dart';
@@ -66,6 +67,16 @@ class RemindAIApp extends ConsumerWidget {
     String fontFamily,
     String accentColor,
   ) {
+    // 检查是否为独立主题
+    if (IndependentThemeRegistry.isIndependentTheme(accentColor)) {
+      final theme = IndependentThemeRegistry.buildTheme(accentColor, brightness);
+      if (theme != null) {
+        // 独立主题已经包含完整的字体配置，直接返回
+        return _applyFont(theme, fontFamily);
+      }
+    }
+
+    // 标准主题：使用配色方案 + Material 3
     final baseTheme = ThemeData(
       colorScheme: ColorScheme.fromSeed(
         seedColor: getAccentColor(accentColor),
@@ -74,21 +85,32 @@ class RemindAIApp extends ConsumerWidget {
       useMaterial3: true,
     );
 
-    // 应用字体族：自定义字体直接用 fontFamily，Google Fonts 用 getTextTheme
+    return _applyFont(baseTheme, fontFamily);
+  }
+
+  /// 应用字体到主题
+  ThemeData _applyFont(ThemeData theme, String fontFamily) {
+    // 应用字体族：
+    // 1. 自定义字体（通过 FontLoader 注册）直接用 fontFamily
+    // 2. 系统字体直接用 fontFamily
+    // 3. Google Fonts 用 getTextTheme
     TextTheme textTheme;
     final isCustom = CustomFontLoader.instance.loadedFonts.contains(fontFamily);
+
     if (isCustom) {
       // 自定义字体通过 FontLoader 注册，直接用 fontFamily 名
-      textTheme = baseTheme.textTheme.apply(fontFamily: fontFamily);
+      textTheme = theme.textTheme.apply(fontFamily: fontFamily);
     } else {
+      // 尝试 Google Fonts，如果失败则当作系统字体处理
       try {
-        textTheme = GoogleFonts.getTextTheme(fontFamily, baseTheme.textTheme);
+        textTheme = GoogleFonts.getTextTheme(fontFamily, theme.textTheme);
       } catch (_) {
-        textTheme = baseTheme.textTheme;
+        // Google Fonts 不存在该字体，当作系统字体直接应用
+        textTheme = theme.textTheme.apply(fontFamily: fontFamily);
       }
     }
 
-    return baseTheme.copyWith(textTheme: textTheme);
+    return theme.copyWith(textTheme: textTheme);
   }
 }
 
