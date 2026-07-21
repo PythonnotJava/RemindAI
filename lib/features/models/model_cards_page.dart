@@ -544,8 +544,9 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                   hintText: context.s.modelsNameHint,
                 ),
                 onChanged: (_) => setState(() {}),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? context.s.modelsNameRequired : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? context.s.modelsNameRequired
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -554,8 +555,9 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                   labelText: 'Base URL',
                   hintText: _provider.baseUrlHint,
                 ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? context.s.modelsBaseUrlRequired : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? context.s.modelsBaseUrlRequired
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -571,8 +573,9 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                     onPressed: () => setState(() => _obscureKey = !_obscureKey),
                   ),
                 ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? context.s.modelsApiKeyRequired : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? context.s.modelsApiKeyRequired
+                    : null,
               ),
               const SizedBox(height: 16),
               // 测试连接按钮
@@ -585,7 +588,11 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.cable, size: 18),
-                label: Text(_testing ? context.s.modelsTestingConnection : context.s.modelsTestConnection),
+                label: Text(
+                  _testing
+                      ? context.s.modelsTestingConnection
+                      : context.s.modelsTestConnection,
+                ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 40),
                 ),
@@ -709,8 +716,12 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return null; // 允许为空
                     final parsed = int.tryParse(v.trim());
-                    if (parsed == null) return context.s.modelsContextWindowValidNumber;
-                    if (parsed <= 0) return context.s.modelsContextWindowValidPositive;
+                    if (parsed == null) {
+                      return context.s.modelsContextWindowValidNumber;
+                    }
+                    if (parsed <= 0) {
+                      return context.s.modelsContextWindowValidPositive;
+                    }
                     return null;
                   },
                 ),

@@ -1388,9 +1388,7 @@ ${hasContent ? '\n\n**已生成的部分内容：**\n\n${state.streamingText}' :
         // 保存到数据库
         _conversationsDao.saveMessage(conversationId, assistantMsg);
 
-        AppLogger.instance.log(
-          '[ChatProvider] AgentError 已保存总结消息到对话历史',
-        );
+        AppLogger.instance.log('[ChatProvider] AgentError 已保存总结消息到对话历史');
         PetObserver.instance.notifyAiError(error: message);
       case AgentLoopLimitReached(rounds: final rounds):
         // 单轮对话内部工具调用轮次熔断：保留已生成的部分文本和工具调用记录，
@@ -1471,6 +1469,12 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
     _subscription?.cancel();
     _subscription = null;
 
+    // ✅ 停止所有定时器，防止 UI 继续渲染
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    _thinkingFlushTimer?.cancel();
+    _thinkingFlushTimer = null;
+
     // 先判断是否有任何输出（在刷缓冲之前）
     final hasContent =
         state.streamingText.isNotEmpty || _streamBuffer.isNotEmpty;
@@ -1529,6 +1533,8 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
         streamingText: '',
         streamingThinking: '', // 清空 thinking 缓冲
         activeToolCalls: [],
+        loopRunning: false, // ✅ 释放 loop 锁
+        loopIteration: 0, // ✅ 重置迭代计数
       );
 
       // 持久化（包含工具调用信息，供 UI 展示历史）
@@ -1602,6 +1608,8 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
           streamingText: '',
           streamingThinking: '',
           activeToolCalls: [],
+          loopRunning: false, // ✅ 释放 loop 锁
+          loopIteration: 0, // ✅ 重置迭代计数
         );
 
         // 持久化
@@ -1629,6 +1637,8 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
           streamingText: '',
           streamingThinking: '',
           activeToolCalls: [],
+          loopRunning: false, // ✅ 释放 loop 锁
+          loopIteration: 0, // ✅ 重置迭代计数
         );
 
         AppLogger.instance.log(

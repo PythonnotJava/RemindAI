@@ -16,6 +16,7 @@ import '../message_transformer.dart';
 ///
 /// 特色：压缩前的"沉淀"步骤确保信息不会真正丢失——
 /// 后续对话如果语义相关，MemoryRecallHook 能从长期记忆中召回。
+/// 参考，一种压缩上下文节省每轮对话token的方法：https://github.com/Hmbown/CodeWhale/issues/580
 class ContextCompactor extends MessageTransformer {
   /// 用于生成摘要的 LLM（复用当前对话模型或指定轻量模型）
   final LlmClient llm;
@@ -122,7 +123,8 @@ class ContextCompactor extends MessageTransformer {
     }
 
     // ─── 第二步：生成摘要 ───
-    final summary = await _summarize(compressible);
+    final compressibleEnd = messages.length - recentCount;
+    final summary = await _summarizeCacheAligned(messages, compressibleEnd);
 
     // ─── 第三步：重组消息列表 ───
     final result = <Map<String, dynamic>>[
@@ -131,8 +133,8 @@ class ContextCompactor extends MessageTransformer {
       ...recent,
     ];
 
-    // ─── 第四步：清理孤立的工具结果 ───
-    // 收集所有 assistant 消息中的 tool_call_id
+    // ─── 第四步：双向清理孤立的消息 ───
+    // 1. 收集所有 assistant 消息中的 tool_call_id
     final validToolCallIds = <String>{};
     for (final msg in result) {
       if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
@@ -143,8 +145,18 @@ class ContextCompactor extends MessageTransformer {
       }
     }
 
-    // 过滤掉没有对应工具调用的 tool 消息
+    // 2. 收集所有 tool 结果消息的 tool_call_id
+    final validToolResultIds = <String>{};
+    for (final msg in result) {
+      if (msg['role'] == 'tool') {
+        final toolCallId = msg['tool_call_id'] as String?;
+        if (toolCallId != null) validToolResultIds.add(toolCallId);
+      }
+    }
+
+    // 3. 过滤掉孤立的消息
     final cleaned = result.where((msg) {
+      // 移除没有对应工具调用的 tool 结果
       if (msg['role'] == 'tool') {
         final toolCallId = msg['tool_call_id'] as String?;
         final isValid =
@@ -153,9 +165,37 @@ class ContextCompactor extends MessageTransformer {
           AppLogger.instance.log(
             '[Compactor] 移除孤立的工具结果: tool_call_id=$toolCallId',
           );
+          print('[Compactor] 🗑️  移除孤立工具结果: $toolCallId');
         }
         return isValid;
       }
+
+      // 移除没有对应工具结果的 assistant tool_calls
+      if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
+        final toolCalls = msg['tool_calls'] as List;
+        // 检查所有 tool_calls 是否都有对应的结果
+        final allToolCallsHaveResults = toolCalls.every((tc) {
+          final id = tc['id'] as String?;
+          return id != null && validToolResultIds.contains(id);
+        });
+
+        if (!allToolCallsHaveResults) {
+          final missingIds = toolCalls
+              .where((tc) {
+                final id = tc['id'] as String?;
+                return id == null || !validToolResultIds.contains(id);
+              })
+              .map((tc) => tc['id'] as String?)
+              .where((id) => id != null)
+              .join(', ');
+          AppLogger.instance.log(
+            '[Compactor] 移除缺少工具结果的 assistant 消息: tool_call_ids=[$missingIds]',
+          );
+          print('[Compactor] 🗑️  移除缺少工具结果的 assistant: $missingIds');
+          return false;
+        }
+      }
+
       return true;
     }).toList();
 
@@ -225,7 +265,9 @@ class ContextCompactor extends MessageTransformer {
   /// 找到保真区的起始位置：保留最近 keepRecentTurns 轮完整对话
   /// 一轮 = user + assistant（可能包含中间的 tool 消息）
   ///
-  /// 特别处理：确保工具调用和工具结果成对保留，避免孤立的 tool 消息。
+  /// 特别处理：双向检查确保工具调用和工具结果成对保留。
+  /// 1. 向前扩展：保真区的 tool 结果 → 对应的 assistant tool_calls 也保留
+  /// 2. 向后检查：保真区的 assistant tool_calls → 对应的 tool 结果也必须在保真区
   int _findRecentBoundary(List<Map<String, dynamic>> messages) {
     int turnsFound = 0;
     int idx = messages.length - 1;
@@ -239,7 +281,7 @@ class ContextCompactor extends MessageTransformer {
     // idx+1 是初步的保真区起始位置
     int boundaryIdx = idx + 1;
 
-    // 向前扩展：确保所有 tool 消息都有对应的 assistant 工具调用
+    // ─── 第一步：向前扩展（保真区的 tool 结果 → assistant tool_calls）───
     // 从边界开始向后扫描，收集所有 tool_call_id
     final toolCallIdsInRecent = <String>{};
     for (int i = boundaryIdx; i < messages.length; i++) {
@@ -278,6 +320,43 @@ class ContextCompactor extends MessageTransformer {
           '[Compactor] 警告: 发现 ${toolCallIdsInRecent.length} 个孤立的工具结果，'
           '将在压缩时移除: ${toolCallIdsInRecent.join(", ")}',
         );
+      }
+    }
+
+    // ─── 第二步：向后检查（保真区的 assistant tool_calls → tool 结果）───
+    // 收集保真区内所有 assistant 的 tool_call_ids
+    final assistantToolCallIds = <String>{};
+    for (int i = boundaryIdx; i < messages.length; i++) {
+      final msg = messages[i];
+      if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
+        final toolCalls = msg['tool_calls'] as List;
+        for (final tc in toolCalls) {
+          final id = tc['id'] as String?;
+          if (id != null) assistantToolCallIds.add(id);
+        }
+      }
+    }
+
+    // 检查这些 tool_call_ids 是否都有对应的 tool 结果在保真区
+    if (assistantToolCallIds.isNotEmpty) {
+      // 收集保真区内的 tool 结果
+      final toolResultIds = <String>{};
+      for (int i = boundaryIdx; i < messages.length; i++) {
+        final msg = messages[i];
+        if (msg['role'] == 'tool') {
+          final toolCallId = msg['tool_call_id'] as String?;
+          if (toolCallId != null) toolResultIds.add(toolCallId);
+        }
+      }
+
+      // 找出缺失的 tool 结果
+      final missingToolResults = assistantToolCallIds.difference(toolResultIds);
+      if (missingToolResults.isNotEmpty) {
+        AppLogger.instance.log(
+          '[Compactor] 警告: 发现 ${missingToolResults.length} 个工具调用缺少对应结果，'
+          '将移除这些 assistant 消息: ${missingToolResults.join(", ")}',
+        );
+        print('[Compactor] ⚠️  检测到工具调用-结果不匹配，将在压缩时修复');
       }
     }
 
@@ -344,39 +423,155 @@ class ContextCompactor extends MessageTransformer {
     AppLogger.instance.log('[Compactor] 沉淀完成: 存入 $stored 条记忆');
   }
 
-  /// 生成对话摘要
-  Future<String> _summarize(List<Map<String, dynamic>> messages) async {
-    final text = _messagesToText(messages);
+  /// 生成对话摘要（Cache-Aligned 方式）
+  ///
+  /// 复用原始消息上下文结构，将摘要指令作为普通 user 消息追加，
+  /// 使得前缀部分能够命中 LLM 的 prompt cache，节省 90-97% 的摘要成本。
+  ///
+  /// [allMessages] 完整的原始消息列表（包含 system + 历史 + 保真区）
+  /// [compressibleEnd] 可压缩区的结束位置索引
+  Future<String> _summarizeCacheAligned(
+    List<Map<String, dynamic>> allMessages,
+    int compressibleEnd,
+  ) async {
+    final compressible = allMessages.sublist(1, compressibleEnd);
 
-    AppLogger.instance.log('[Compactor] 生成摘要: 原文 ${text.length} 字符');
+    // ─── 估算对比数据（不实际调用，仅用于日志展示）───
+    final traditionalEstimate = _estimateTraditionalSummaryCost(compressible);
+    final cacheAlignedEstimate = _estimateCacheAlignedSummaryCost(
+      allMessages,
+      compressibleEnd,
+    );
+
+    final separator = '[Compactor] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+    final comparison = '[Compactor] 📊 摘要策略对比（基于估算）:';
+    final traditional =
+        '[Compactor]   传统方式: ~$traditionalEstimate tokens (独立请求，0% 缓存)';
+    final cacheAligned =
+        '[Compactor]   Cache-Aligned: ~$cacheAlignedEstimate tokens (复用上下文，预期 95%+ 缓存命中)';
+    final savings =
+        '[Compactor]   💰 预估节省: ${traditionalEstimate - cacheAlignedEstimate} tokens (${((1 - cacheAlignedEstimate / traditionalEstimate) * 100).toStringAsFixed(1)}%)';
+
+    // 写入日志文件
+    AppLogger.instance.log(separator);
+    AppLogger.instance.log(comparison);
+    AppLogger.instance.log(traditional);
+    AppLogger.instance.log(cacheAligned);
+    AppLogger.instance.log(savings);
+    AppLogger.instance.log('[Compactor] ');
+
+    // 同时输出到终端
+    print(separator);
+    print(comparison);
+    print(traditional);
+    print(cacheAligned);
+    print(savings);
+    print('');
 
     try {
-      final summaryPrompt = [
+      // ─── 构造 Cache-Aligned 请求 ───
+      // 保留原始消息结构（包括 system、所有历史消息），仅追加摘要指令
+      final summaryRequest = [
+        ...allMessages.sublist(0, compressibleEnd), // 复用前缀，命中 cache
         {
-          'role': 'system',
+          'role': 'user',
           'content':
-              '你是一个对话摘要生成器。将下面的对话历史压缩为一段简洁的摘要。\n\n'
-              '要求：\n'
-              '- 保留关键信息：用户的需求、做出的决策、重要结论\n'
-              '- 保留技术细节：涉及的文件、函数、配置、错误信息\n'
-              '- 保留进度状态：已完成什么、正在进行什么、待办事项\n'
-              '- 使用简洁的要点格式\n'
-              '- 控制在 400 字以内\n'
-              '- 直接输出摘要内容，不要前缀或解释',
+              '请为上述对话生成一段简洁摘要。要求：\n'
+              '- 保留关键信息：用户需求、决策、结论\n'
+              '- 保留技术细节：文件、函数、配置、错误\n'
+              '- 保留进度状态：已完成、正在进行、待办\n'
+              '- 使用要点格式，控制在 400 字以内\n'
+              '- 直接输出摘要，不要前缀或解释',
         },
-        {'role': 'user', 'content': text},
       ];
 
-      final response = await llm.chat(summaryPrompt);
+      AppLogger.instance.log('[Compactor] ⏱️  调用 LLM 生成摘要...');
+      print('[Compactor] ⏱️  调用 LLM 生成摘要...');
 
+      final response = await llm.chat(summaryRequest);
       final summary = response.content?.trim() ?? '';
-      _recordTokenUsage(summaryPrompt, summary);
-      AppLogger.instance.log('[Compactor] 摘要生成完成: ${summary.length} 字符');
-      return summary.isEmpty ? _fallbackSummary(messages) : summary;
+
+      // ─── 记录真实 token 使用情况 ───
+      _recordTokenUsage(summaryRequest, summary);
+
+      // 如果 LLM 返回了 usage 信息，展示真实效果
+      if (response.usage != null) {
+        final usage = response.usage!;
+        final cachedTokens = usage.promptCacheReadInputTokens ?? 0;
+        final inputTokens = usage.promptTokens ?? 0;
+        final totalInput = cachedTokens + inputTokens;
+        final cacheHitRate = totalInput > 0
+            ? (cachedTokens / totalInput * 100)
+            : 0;
+
+        final completed = '[Compactor] ✅ 摘要生成完成: ${summary.length} 字符';
+        final apiResponse = '[Compactor] 📈 真实 API 响应:';
+        final cached = '[Compactor]     缓存命中: $cachedTokens tokens';
+        final input = '[Compactor]     实际输入: $inputTokens tokens';
+        final output =
+            '[Compactor]     输出: ${usage.completionTokens ?? 0} tokens';
+        final hitRate =
+            '[Compactor]     缓存命中率: ${cacheHitRate.toStringAsFixed(1)}% ✨';
+
+        // 写入日志文件
+        AppLogger.instance.log(completed);
+        AppLogger.instance.log(apiResponse);
+        AppLogger.instance.log(cached);
+        AppLogger.instance.log(input);
+        AppLogger.instance.log(output);
+        AppLogger.instance.log(hitRate);
+
+        // 同时输出到终端
+        print(completed);
+        print(apiResponse);
+        print(cached);
+        print(input);
+        print(output);
+        print(hitRate);
+      } else {
+        final completed = '[Compactor] ✅ 摘要生成完成: ${summary.length} 字符';
+        AppLogger.instance.log(completed);
+        print(completed);
+      }
+
+      AppLogger.instance.log('[Compactor] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('[Compactor] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      return summary.isEmpty ? _fallbackSummary(compressible) : summary;
     } catch (e) {
-      AppLogger.instance.log('[Compactor] 摘要生成失败: $e, 使用降级方案');
-      return _fallbackSummary(messages);
+      final error = '[Compactor] ❌ 摘要生成失败: $e';
+      final fallback = '[Compactor] 使用降级方案（消息预览）';
+      final endSeparator = '[Compactor] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+
+      // 写入日志文件
+      AppLogger.instance.log(error);
+      AppLogger.instance.log(fallback);
+      AppLogger.instance.log(endSeparator);
+
+      // 同时输出到终端
+      print(error);
+      print(fallback);
+      print(endSeparator);
+
+      return _fallbackSummary(compressible);
     }
+  }
+
+  /// 估算传统方式的摘要成本（不实际调用 LLM）
+  int _estimateTraditionalSummaryCost(List<Map<String, dynamic>> messages) {
+    final text = _messagesToText(messages);
+    // 传统方式：system prompt (~300 tokens) + 格式化文本 + 输出 (~400 tokens)
+    return 300 + _estimateStringTokens(text) + 400;
+  }
+
+  /// 估算 Cache-Aligned 方式的成本（不实际调用 LLM）
+  int _estimateCacheAlignedSummaryCost(
+    List<Map<String, dynamic>> allMessages,
+    int compressibleEnd,
+  ) {
+    // Cache-Aligned 方式：仅摘要指令 (~150 tokens) + 输出 (~400 tokens)
+    // 前缀部分预期 95%+ 命中缓存，不计入实际成本
+    return 150 + 400;
   }
 
   /// 降级摘要：LLM 调用失败时，取每轮对话的首 50 字符

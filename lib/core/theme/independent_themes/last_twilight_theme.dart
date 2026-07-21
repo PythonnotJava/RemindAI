@@ -38,12 +38,6 @@ class LastTwilightTheme {
   /// 余晖金黄 - 太阳最后的金光
   static const Color _sunsetGold = Color(0xFFFFD54F);
 
-  /// 淡金黄 - 云层反射的柔和黄光
-  static const Color _softYellow = Color(0xFFFFF59D);
-
-  /// 暮色灰紫 - 天空渐暗的灰调
-  static const Color _twilightGray = Color(0xFF9E9E9E);
-
   /// 深灰紫 - 夜幕降临的灰紫色
   static const Color _duskGrayPurple = Color(0xFF757575);
 
@@ -91,9 +85,6 @@ class LastTwilightTheme {
 
   /// 深红 - 错误色
   static const Color _error = Color(0xFFE53935);
-
-  /// 深灰 - 错误文字
-  static const Color _errorDark = Color(0xFF3A3A3A);
 
   // ==================== 主题构建 ====================
 
@@ -272,9 +263,7 @@ class LastTwilightTheme {
         elevation: 2,
         shadowColor: Colors.black.withOpacity(0.3),
         surfaceTintColor: _sunsetGold.withOpacity(0.08), // 淡金色光泽
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
 
       // 按钮 - 晚霞橙红主题
@@ -284,9 +273,7 @@ class LastTwilightTheme {
           foregroundColor: Colors.white,
           elevation: 2,
           shadowColor: Colors.black.withOpacity(0.3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
 
@@ -294,16 +281,12 @@ class LastTwilightTheme {
         style: FilledButton.styleFrom(
           backgroundColor: _twilightRed,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
 
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: _sunsetOrange,
-        ),
+        style: TextButton.styleFrom(foregroundColor: _sunsetOrange),
       ),
 
       // 输入框 - 暮色质感
@@ -326,7 +309,10 @@ class LastTwilightTheme {
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: _error),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
 
       // 对话框 - 柔和背景
@@ -334,9 +320,7 @@ class LastTwilightTheme {
         backgroundColor: _surfaceHigh,
         surfaceTintColor: _sunsetGold.withOpacity(0.05),
         elevation: 8,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
 
       // 底部栏 - 暮色渐变
@@ -355,9 +339,7 @@ class LastTwilightTheme {
         deleteIconColor: _textSecondary,
         labelStyle: const TextStyle(color: _textPrimary),
         side: BorderSide(color: _outline),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
 
       // 分隔线 - 暖色调
@@ -367,28 +349,21 @@ class LastTwilightTheme {
       ),
 
       // 图标主题
-      iconTheme: const IconThemeData(
-        color: _textSecondary,
-        size: 24,
-      ),
+      iconTheme: const IconThemeData(color: _textSecondary, size: 24),
 
       // FAB - 金色点缀
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: _sunsetGold,
         foregroundColor: _textDark,
         elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
 
       // Snackbar - 温暖提示
       snackBarTheme: SnackBarThemeData(
         backgroundColor: _surfaceHigh,
         contentTextStyle: const TextStyle(color: _textPrimary),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         behavior: SnackBarBehavior.floating,
       ),
 

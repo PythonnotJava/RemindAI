@@ -69,7 +69,10 @@ class RemindAIApp extends ConsumerWidget {
   ) {
     // 检查是否为独立主题
     if (IndependentThemeRegistry.isIndependentTheme(accentColor)) {
-      final theme = IndependentThemeRegistry.buildTheme(accentColor, brightness);
+      final theme = IndependentThemeRegistry.buildTheme(
+        accentColor,
+        brightness,
+      );
       if (theme != null) {
         // 独立主题已经包含完整的字体配置，直接返回
         return _applyFont(theme, fontFamily);

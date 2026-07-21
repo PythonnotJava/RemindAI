@@ -30,10 +30,7 @@ final systemFontsProvider = FutureProvider<List<String>>((ref) async {
   try {
     final fontList = SystemFonts().getFontList();
     // 过滤并排序系统字体
-    final filtered = fontList
-        .where((font) => font.isNotEmpty)
-        .toSet()
-        .toList()
+    final filtered = fontList.where((font) => font.isNotEmpty).toSet().toList()
       ..sort();
     return filtered;
   } catch (e) {
@@ -99,16 +96,16 @@ class FontSection extends ConsumerWidget {
   }
 
   Widget _buildFontContent(
-      BuildContext context,
-      WidgetRef ref,
-      String uiFont,
-      String chatFont,
-      double chatFontSize,
-      List<String> customFonts,
-      List<String> allFonts,
-      List<String> systemFonts,
-      dynamic s,
-      ) {
+    BuildContext context,
+    WidgetRef ref,
+    String uiFont,
+    String chatFont,
+    double chatFontSize,
+    List<String> customFonts,
+    List<String> allFonts,
+    List<String> systemFonts,
+    dynamic s,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -232,10 +229,10 @@ class _CustomFontsCard extends ConsumerWidget {
   }
 
   Future<void> _removeFont(
-      BuildContext context,
-      WidgetRef ref,
-      String font,
-      ) async {
+    BuildContext context,
+    WidgetRef ref,
+    String font,
+  ) async {
     await ref.read(customFontsProvider.notifier).removeFont(font);
   }
 }
@@ -304,7 +301,12 @@ class _FontOnlyCard extends StatelessWidget {
               ),
               child: Text(
                 s.settingsFontPreview,
-                style: _getPreviewStyle(currentFont, customFonts, systemFonts, 14),
+                style: _getPreviewStyle(
+                  currentFont,
+                  customFonts,
+                  systemFonts,
+                  14,
+                ),
               ),
             ),
           ],
@@ -408,7 +410,12 @@ class _FontCard extends StatelessWidget {
               ),
               child: Text(
                 s.settingsFontPreview,
-                style: _getPreviewStyle(currentFont, customFonts, systemFonts, currentSize),
+                style: _getPreviewStyle(
+                  currentFont,
+                  customFonts,
+                  systemFonts,
+                  currentSize,
+                ),
               ),
             ),
           ],
@@ -420,12 +427,12 @@ class _FontCard extends StatelessWidget {
 
 /// 构建通用的字体下拉选择器
 Widget _buildFontDropdown(
-    String currentFont,
-    List<String> allFonts,
-    List<String> customFonts,
-    List<String> systemFonts,
-    ValueChanged<String> onChanged,
-    ) {
+  String currentFont,
+  List<String> allFonts,
+  List<String> customFonts,
+  List<String> systemFonts,
+  ValueChanged<String> onChanged,
+) {
   final effectiveFont = allFonts.contains(currentFont)
       ? currentFont
       : allFonts.first;
@@ -451,8 +458,8 @@ Widget _buildFontDropdown(
             final icon = isCustom
                 ? const Icon(Icons.folder_outlined, size: 14)
                 : isSystem
-                    ? const Icon(Icons.computer, size: 14)
-                    : null;
+                ? const Icon(Icons.computer, size: 14)
+                : null;
 
             final style = (isCustom || isSystem)
                 ? TextStyle(fontFamily: font, fontSize: 14)
@@ -463,10 +470,7 @@ Widget _buildFontDropdown(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (icon != null) ...[
-                    icon,
-                    const SizedBox(width: 6),
-                  ],
+                  if (icon != null) ...[icon, const SizedBox(width: 6)],
                   Flexible(
                     child: Text(
                       font,
@@ -489,11 +493,11 @@ Widget _buildFontDropdown(
 
 /// 获取预览 style：自定义字体和系统字体用 fontFamily，Google Fonts 用 getFont
 TextStyle _getPreviewStyle(
-    String font,
-    List<String> customFonts,
-    List<String> systemFonts,
-    double size,
-    ) {
+  String font,
+  List<String> customFonts,
+  List<String> systemFonts,
+  double size,
+) {
   if (customFonts.contains(font) || systemFonts.contains(font)) {
     return TextStyle(fontFamily: font, fontSize: size);
   }

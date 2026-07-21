@@ -58,7 +58,7 @@ class AppLogger {
     // 控制台输出由 main.dart 的 Zone.print hook 中的 parent.print 处理
 
     try {
-      _sink?.writeln(logLine);  // 写入文件
+      _sink?.writeln(logLine); // 写入文件
     } catch (e) {
       // 忽略写入错误，避免崩溃
     }

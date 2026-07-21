@@ -605,8 +605,14 @@ class ChatResponse {
   final String? content;
   final List<ToolCall>? toolCalls;
   final String finishReason;
+  final UsageInfo? usage;
 
-  ChatResponse({this.content, this.toolCalls, required this.finishReason});
+  ChatResponse({
+    this.content,
+    this.toolCalls,
+    required this.finishReason,
+    this.usage,
+  });
 
   factory ChatResponse.fromJson(Map<String, dynamic> json) {
     final choice = json['choices'][0];
@@ -619,10 +625,16 @@ class ChatResponse {
           .toList();
     }
 
+    UsageInfo? usage;
+    if (json['usage'] != null) {
+      usage = UsageInfo.fromJson(json['usage']);
+    }
+
     return ChatResponse(
       content: message['content'],
       toolCalls: calls,
       finishReason: choice['finish_reason'] ?? '',
+      usage: usage,
     );
   }
 
@@ -638,6 +650,40 @@ class ChatResponse {
       msg['content'] = '';
     }
     return msg;
+  }
+}
+
+/// Token 使用统计信息
+class UsageInfo {
+  final int? promptTokens;
+  final int? completionTokens;
+  final int? totalTokens;
+
+  /// Prompt cache 读取的 tokens（DeepSeek: prompt_cache_hit_tokens, Claude: cache_read_input_tokens）
+  final int? promptCacheReadInputTokens;
+
+  /// Prompt cache 写入的 tokens（Claude: cache_creation_input_tokens）
+  final int? promptCacheWriteInputTokens;
+
+  UsageInfo({
+    this.promptTokens,
+    this.completionTokens,
+    this.totalTokens,
+    this.promptCacheReadInputTokens,
+    this.promptCacheWriteInputTokens,
+  });
+
+  factory UsageInfo.fromJson(Map<String, dynamic> json) {
+    return UsageInfo(
+      promptTokens: json['prompt_tokens'],
+      completionTokens: json['completion_tokens'],
+      totalTokens: json['total_tokens'],
+      // DeepSeek 使用 prompt_cache_hit_tokens
+      // Claude 使用 cache_read_input_tokens
+      promptCacheReadInputTokens:
+          json['prompt_cache_hit_tokens'] ?? json['cache_read_input_tokens'],
+      promptCacheWriteInputTokens: json['cache_creation_input_tokens'],
+    );
   }
 }
 

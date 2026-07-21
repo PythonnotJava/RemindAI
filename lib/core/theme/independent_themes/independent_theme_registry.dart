@@ -78,7 +78,8 @@ class IndependentThemeRegistry {
   };
 
   /// 获取所有独立主题
-  static Map<String, IndependentThemeMetadata> get all => Map.unmodifiable(_themes);
+  static Map<String, IndependentThemeMetadata> get all =>
+      Map.unmodifiable(_themes);
 
   /// 获取独立主题列表
   static List<IndependentThemeMetadata> get list => _themes.values.toList();
