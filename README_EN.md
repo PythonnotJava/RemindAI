@@ -207,7 +207,7 @@ Thanks to **Yu** for designing the delightful logo that brings life and personal
 
 ## ☕ Sponsor
 
-If RemindAI helps you, feel free to support development[☞Here]([PythonnotJava.github.io/extend/remindai/sponsor.html](https://www.robot-shadow.cn/extend/remindai/sponsor.html))~
+If RemindAI helps you, feel free to support development[☞Here](https://www.robot-shadow.cn/extend/remindai/sponsor.html)~
 ---
 
 
