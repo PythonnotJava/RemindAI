@@ -189,7 +189,7 @@ flutter build macos --release --tree-shake-icons --split-debug-info=./debug-info
 | 📦 技能系统 | <img src="snapshots/skill_support.png" width="600" /> |
 
 </details>
-
+[index.html](../../PythonnotJava.github.io/extend/remindai/index.html)
 ---
 
 ## 🙏 致谢 
@@ -208,7 +208,7 @@ flutter build macos --release --tree-shake-icons --split-debug-info=./debug-info
 
 ## ☕ 赞助
 
-如果 RemindAI 对你有帮助，欢迎选择性赞助支持开发 [☞Here](PythonnotJava.github.io/extend/remindai/sponsor.html)~
+如果 RemindAI 对你有帮助，欢迎选择性赞助支持开发 [☞Here]([PythonnotJava.github.io/extend/remindai/sponsor.html](https://www.robot-shadow.cn/extend/remindai/sponsor.html))~
 
 ---
 
