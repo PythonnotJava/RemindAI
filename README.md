@@ -208,16 +208,7 @@ flutter build macos --release --tree-shake-icons --split-debug-info=./debug-info
 
 ## ☕ 赞助
 
-如果 RemindAI 对你有帮助，欢迎选择性赞助支持开发 ~
-
-<p align="center">
-  <img src="snapshots/sponsor/wechat.jpg" alt="微信赞赏" width="200" />
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="snapshots/sponsor/alipay.jpg" alt="支付宝赞赏" width="200" />
-</p>
-<p align="center">
-  <sub>💚 微信 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 🔵 支付宝</sub>
-</p>
+如果 RemindAI 对你有帮助，欢迎选择性赞助支持开发 [☞Here](PythonnotJava.github.io/extend/remindai/sponsor.html)~
 
 ---
 

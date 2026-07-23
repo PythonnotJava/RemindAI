@@ -207,17 +207,7 @@ Thanks to **Yu** for designing the delightful logo that brings life and personal
 
 ## ☕ Sponsor
 
-If RemindAI helps you, feel free to support development ~
-
-<p align="center">
-  <img src="snapshots/sponsor/wechat.jpg" alt="WeChat" width="200" />
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="snapshots/sponsor/alipay.jpg" alt="Alipay" width="200" />
-</p>
-<p align="center">
-  <sub>💚 WeChat &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 🔵 Alipay</sub>
-</p>
-
+If RemindAI helps you, feel free to support development[☞Here](PythonnotJava.github.io/extend/remindai/sponsor.html)~
 ---
 
 
