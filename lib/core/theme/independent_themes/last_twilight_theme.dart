@@ -59,9 +59,6 @@ class LastTwilightTheme {
   /// 最低层表面 - 深灰紫
   static const Color _surfaceLowest = Color(0xFF303030);
 
-  /// 背景 - 深沉的暮色灰
-  static const Color _background = Color(0xFF2E2E2E);
-
   // ==================== 文字颜色 ====================
 
   /// 亮白色 - 主文字，像余晖中的明亮云层
@@ -117,10 +114,6 @@ class LastTwilightTheme {
       surfaceContainerLow: _surfaceLow,
       surfaceContainerLowest: _surfaceLowest,
       onSurfaceVariant: _textSecondary,
-
-      // 背景
-      background: _background,
-      onBackground: _textPrimary,
 
       // 错误
       error: _error,
@@ -255,14 +248,14 @@ class LastTwilightTheme {
         scrolledUnderElevation: 1,
         backgroundColor: _surfaceMain,
         foregroundColor: _textPrimary,
-        surfaceTintColor: _sunsetGold.withOpacity(0.05),
+        surfaceTintColor: _sunsetGold.withValues(alpha: 0.05),
       ),
 
       // 卡片 - 柔和阴影
       cardTheme: CardThemeData(
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.3),
-        surfaceTintColor: _sunsetGold.withOpacity(0.08), // 淡金色光泽
+        shadowColor: Colors.black.withValues(alpha: 0.3),
+        surfaceTintColor: _sunsetGold.withValues(alpha: 0.08), // 淡金色光泽
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
 
@@ -272,7 +265,7 @@ class LastTwilightTheme {
           backgroundColor: _sunsetOrange,
           foregroundColor: Colors.white,
           elevation: 2,
-          shadowColor: Colors.black.withOpacity(0.3),
+          shadowColor: Colors.black.withValues(alpha: 0.3),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
@@ -318,7 +311,7 @@ class LastTwilightTheme {
       // 对话框 - 柔和背景
       dialogTheme: DialogThemeData(
         backgroundColor: _surfaceHigh,
-        surfaceTintColor: _sunsetGold.withOpacity(0.05),
+        surfaceTintColor: _sunsetGold.withValues(alpha: 0.05),
         elevation: 8,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
@@ -344,7 +337,7 @@ class LastTwilightTheme {
 
       // 分隔线 - 暖色调
       dividerTheme: DividerThemeData(
-        color: _outline.withOpacity(0.3),
+        color: _outline.withValues(alpha: 0.3),
         thickness: 1,
       ),
 
@@ -369,35 +362,35 @@ class LastTwilightTheme {
 
       // Switch - 晚霞橙红
       switchTheme: SwitchThemeData(
-        thumbColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return _sunsetOrange;
           }
           return _textSecondary;
         }),
-        trackColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
-            return _sunsetOrange.withOpacity(0.5);
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return _sunsetOrange.withValues(alpha: 0.5);
           }
-          return _outline.withOpacity(0.3);
+          return _outline.withValues(alpha: 0.3);
         }),
       ),
 
       // Checkbox - 晚霞橙红
       checkboxTheme: CheckboxThemeData(
-        fillColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return _sunsetOrange;
           }
           return Colors.transparent;
         }),
-        checkColor: MaterialStateProperty.all(Colors.white),
+        checkColor: WidgetStateProperty.all(Colors.white),
       ),
 
       // Radio - 晚霞橙红
       radioTheme: RadioThemeData(
-        fillColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return _sunsetOrange;
           }
           return _outline;
@@ -407,9 +400,9 @@ class LastTwilightTheme {
       // Slider - 晚霞渐变
       sliderTheme: SliderThemeData(
         activeTrackColor: _sunsetOrange,
-        inactiveTrackColor: _outline.withOpacity(0.3),
+        inactiveTrackColor: _outline.withValues(alpha: 0.3),
         thumbColor: _sunsetOrange,
-        overlayColor: _sunsetOrange.withOpacity(0.2),
+        overlayColor: _sunsetOrange.withValues(alpha: 0.2),
       ),
 
       // ProgressIndicator - 晚霞橙红
@@ -469,10 +462,6 @@ class LastTwilightTheme {
       surfaceContainerLow: Color(0xFFFFFBF7),
       surfaceContainerLowest: Color(0xFFFFFFFF),
       onSurfaceVariant: Color(0xFF6B5D52),
-
-      // 背景
-      background: Color(0xFFFFFBF5),
-      onBackground: Color(0xFF2D1B1B),
 
       // 错误
       error: Color(0xFFD32F2F),

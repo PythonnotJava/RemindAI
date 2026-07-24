@@ -1336,25 +1336,25 @@ abstract class S {
   /// No description provided for @modelsContextWindow.
   ///
   /// In zh, this message translates to:
-  /// **'上下文窗口 (tokens)'**
+  /// **'输入上下文窗口 (Input Context)'**
   String get modelsContextWindow;
 
   /// No description provided for @modelsContextWindowHint.
   ///
   /// In zh, this message translates to:
-  /// **'不填或填 0 时默认取 128000'**
+  /// **'例如: DeepSeek-V3 填 1000000 (1M)'**
   String get modelsContextWindowHint;
 
   /// No description provided for @modelsContextWindowHelper.
   ///
   /// In zh, this message translates to:
-  /// **'模型的最大上下文长度，用于自动压缩判断'**
+  /// **'⚠️ 注意：填输入上下文，不是 max_tokens 输出限制'**
   String get modelsContextWindowHelper;
 
   /// No description provided for @modelsContextWindowTooltip.
   ///
   /// In zh, this message translates to:
-  /// **'⚠️ 警告：必须填写模型的真实上下文窗口大小！\n\n• 填写过小 → 频繁压缩，模型\"健忘\"\n• 填写过大 → 请求超限，API 返回 400 错误\n• 不确定时留空，系统默认 128K\n\n配置错误导致的问题概不负责！'**
+  /// **'⚠️ 关键区别：\n\n📥 输入上下文 (Input Context) ← 填这个！\n  • Claude Opus 4: 200000 (200K)\n  • DeepSeek V3: 1000000 (1M)\n  • GPT-4: 128000 (128K)\n\n📤 输出限制 (max_tokens) ← 不要填这个！\n  • 通常只有 4K-16K，会导致频繁压缩\n\n留空时默认 128K（适合小模型）'**
   String get modelsContextWindowTooltip;
 
   /// No description provided for @modelsContextWindowValidNumber.
@@ -1368,6 +1368,30 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'必须大于 0'**
   String get modelsContextWindowValidPositive;
+
+  /// No description provided for @modelsMaxOutputTokens.
+  ///
+  /// In zh, this message translates to:
+  /// **'最大输出 Token (可选)'**
+  String get modelsMaxOutputTokens;
+
+  /// No description provided for @modelsMaxOutputTokensHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如: 8192'**
+  String get modelsMaxOutputTokensHint;
+
+  /// No description provided for @modelsMaxOutputTokensHelper.
+  ///
+  /// In zh, this message translates to:
+  /// **'留空默认 12800'**
+  String get modelsMaxOutputTokensHelper;
+
+  /// No description provided for @modelsMaxOutputTokensTooltip.
+  ///
+  /// In zh, this message translates to:
+  /// **'最大输出 token 数限制\n留空则使用默认值 12800\n常见配置：\n  • DeepSeek V3: 8192\n  • Claude: 16384\n  • GPT-4: 8192'**
+  String get modelsMaxOutputTokensTooltip;
 
   /// No description provided for @modelsProtocolType.
   ///
@@ -6936,6 +6960,42 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'数据根目录 (.RemindAI)'**
   String get settingsRootPath;
+
+  /// No description provided for @galleryToolName.
+  ///
+  /// In zh, this message translates to:
+  /// **'Gallery'**
+  String get galleryToolName;
+
+  /// No description provided for @galleryToolDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'星空特效展示与回忆'**
+  String get galleryToolDesc;
+
+  /// No description provided for @galleryStoryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'小故事'**
+  String get galleryStoryTitle;
+
+  /// No description provided for @galleryShowStory.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示故事'**
+  String get galleryShowStory;
+
+  /// No description provided for @galleryHideStory.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐藏故事'**
+  String get galleryHideStory;
+
+  /// No description provided for @galleryStoryContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'## 初心\n\n曾经我为了亲手制作炫酷的特效而学习了编程。\n\n如你所见，这个特效是我当时翻看 Pygame 的文档做出来的，如今再次使用 Flutter 复刻。故事亦到此结束。'**
+  String get galleryStoryContent;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

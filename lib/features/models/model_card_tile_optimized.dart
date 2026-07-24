@@ -234,6 +234,7 @@ class _OptimizedModelCardTileState extends State<OptimizedModelCardTile> {
         initialLogoPath: widget.card.logoPath,
         initialProvider: widget.card.provider,
         initialContextWindow: widget.card.contextWindow,
+        initialMaxOutputTokens: widget.card.maxOutputTokens,
         cardId: widget.card.id,
         onSave:
             (
@@ -244,6 +245,7 @@ class _OptimizedModelCardTileState extends State<OptimizedModelCardTile> {
               logoPath,
               provider,
               contextWindow,
+              maxOutputTokens,
             ) {
               final container = ProviderScope.containerOf(context);
               final updated = widget.card.copyWith(
@@ -254,6 +256,7 @@ class _OptimizedModelCardTileState extends State<OptimizedModelCardTile> {
                 logoPath: logoPath,
                 provider: provider,
                 contextWindow: contextWindow,
+                maxOutputTokens: maxOutputTokens,
               );
               container.read(modelCardsProvider.notifier).updateCard(updated);
             },

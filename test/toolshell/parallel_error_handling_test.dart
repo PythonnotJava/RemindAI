@@ -153,7 +153,7 @@ void main() {
 
     test('场景5: toolshell_write 缺少必需参数', () async {
       final pipeline = buildPipeline();
-      final res = await call(pipeline, 'toolshell_run_parallel', {
+      await call(pipeline, 'toolshell_run_parallel', {
         'calls': [
           {
             'tool': 'toolshell_read',

@@ -77,6 +77,7 @@ abstract class LlmClient {
     required String apiKey,
     required String model,
     LlmProvider provider = LlmProvider.openai,
+    int maxOutputTokens = 0,
   }) {
     switch (provider) {
       case LlmProvider.anthropic:
@@ -84,7 +85,12 @@ abstract class LlmClient {
       case LlmProvider.gemini:
         return GeminiClient(baseUrl: baseUrl, apiKey: apiKey, model: model);
       case LlmProvider.openai:
-        return OpenAiClient(baseUrl: baseUrl, apiKey: apiKey, model: model);
+        return OpenAiClient(
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          model: model,
+          maxOutputTokens: maxOutputTokens,
+        );
     }
   }
 
@@ -193,12 +199,17 @@ class OpenAiClient implements LlmClient {
   final Dio _dio;
   final String baseUrl;
   final String apiKey;
+
+  @override
   final String model;
+
+  final int maxOutputTokens;
 
   OpenAiClient({
     required this.baseUrl,
     required this.apiKey,
     required this.model,
+    this.maxOutputTokens = 0,
   }) : _base = _normalizeBase(baseUrl),
        _dio = Dio(
          BaseOptions(
@@ -240,6 +251,29 @@ class OpenAiClient implements LlmClient {
   /// chat/completions 完整绝对地址。
   String get _chatUrl => '$_base/chat/completions';
 
+  /// 获取最大输出 token 数
+  ///
+  /// 算法思想：
+  /// 1. 优先使用用户配置的值（精确控制）
+  /// 2. 未配置时使用 12800 作为默认兜底值
+  ///
+  /// 为什么是 12800？
+  /// - 足够大：可以容纳大部分代码生成和长篇回答（约 9600 个中文字）
+  /// - 足够安全：配合 50% 压缩阈值，避免 "输入 + 输出" 超过上下文窗口
+  ///   例如：DeepSeek V3 (1M) → 压缩阈值 500K → 最大输入约 487K → 剩余 513K 可用于输出
+  /// - 适配主流模型：
+  ///   * DeepSeek V3 官方输出限制: 8K (可配置为 8192)
+  ///   * Claude 3.5: 支持 16K+ (可配置为 16384)
+  ///   * GPT-4: 通常 4K-8K (可配置为 8192)
+  int _getMaxTokens() {
+    // 如果用户配置了值，使用用户值
+    if (maxOutputTokens > 0) {
+      return maxOutputTokens;
+    }
+    // 否则使用默认值 12800
+    return 12800;
+  }
+
   /// 非流式调用 (备用，简单场景)
   @override
   Future<ChatResponse> chat(
@@ -249,6 +283,7 @@ class OpenAiClient implements LlmClient {
     final body = <String, dynamic>{
       'model': model,
       'messages': messages,
+      'max_tokens': _getMaxTokens(),
       if (tools != null && tools.isNotEmpty) 'tools': tools,
       if (tools != null && tools.isNotEmpty) 'tool_choice': 'auto',
     };
@@ -297,6 +332,7 @@ class OpenAiClient implements LlmClient {
       'model': model,
       'messages': messages,
       'stream': true,
+      'max_tokens': _getMaxTokens(),
       if (tools != null && tools.isNotEmpty) 'tools': tools,
       if (tools != null && tools.isNotEmpty) 'tool_choice': 'auto',
     };
@@ -348,6 +384,7 @@ class OpenAiClient implements LlmClient {
       'model': model,
       'messages': processedMessages,
       'stream': true,
+      'max_tokens': _getMaxTokens(),
       if (tools != null && tools.isNotEmpty) 'tools': tools,
       if (tools != null && tools.isNotEmpty) 'tool_choice': 'auto',
     };

@@ -157,6 +157,7 @@ class ServerSessionBuilder {
       apiKey: card.apiKey,
       model: card.modelId,
       provider: LlmProviderX.fromId(card.provider),
+      maxOutputTokens: card.maxOutputTokens,
     );
 
     // ─── 记忆 (按档位) ───
@@ -331,6 +332,7 @@ class ServerSessionBuilder {
           useQdrant: useQdrant,
           // contextWindow 为 0 时，ContextCompactor 用 128K 兜底
           contextWindow: card.contextWindow,
+          modelName: card.modelId,
         ),
     ]);
 

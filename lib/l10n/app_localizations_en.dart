@@ -666,24 +666,37 @@ class SEn extends S {
   String get modelsSearchHint => 'Type to search models...';
 
   @override
-  String get modelsContextWindow => 'Context window (tokens)';
+  String get modelsContextWindow => 'Input Context Window';
 
   @override
-  String get modelsContextWindowHint => 'Default to 128000 if left empty or 0';
+  String get modelsContextWindowHint => 'e.g., DeepSeek-V3: 1000000 (1M)';
 
   @override
   String get modelsContextWindowHelper =>
-      'Model\'s max context length for auto-compression';
+      '⚠️ Note: Input context, NOT max_tokens output limit';
 
   @override
   String get modelsContextWindowTooltip =>
-      '⚠️ WARNING: You MUST enter the model\'s actual context window size!\n\n• Too small → Frequent compression, model becomes \"forgetful\"\n• Too large → Request exceeds limit, API returns 400 error\n• If unsure, leave empty for default 128K\n\nWe are NOT responsible for issues caused by misconfiguration!';
+      '⚠️ Critical Distinction:\n\n📥 Input Context Window ← Fill this!\n  • Claude Opus 4: 200000 (200K)\n  • DeepSeek V3: 1000000 (1M)\n  • GPT-4: 128000 (128K)\n\n📤 max_tokens (output limit) ← DO NOT use this!\n  • Usually only 4K-16K, causes frequent compression\n\nDefault 128K if left empty (suitable for smaller models)';
 
   @override
   String get modelsContextWindowValidNumber => 'Please enter a valid number';
 
   @override
   String get modelsContextWindowValidPositive => 'Must be greater than 0';
+
+  @override
+  String get modelsMaxOutputTokens => 'Max Output Tokens (Optional)';
+
+  @override
+  String get modelsMaxOutputTokensHint => 'e.g. 8192';
+
+  @override
+  String get modelsMaxOutputTokensHelper => 'Default 12800 if left empty';
+
+  @override
+  String get modelsMaxOutputTokensTooltip =>
+      'Maximum output token limit\nDefault value is 12800 if left empty\nCommon configurations:\n  • DeepSeek V3: 8192\n  • Claude: 16384\n  • GPT-4: 8192';
 
   @override
   String get modelsProtocolType => 'Protocol type';
@@ -3773,4 +3786,23 @@ class SEn extends S {
 
   @override
   String get settingsRootPath => 'Data Root Directory (.RemindAI)';
+
+  @override
+  String get galleryToolName => 'Gallery';
+
+  @override
+  String get galleryToolDesc => 'Starry sky effects showcase and memories';
+
+  @override
+  String get galleryStoryTitle => 'A Little Story';
+
+  @override
+  String get galleryShowStory => 'Show Story';
+
+  @override
+  String get galleryHideStory => 'Hide Story';
+
+  @override
+  String get galleryStoryContent =>
+      '## The Beginning\n\nOnce upon a time, I learned programming to create stunning visual effects with my own hands.\n\nAs you can see, this effect was created by reading through Pygame documentation back then, now recreated using Flutter.\n\nEven learning UI design was for showcasing better effects.\n\n---\n\n## Letting Go\n\nSome things become obsessions that haunt you for too long, binding you for too long.\n\nFor me, it\'s time to let go of programming.\n\n> May you find your own light among the stars.';
 }

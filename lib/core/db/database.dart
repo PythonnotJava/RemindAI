@@ -169,6 +169,23 @@ class DatabaseHelper {
       'context_window',
       "INTEGER NOT NULL DEFAULT 0",
     );
+    // Migration: add max_output_tokens for model cards
+    // 最大输出 token 限制，0 表示使用默认值 12800
+    //
+    // 设计思想：
+    // - 作为保护上限，防止输出过长导致 "输入+输出" 超过模型上下文窗口
+    // - 不同模型有不同的输出限制：
+    //   * DeepSeek V3: 官方限制 8192
+    //   * Claude 3.5: 支持 16384+
+    //   * GPT-4: 通常 4096-8192
+    // - 用户可以根据模型特性和使用场景自定义配置
+    // - 留空或 0 时，LlmClient 使用 12800 作为兜底（适配大部分场景）
+    _migrateAddColumn(
+      db,
+      'model_cards',
+      'max_output_tokens',
+      "INTEGER NOT NULL DEFAULT 0",
+    );
 
     // 性能优化：为 model_cards 的 is_default 字段创建索引
     db.execute('''

@@ -616,6 +616,7 @@ class _PetPageState extends ConsumerState<PetPage>
                   apiKey: card.apiKey,
                   model: card.modelId,
                   provider: LlmProviderX.fromId(card.provider),
+                  maxOutputTokens: card.maxOutputTokens,
                 );
                 final resp = await client.chat([
                   {'role': 'user', 'content': prompt},

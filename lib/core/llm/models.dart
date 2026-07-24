@@ -165,6 +165,9 @@ class ModelCard {
   /// 0 表示未知，会使用保守默认值。
   final int contextWindow;
 
+  /// 最大输出 token 数限制，0 表示使用默认值 (12800)。
+  final int maxOutputTokens;
+
   const ModelCard({
     required this.id,
     required this.name,
@@ -174,5 +177,6 @@ class ModelCard {
     this.logoPath = '',
     this.provider = 'openai',
     this.contextWindow = 0,
+    this.maxOutputTokens = 0,
   });
 }

@@ -38,20 +38,94 @@ class ContextCompactor extends MessageTransformer {
   /// 0 表示未知——此时退回保守默认值。
   final int contextWindow;
 
-  /// 兜底默认上下文窗口 (128K)，用于 contextWindow 未知时计算阈值。
-  /// 当今主流模型最低都有 128K，安全兜底。
+  /// 模型名称，用于智能默认值推断
+  final String modelName;
+
+  /// 根据模型名称推断合理的默认上下文窗口
+  static int _inferDefaultContextWindow(String modelName) {
+    final nameLower = modelName.toLowerCase();
+
+    // DeepSeek 系列：1M 上下文
+    if (nameLower.contains('deepseek')) {
+      return 1000000;
+    }
+
+    // Claude 系列：200K 上下文
+    if (nameLower.contains('claude')) {
+      return 200000;
+    }
+
+    // Gemini Pro 1.5/2.0：1M+ 上下文
+    if (nameLower.contains('gemini') &&
+        (nameLower.contains('1.5') ||
+            nameLower.contains('2.0') ||
+            nameLower.contains('pro'))) {
+      return 1000000;
+    }
+
+    // GPT-5 系列：128K 上下文（推测）
+    if (nameLower.contains('gpt-5')) {
+      return 128000;
+    }
+
+    // GPT-4 系列：128K 上下文
+    if (nameLower.contains('gpt-4')) {
+      return 128000;
+    }
+
+    // 其他模型保守估计 128K
+    return _defaultContextWindow;
+  }
+
+  /// 兜底默认上下文窗口，当 contextWindow 未知且无法从模型名推断时使用。
   static const int _defaultContextWindow = 128000;
+
+  /// 模型特定的压缩阈值比例配置
+  static const Map<String, double> _modelThresholds = {
+    'claude-opus-4': 0.50,
+    'claude-sonnet-4': 0.50,
+    'claude-3-5-sonnet': 0.50,
+    'claude-3-opus': 0.50,
+    'gpt-5': 0.5,
+    'gpt-4': 0.50,
+    'gpt-4-turbo': 0.50,
+    'deepseek': 0.50,
+    'gemini-1.5-pro': 0.50,
+    'gemini-2.0': 0.50,
+  };
+
+  /// 小上下文模型的阈值下限（避免压缩后空间不足）
+  static const double _smallContextFloor = 0.75;
+  static const int _smallContextLimit = 512000; // 512K
 
   /// 基于模型 context window 计算动态阈值的比例。
   /// 触发压缩 = contextWindow * ratio。
-  /// 预留 40% 给工具循环累积、system prompt + 工具定义 + 保真区 + LLM 回复空间。
-  static const double _thresholdRatio = 0.60;
+  /// 预留空间给：工具循环累积、system prompt + 工具定义 + 保真区 + LLM 回复。
+  static const double _defaultThresholdRatio = 0.50;
 
   /// 动态计算出的实际阈值
   int get effectiveThreshold {
     if (tokenThreshold > 0) return tokenThreshold;
-    final ctx = contextWindow > 0 ? contextWindow : _defaultContextWindow;
-    return (ctx * _thresholdRatio).toInt();
+
+    final ctx = contextWindow > 0
+        ? contextWindow
+        : _inferDefaultContextWindow(modelName);
+
+    // 1. 获取模型特定阈值（匹配任意子串）
+    double ratio = _defaultThresholdRatio;
+    for (final entry in _modelThresholds.entries) {
+      if (modelName.toLowerCase().contains(entry.key.toLowerCase())) {
+        ratio = entry.value;
+        break;
+      }
+    }
+
+    // 2. 小上下文模型调整：提高阈值延迟压缩
+    if (ctx < _smallContextLimit && ratio < _smallContextFloor) {
+      ratio = _smallContextFloor;
+    }
+
+    return (ctx * ratio).toInt();
   }
 
   /// 压缩后保留最近多少轮对话（一轮 = user + assistant）
@@ -63,6 +137,32 @@ class ContextCompactor extends MessageTransformer {
   /// 是否已在当前 pipeline 调用中执行过压缩（防止同一轮重复压缩）
   bool _compactedThisRound = false;
 
+  /// 上一次压缩生成的总结（用于迭代式总结）
+  String? _previousSummary;
+
+  /// 压缩失败计数（用于指数退避）
+  int _compressionFailures = 0;
+
+  /// 上次失败时间
+  DateTime? _lastFailureTime;
+
+  /// 上下文压缩器构造函数
+  ///
+  /// 参数说明：
+  /// - [tokenThreshold]: 手动指定的压缩触发阈值（0 表示自动计算）
+  /// - [contextWindow]: 模型上下文窗口大小（用于计算默认阈值）
+  /// - [keepRecentTurns]: 保留最近 N 轮对话（默认 6 轮）
+  /// - [summaryMaxTokens]: 总结的最大长度（默认 800 tokens）
+  ///
+  /// 阈值计算逻辑：
+  /// 1. 如果 tokenThreshold > 0：直接使用该值
+  /// 2. 如果 contextWindow > 0：使用 contextWindow * 50%
+  /// 3. 否则：使用保守兜底值 128K * 50% = 64K
+  ///
+  /// 为什么是 50%？
+  /// - 给输出留足空间：输入占 50%，输出可以用剩余 50%
+  /// - 避免"满载崩溃"：压缩后立即生成长回答不会超限
+  /// - 实际压缩比通常 > 90%：压缩后远低于 50%，下次触发有充足缓冲
   ContextCompactor({
     required this.llm,
     this.memoryManager,
@@ -70,7 +170,8 @@ class ContextCompactor extends MessageTransformer {
     this.useQdrant = false,
     this.tokenThreshold = 0,
     this.contextWindow = 0,
-    this.keepRecentTurns = 6,
+    this.modelName = '',
+    this.keepRecentTurns = 4, // Loop 模式降低保留轮数，减少请求体大小
     this.summaryMaxTokens = 800,
   });
 
@@ -85,9 +186,14 @@ class ContextCompactor extends MessageTransformer {
     final threshold = effectiveThreshold;
     final tokens = _estimateTokens(messages);
     if (tokens > threshold && !_compactedThisRound) {
+      // 计算实际使用的比例（用于日志）
+      final ctx = contextWindow > 0
+          ? contextWindow
+          : _inferDefaultContextWindow(modelName);
+      final actualRatio = threshold / ctx;
       AppLogger.instance.log(
-        '[Compactor] 触发压缩: 估算 $tokens tokens > 阈值 $threshold'
-        '${contextWindow > 0 ? " (contextWindow=$contextWindow, ratio=$_thresholdRatio)" : " (默认阈值)"}',
+        '[Compactor] 触发压缩: 估算 $tokens tokens > 阈值 $threshold '
+        '(contextWindow=$ctx, ratio=${actualRatio.toStringAsFixed(2)}, model=$modelName)',
       );
       return true;
     }
@@ -98,6 +204,11 @@ class ContextCompactor extends MessageTransformer {
   Future<List<Map<String, dynamic>>> transform(
     List<Map<String, dynamic>> messages,
   ) async {
+    // ─── 预处理：清理孤立的工具调用和结果 ───
+    // 无论是否触发压缩，都应该执行完整性检查
+    // 防止因为某些异常导致 tool_calls 和 tool_result 不匹配
+    messages = _cleanOrphanedToolMessages(messages);
+
     _compactedThisRound = true;
 
     // ─── 分区 ───
@@ -133,71 +244,8 @@ class ContextCompactor extends MessageTransformer {
       ...recent,
     ];
 
-    // ─── 第四步：双向清理孤立的消息 ───
-    // 1. 收集所有 assistant 消息中的 tool_call_id
-    final validToolCallIds = <String>{};
-    for (final msg in result) {
-      if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
-        for (final tc in msg['tool_calls'] as List) {
-          final id = tc['id'] as String?;
-          if (id != null) validToolCallIds.add(id);
-        }
-      }
-    }
-
-    // 2. 收集所有 tool 结果消息的 tool_call_id
-    final validToolResultIds = <String>{};
-    for (final msg in result) {
-      if (msg['role'] == 'tool') {
-        final toolCallId = msg['tool_call_id'] as String?;
-        if (toolCallId != null) validToolResultIds.add(toolCallId);
-      }
-    }
-
-    // 3. 过滤掉孤立的消息
-    final cleaned = result.where((msg) {
-      // 移除没有对应工具调用的 tool 结果
-      if (msg['role'] == 'tool') {
-        final toolCallId = msg['tool_call_id'] as String?;
-        final isValid =
-            toolCallId != null && validToolCallIds.contains(toolCallId);
-        if (!isValid) {
-          AppLogger.instance.log(
-            '[Compactor] 移除孤立的工具结果: tool_call_id=$toolCallId',
-          );
-          print('[Compactor] 🗑️  移除孤立工具结果: $toolCallId');
-        }
-        return isValid;
-      }
-
-      // 移除没有对应工具结果的 assistant tool_calls
-      if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
-        final toolCalls = msg['tool_calls'] as List;
-        // 检查所有 tool_calls 是否都有对应的结果
-        final allToolCallsHaveResults = toolCalls.every((tc) {
-          final id = tc['id'] as String?;
-          return id != null && validToolResultIds.contains(id);
-        });
-
-        if (!allToolCallsHaveResults) {
-          final missingIds = toolCalls
-              .where((tc) {
-                final id = tc['id'] as String?;
-                return id == null || !validToolResultIds.contains(id);
-              })
-              .map((tc) => tc['id'] as String?)
-              .where((id) => id != null)
-              .join(', ');
-          AppLogger.instance.log(
-            '[Compactor] 移除缺少工具结果的 assistant 消息: tool_call_ids=[$missingIds]',
-          );
-          print('[Compactor] 🗑️  移除缺少工具结果的 assistant: $missingIds');
-          return false;
-        }
-      }
-
-      return true;
-    }).toList();
+    // ─── 第四步：再次清理孤立消息（压缩可能破坏完整性）───
+    final cleaned = _cleanOrphanedToolMessages(result);
 
     final newTokens = _estimateTokens(cleaned);
     AppLogger.instance.log(
@@ -212,6 +260,26 @@ class ContextCompactor extends MessageTransformer {
   void resetRound() => _compactedThisRound = false;
 
   // ─── 私有方法 ─────────────────────────────────────────────
+
+  /// 检查是否应跳过 LLM 压缩（失败冷却期）
+  bool _shouldSkipLLMCompression() {
+    if (_compressionFailures == 0) return false;
+    if (_lastFailureTime == null) return false;
+
+    // 指数退避: 2^n 分钟
+    final cooldownMinutes = 1 << _compressionFailures; // 2, 4, 8, 16, 32...
+    final elapsed = DateTime.now().difference(_lastFailureTime!);
+
+    if (elapsed.inMinutes < cooldownMinutes) {
+      AppLogger.instance.log(
+        '[Compactor] ⏸️  冷却期活跃: 已失败 $_compressionFailures 次，'
+        '需等待 $cooldownMinutes 分钟 (已过 ${elapsed.inMinutes} 分钟)',
+      );
+      return true;
+    }
+
+    return false;
+  }
 
   /// 估算消息列表的 token 数（粗略：中文 ~1.5 token/字，英文 ~0.75 token/词）
   int _estimateTokens(List<Map<String, dynamic>> messages) {
@@ -262,8 +330,113 @@ class ContextCompactor extends MessageTransformer {
     }
   }
 
+  /// 清理孤立的工具调用和工具结果
+  ///
+  /// 算法思想：
+  /// 1. 收集所有 assistant 消息中的 tool_call_id（有效的工具调用）
+  /// 2. 收集所有 tool 消息中的 tool_call_id（有效的工具结果）
+  /// 3. 移除没有对应工具调用的 tool 结果（孤立结果）
+  /// 4. 移除没有对应工具结果的 assistant tool_calls（孤立调用）
+  ///
+  /// 为什么需要这个？
+  /// - 并行工具调用时，某个工具执行失败可能导致缺少 tool result
+  /// - 上下文压缩边界可能割裂 tool_calls 和 tool_result
+  /// - 数据库加载时可能丢失某些消息
+  /// - OpenAI API 强制要求 tool_calls 和 tool_result 必须成对出现
+  ///
+  /// 这个清理是防御性的，无论是否触发压缩都应该执行。
+  List<Map<String, dynamic>> _cleanOrphanedToolMessages(
+    List<Map<String, dynamic>> messages,
+  ) {
+    // 1. 收集所有 assistant 消息中的 tool_call_id
+    final validToolCallIds = <String>{};
+    for (final msg in messages) {
+      if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
+        for (final tc in msg['tool_calls'] as List) {
+          final id = tc['id'] as String?;
+          if (id != null) validToolCallIds.add(id);
+        }
+      }
+    }
+
+    // 2. 收集所有 tool 结果消息的 tool_call_id
+    final validToolResultIds = <String>{};
+    for (final msg in messages) {
+      if (msg['role'] == 'tool') {
+        final toolCallId = msg['tool_call_id'] as String?;
+        if (toolCallId != null) validToolResultIds.add(toolCallId);
+      }
+    }
+
+    // 3. 过滤掉孤立的消息
+    final cleaned = messages.where((msg) {
+      // 移除没有对应工具调用的 tool 结果
+      if (msg['role'] == 'tool') {
+        final toolCallId = msg['tool_call_id'] as String?;
+        final isValid =
+            toolCallId != null && validToolCallIds.contains(toolCallId);
+        if (!isValid) {
+          AppLogger.instance.log(
+            '[Compactor] 🗑️  清理孤立的工具结果: tool_call_id=$toolCallId',
+          );
+        }
+        return isValid;
+      }
+
+      // 移除没有对应工具结果的 assistant tool_calls
+      if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
+        final toolCalls = msg['tool_calls'] as List;
+        // 检查所有 tool_calls 是否都有对应的结果
+        final allToolCallsHaveResults = toolCalls.every((tc) {
+          final id = tc['id'] as String?;
+          return id != null && validToolResultIds.contains(id);
+        });
+
+        if (!allToolCallsHaveResults) {
+          final missingIds = toolCalls
+              .where((tc) {
+                final id = tc['id'] as String?;
+                return id == null || !validToolResultIds.contains(id);
+              })
+              .map((tc) => tc['id'] as String?)
+              .where((id) => id != null)
+              .join(', ');
+          AppLogger.instance.log(
+            '[Compactor] 🗑️  清理缺少工具结果的 assistant 消息: tool_call_ids=[$missingIds]',
+          );
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+
+    final removedCount = messages.length - cleaned.length;
+    if (removedCount > 0) {
+      AppLogger.instance.log('[Compactor] ✅ 完整性检查: 移除 $removedCount 条孤立消息');
+    }
+
+    return cleaned;
+  }
+
   /// 找到保真区的起始位置：保留最近 keepRecentTurns 轮完整对话
   /// 一轮 = user + assistant（可能包含中间的 tool 消息）
+  ///
+  /// 算法思想：
+  /// - **压缩策略**：按轮数保留，而非按 token 百分比
+  ///   * 原因：轮数更稳定、可预测。无论每轮长短，都保留固定轮数的完整上下文
+  ///   * 例如：100 轮对话，无论总计 10K 还是 1M tokens，都保留最近 6 轮
+  ///
+  /// - **触发阈值**：当前对话达到 contextWindow * 50% 时触发压缩
+  ///   * 例如：DeepSeek V3 (1M) → 达到 500K tokens 时压缩
+  ///
+  /// - **压缩结果**：system + 总结 + 最近 6 轮
+  ///   * 旧对话 → 生成总结 (~500 tokens) + 沉淀到向量数据库
+  ///   * 保真区 → 完整保留，包含工具调用和结果
+  ///
+  /// - **工具调用成对保留**：双向检查确保 tool_calls 和 tool_results 不被割裂
+  ///   1. 向前扩展：保真区的 tool 结果 → 对应的 assistant tool_calls 也保留
+  ///   2. 向后检查：保真区的 assistant tool_calls → 对应的 tool 结果也必须在保真区
   ///
   /// 特别处理：双向检查确保工具调用和工具结果成对保留。
   /// 1. 向前扩展：保真区的 tool 结果 → 对应的 assistant tool_calls 也保留
@@ -468,21 +641,49 @@ class ContextCompactor extends MessageTransformer {
     print(savings);
     print('');
 
+    // 检查冷却期
+    if (_shouldSkipLLMCompression()) {
+      AppLogger.instance.log('[Compactor] 跳过 LLM 压缩，使用降级方案');
+      print('[Compactor] 跳过 LLM 压缩，使用降级方案');
+      return _fallbackSummary(compressible);
+    }
+
     try {
       // ─── 构造 Cache-Aligned 请求 ───
       // 保留原始消息结构（包括 system、所有历史消息），仅追加摘要指令
+      final summaryInstruction = StringBuffer();
+
+      // 如果有上一次的总结，先展示它
+      if (_previousSummary != null && _previousSummary!.isNotEmpty) {
+        summaryInstruction.write(
+          '【上一次的总结】：\n'
+          '$_previousSummary\n\n'
+          '现在，请基于上述历史总结，更新并补充下面新对话的内容。\n\n',
+        );
+      }
+
+      summaryInstruction.write(
+        '请为${_previousSummary != null ? "新" : "上述"}对话生成一段简洁摘要。要求：\n'
+        '- 保留关键信息：用户需求、决策、结论\n'
+        '- 保留技术细节：文件、函数、配置、错误\n'
+        '- 保留进度状态：已完成、正在进行、待办\n',
+      );
+
+      if (_previousSummary != null) {
+        summaryInstruction.write(
+          '- 将新信息与历史总结合并，保持时间顺序\n'
+          '- 去除重复信息，突出新的进展\n',
+        );
+      }
+
+      summaryInstruction.write(
+        '- 使用要点格式，控制在 ${_previousSummary != null ? "600" : "400"} 字以内\n'
+        '- 直接输出摘要，不要前缀或解释',
+      );
+
       final summaryRequest = [
         ...allMessages.sublist(0, compressibleEnd), // 复用前缀，命中 cache
-        {
-          'role': 'user',
-          'content':
-              '请为上述对话生成一段简洁摘要。要求：\n'
-              '- 保留关键信息：用户需求、决策、结论\n'
-              '- 保留技术细节：文件、函数、配置、错误\n'
-              '- 保留进度状态：已完成、正在进行、待办\n'
-              '- 使用要点格式，控制在 400 字以内\n'
-              '- 直接输出摘要，不要前缀或解释',
-        },
+        {'role': 'user', 'content': summaryInstruction.toString()},
       ];
 
       AppLogger.instance.log('[Compactor] ⏱️  调用 LLM 生成摘要...');
@@ -537,20 +738,36 @@ class ContextCompactor extends MessageTransformer {
       AppLogger.instance.log('[Compactor] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       print('[Compactor] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
+      // 保存总结供下次迭代使用
+      if (summary.isNotEmpty) {
+        _previousSummary = summary;
+        // 成功则重置失败计数
+        _compressionFailures = 0;
+        _lastFailureTime = null;
+      }
+
       return summary.isEmpty ? _fallbackSummary(compressible) : summary;
     } catch (e) {
-      final error = '[Compactor] ❌ 摘要生成失败: $e';
+      // 记录失败
+      _compressionFailures++;
+      _lastFailureTime = DateTime.now();
+
+      final error = '[Compactor] ❌ 摘要生成失败 (第 $_compressionFailures 次): $e';
       final fallback = '[Compactor] 使用降级方案（消息预览）';
+      final cooldown =
+          '[Compactor] ⏱️  下次冷却时间: ${1 << _compressionFailures} 分钟';
       final endSeparator = '[Compactor] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
 
       // 写入日志文件
       AppLogger.instance.log(error);
       AppLogger.instance.log(fallback);
+      AppLogger.instance.log(cooldown);
       AppLogger.instance.log(endSeparator);
 
       // 同时输出到终端
       print(error);
       print(fallback);
+      print(cooldown);
       print(endSeparator);
 
       return _fallbackSummary(compressible);

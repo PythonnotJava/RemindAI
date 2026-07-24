@@ -185,7 +185,7 @@ class ChatState {
     this.pendingPermission,
     this.loopEnabled = false,
     this.loopIteration = 0,
-    this.loopMaxIterations = 10,
+    this.loopMaxIterations = 20,
     this.loopRunning = false,
     this.subReadersRun,
     this.hasMoreHistory = false,
@@ -687,6 +687,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         apiKey: modelCard.apiKey,
         model: modelCard.model,
         provider: provider,
+        maxOutputTokens: modelCard.maxOutputTokens,
       ),
       // 每个子任务独立一份只读 Executor 实例，互不共享可变状态；
       // 因为只读，即使多个子 Agent 同时指向同一 workDir 也不会产生写冲突。

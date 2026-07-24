@@ -215,6 +215,7 @@ class AgentContextBuilder {
       apiKey: modelCard.apiKey,
       model: modelCard.model,
       provider: LlmProviderX.fromId(modelCard.provider),
+      maxOutputTokens: modelCard.maxOutputTokens,
     );
 
     // ─── 记忆系统 ───
@@ -427,6 +428,7 @@ class AgentContextBuilder {
             useQdrant: useQdrant,
             // contextWindow 为 0 时，ContextCompactor 用 128K 兜底
             contextWindow: modelCard.contextWindow,
+            modelName: modelCard.model,
           ),
       ]),
     );

@@ -11,6 +11,8 @@ class GeminiClient implements LlmClient {
   final Dio _dio;
   final String baseUrl;
   final String apiKey;
+
+  @override
   final String model;
 
   GeminiClient({

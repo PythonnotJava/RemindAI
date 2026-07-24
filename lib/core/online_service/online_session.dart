@@ -8,6 +8,7 @@ class UserModelConfig {
   final String apiKey;
   final String modelId;
   final String provider; // openai / anthropic / gemini
+  final int maxOutputTokens;
 
   UserModelConfig({
     required this.id,
@@ -16,6 +17,7 @@ class UserModelConfig {
     required this.apiKey,
     required this.modelId,
     required this.provider,
+    this.maxOutputTokens = 0,
   });
 
   factory UserModelConfig.fromJson(Map<String, dynamic> json) =>
@@ -26,6 +28,7 @@ class UserModelConfig {
         apiKey: json['apiKey'] as String? ?? '',
         modelId: json['modelId'] as String? ?? '',
         provider: json['provider'] as String? ?? 'openai',
+        maxOutputTokens: json['maxOutputTokens'] as int? ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -35,6 +38,7 @@ class UserModelConfig {
     'apiKey': apiKey,
     'modelId': modelId,
     'provider': provider,
+    'maxOutputTokens': maxOutputTokens,
   };
 }
 

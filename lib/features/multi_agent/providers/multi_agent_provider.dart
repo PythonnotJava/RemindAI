@@ -627,6 +627,7 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
         (p) => p.name == modelCard.provider,
         orElse: () => LlmProvider.openai,
       ),
+      maxOutputTokens: modelCard.maxOutputTokens,
     );
 
     // 创建 Executor
@@ -818,6 +819,7 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
           (p) => p.name == modelCard.provider,
           orElse: () => LlmProvider.openai,
         ),
+        maxOutputTokens: modelCard.maxOutputTokens,
       );
 
       // 单轮摘要请求

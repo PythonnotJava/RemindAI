@@ -153,6 +153,7 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
               logoPath,
               provider,
               contextWindow,
+              maxOutputTokens,
             ) {
               ref
                   .read(modelCardsProvider.notifier)
@@ -164,6 +165,7 @@ class _ModelCardsPageState extends ConsumerState<ModelCardsPage> {
                     logoPath: logoPath,
                     provider: provider,
                     contextWindow: contextWindow,
+                    maxOutputTokens: maxOutputTokens,
                   );
             },
       ),
@@ -223,6 +225,7 @@ class ModelCardDialog extends StatefulWidget {
   final String? initialLogoPath;
   final String? initialProvider;
   final int? initialContextWindow;
+  final int? initialMaxOutputTokens;
   final String? cardId; // 用于区分是新建还是编辑
   final void Function(
     String name,
@@ -232,6 +235,7 @@ class ModelCardDialog extends StatefulWidget {
     String logoPath,
     String provider,
     int contextWindow,
+    int maxOutputTokens,
   )
   onSave;
 
@@ -243,6 +247,7 @@ class ModelCardDialog extends StatefulWidget {
     this.initialLogoPath,
     this.initialProvider,
     this.initialContextWindow,
+    this.initialMaxOutputTokens,
     this.cardId,
     required this.onSave,
     super.key,
@@ -275,6 +280,10 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
   int _contextWindow = 0;
   late final TextEditingController _contextWindowCtrl;
 
+  // 最大输出 token 数
+  int _maxOutputTokens = 0;
+  late final TextEditingController _maxOutputTokensCtrl;
+
   @override
   void initState() {
     super.initState();
@@ -287,6 +296,10 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
     _contextWindow = widget.initialContextWindow ?? 0;
     _contextWindowCtrl = TextEditingController(
       text: _contextWindow > 0 ? _contextWindow.toString() : '',
+    );
+    _maxOutputTokens = widget.initialMaxOutputTokens ?? 0;
+    _maxOutputTokensCtrl = TextEditingController(
+      text: _maxOutputTokens > 0 ? _maxOutputTokens.toString() : '',
     );
     if (widget.initialModelId != null && widget.initialModelId!.isNotEmpty) {
       _availableModels = [
@@ -466,272 +479,312 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-              // Logo 选择区
-              Row(
-                children: [
-                  ModelLogo(
-                    logoPath: _logoPath,
-                    name: _nameCtrl.text,
-                    modelId: _selectedModel ?? '',
-                    size: 48,
+                // Logo 选择区
+                Row(
+                  children: [
+                    ModelLogo(
+                      logoPath: _logoPath,
+                      name: _nameCtrl.text,
+                      modelId: _selectedModel ?? '',
+                      size: 48,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Logo (可选)',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          Text(
+                            _logoPath.isEmpty
+                                ? '未设置，将按品牌自动识别'
+                                : _logoPath.split(RegExp(r'[\\/]')).last,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_logoPath.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: context.s.chatEnvClear,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => setState(() => _logoPath = ''),
+                      ),
+                    TextButton.icon(
+                      onPressed: _pickLogo,
+                      icon: const Icon(Icons.image_outlined, size: 18),
+                      label: Text(context.s.commonSelect),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // 协议类型选择
+                DropdownButtonFormField<LlmProvider>(
+                  initialValue: _provider,
+                  decoration: InputDecoration(
+                    labelText: context.s.modelsProtocolType,
+                    helperText: context.s.modelsProtocolHelper,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
+                  items: LlmProvider.values
+                      .map(
+                        (p) => DropdownMenuItem(value: p, child: Text(p.label)),
+                      )
+                      .toList(),
+                  onChanged: (p) {
+                    if (p == null) return;
+                    setState(() {
+                      _provider = p;
+                      // 切换协议后清空已检测模型 (避免跨协议串味)
+                      _availableModels =
+                          _selectedModel != null && _selectedModel!.isNotEmpty
+                          ? [_DetectedModel(_selectedModel!)]
+                          : [];
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: context.s.modelsName,
+                    hintText: context.s.modelsNameHint,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? context.s.modelsNameRequired
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _urlCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Base URL',
+                    hintText: _provider.baseUrlHint,
+                  ),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? context.s.modelsBaseUrlRequired
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _keyCtrl,
+                  obscureText: _obscureKey,
+                  decoration: InputDecoration(
+                    labelText: 'API Key',
+                    hintText: 'sk-...',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureKey ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () =>
+                          setState(() => _obscureKey = !_obscureKey),
+                    ),
+                  ),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? context.s.modelsApiKeyRequired
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                // 测试连接按钮
+                OutlinedButton.icon(
+                  onPressed: _testing ? null : _testConnection,
+                  icon: _testing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.cable, size: 18),
+                  label: Text(
+                    _testing
+                        ? context.s.modelsTestingConnection
+                        : context.s.modelsTestConnection,
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
+                ),
+                if (_testError != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Logo (可选)',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        Icon(
+                          Icons.error_outline,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.error,
                         ),
-                        Text(
-                          _logoPath.isEmpty
-                              ? '未设置，将按品牌自动识别'
-                              : _logoPath.split(RegExp(r'[\\/]')).last,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Theme.of(context).colorScheme.outline,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _testError!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onErrorContainer,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  if (_logoPath.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      tooltip: context.s.chatEnvClear,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => setState(() => _logoPath = ''),
-                    ),
-                  TextButton.icon(
-                    onPressed: _pickLogo,
-                    icon: const Icon(Icons.image_outlined, size: 18),
-                    label: Text(context.s.commonSelect),
-                  ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              // 协议类型选择
-              DropdownButtonFormField<LlmProvider>(
-                initialValue: _provider,
-                decoration: InputDecoration(
-                  labelText: context.s.modelsProtocolType,
-                  helperText: context.s.modelsProtocolHelper,
-                ),
-                items: LlmProvider.values
-                    .map(
-                      (p) => DropdownMenuItem(value: p, child: Text(p.label)),
-                    )
-                    .toList(),
-                onChanged: (p) {
-                  if (p == null) return;
-                  setState(() {
-                    _provider = p;
-                    // 切换协议后清空已检测模型 (避免跨协议串味)
-                    _availableModels =
-                        _selectedModel != null && _selectedModel!.isNotEmpty
-                        ? [_DetectedModel(_selectedModel!)]
-                        : [];
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _nameCtrl,
-                decoration: InputDecoration(
-                  labelText: context.s.modelsName,
-                  hintText: context.s.modelsNameHint,
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? context.s.modelsNameRequired
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _urlCtrl,
-                decoration: InputDecoration(
-                  labelText: 'Base URL',
-                  hintText: _provider.baseUrlHint,
-                ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? context.s.modelsBaseUrlRequired
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _keyCtrl,
-                obscureText: _obscureKey,
-                decoration: InputDecoration(
-                  labelText: 'API Key',
-                  hintText: 'sk-...',
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureKey ? Icons.visibility_off : Icons.visibility,
-                    ),
-                    onPressed: () => setState(() => _obscureKey = !_obscureKey),
-                  ),
-                ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? context.s.modelsApiKeyRequired
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              // 测试连接按钮
-              OutlinedButton.icon(
-                onPressed: _testing ? null : _testConnection,
-                icon: _testing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                const SizedBox(height: 16),
+                // 模型选择区
+                _availableModels.isEmpty
+                    ? TextFormField(
+                        initialValue: _selectedModel,
+                        decoration: InputDecoration(
+                          labelText: context.s.modelsModelId,
+                          hintText: context.s.modelsModelIdHint,
+                        ),
+                        onChanged: (v) => _selectedModel = v.trim(),
+                        validator: (v) {
+                          if (_selectedModel == null ||
+                              _selectedModel!.isEmpty) {
+                            return context.s.modelsModelIdRequired;
+                          }
+                          return null;
+                        },
                       )
-                    : const Icon(Icons.cable, size: 18),
-                label: Text(
-                  _testing
-                      ? context.s.modelsTestingConnection
-                      : context.s.modelsTestConnection,
-                ),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 40),
-                ),
-              ),
-              if (_testError != null) ...[
-                const SizedBox(height: 8),
-                Container(
+                    : Autocomplete<_DetectedModel>(
+                        displayStringForOption: (m) => m.id,
+                        optionsBuilder: (textEditingValue) {
+                          final query = textEditingValue.text.toLowerCase();
+                          if (query.isEmpty) return _availableModels;
+                          return _availableModels.where(
+                            (m) => m.id.toLowerCase().contains(query),
+                          );
+                        },
+                        initialValue: _selectedModel != null
+                            ? TextEditingValue(text: _selectedModel!)
+                            : null,
+                        onSelected: (v) => setState(() {
+                          _selectedModel = v.id;
+                          _contextWindow = v.contextWindow;
+                        }),
+                        optionsMaxHeight: 240,
+                        fieldViewBuilder:
+                            (context, controller, focusNode, onSubmitted) {
+                              return TextFormField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                decoration: InputDecoration(
+                                  labelText:
+                                      '模型 (${_availableModels.length} 个可用)',
+                                  hintText: context.s.modelsSearchHint,
+                                  suffixIcon: const Icon(
+                                    Icons.search,
+                                    size: 20,
+                                  ),
+                                ),
+                                style: const TextStyle(fontSize: 13),
+                                onChanged: (v) => _selectedModel = v.trim(),
+                                validator: (v) =>
+                                    (v == null || v.trim().isEmpty)
+                                    ? '请选择模型'
+                                    : null,
+                              );
+                            },
+                      ),
+                const SizedBox(height: 16),
+                // 上下文窗口配置
+                Tooltip(
+                  message: context.s.modelsContextWindowTooltip,
                   padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: Colors.white,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.errorContainer,
+                    color: Colors.black87,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 20,
+                  child: TextFormField(
+                    controller: _contextWindowCtrl,
+                    decoration: InputDecoration(
+                      labelText: context.s.modelsContextWindow,
+                      hintText: context.s.modelsContextWindowHint,
+                      helperText: context.s.modelsContextWindowHelper,
+                      suffixIcon: Icon(
+                        Icons.warning_amber_rounded,
                         color: Theme.of(context).colorScheme.error,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _testError!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onErrorContainer,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (v) {
+                      final parsed = int.tryParse(v.trim());
+                      _contextWindow = parsed ?? 0;
+                    },
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return null; // 允许为空
+                      final parsed = int.tryParse(v.trim());
+                      if (parsed == null) {
+                        return context.s.modelsContextWindowValidNumber;
+                      }
+                      if (parsed <= 0) {
+                        return context.s.modelsContextWindowValidPositive;
+                      }
+                      // 检测疑似错误填写 max_tokens 的情况
+                      if (parsed < 32000) {
+                        return '⚠️ 该值过小 ($parsed)，疑似填写了 max_tokens 输出限制\n'
+                            '应填写输入上下文窗口 (通常 ≥ 128K)';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                // 最大输出 Token 数
+                const SizedBox(height: 16),
+                Tooltip(
+                  message: context.s.modelsMaxOutputTokensTooltip,
+                  child: TextFormField(
+                    controller: _maxOutputTokensCtrl,
+                    decoration: InputDecoration(
+                      labelText: context.s.modelsMaxOutputTokens,
+                      hintText: context.s.modelsMaxOutputTokensHint,
+                      helperText: context.s.modelsMaxOutputTokensHelper,
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (v) {
+                      final parsed = int.tryParse(v.trim());
+                      _maxOutputTokens = parsed ?? 0;
+                    },
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return null; // 允许为空
+                      final parsed = int.tryParse(v.trim());
+                      if (parsed == null) {
+                        return context.s.modelsContextWindowValidNumber;
+                      }
+                      if (parsed <= 0) {
+                        return context.s.modelsContextWindowValidPositive;
+                      }
+                      return null;
+                    },
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
-              // 模型选择区
-              _availableModels.isEmpty
-                  ? TextFormField(
-                      initialValue: _selectedModel,
-                      decoration: InputDecoration(
-                        labelText: context.s.modelsModelId,
-                        hintText: context.s.modelsModelIdHint,
-                      ),
-                      onChanged: (v) => _selectedModel = v.trim(),
-                      validator: (v) {
-                        if (_selectedModel == null || _selectedModel!.isEmpty) {
-                          return context.s.modelsModelIdRequired;
-                        }
-                        return null;
-                      },
-                    )
-                  : Autocomplete<_DetectedModel>(
-                      displayStringForOption: (m) => m.id,
-                      optionsBuilder: (textEditingValue) {
-                        final query = textEditingValue.text.toLowerCase();
-                        if (query.isEmpty) return _availableModels;
-                        return _availableModels.where(
-                          (m) => m.id.toLowerCase().contains(query),
-                        );
-                      },
-                      initialValue: _selectedModel != null
-                          ? TextEditingValue(text: _selectedModel!)
-                          : null,
-                      onSelected: (v) => setState(() {
-                        _selectedModel = v.id;
-                        _contextWindow = v.contextWindow;
-                      }),
-                      optionsMaxHeight: 240,
-                      fieldViewBuilder:
-                          (context, controller, focusNode, onSubmitted) {
-                            return TextFormField(
-                              controller: controller,
-                              focusNode: focusNode,
-                              decoration: InputDecoration(
-                                labelText:
-                                    '模型 (${_availableModels.length} 个可用)',
-                                hintText: context.s.modelsSearchHint,
-                                suffixIcon: const Icon(Icons.search, size: 20),
-                              ),
-                              style: const TextStyle(fontSize: 13),
-                              onChanged: (v) => _selectedModel = v.trim(),
-                              validator: (v) => (v == null || v.trim().isEmpty)
-                                  ? '请选择模型'
-                                  : null,
-                            );
-                          },
-                    ),
-              const SizedBox(height: 16),
-              // 上下文窗口配置
-              Tooltip(
-                message: context.s.modelsContextWindowTooltip,
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                textStyle: const TextStyle(
-                  fontSize: 13,
-                  height: 1.4,
-                  color: Colors.white,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: TextFormField(
-                  controller: _contextWindowCtrl,
-                  decoration: InputDecoration(
-                    labelText: context.s.modelsContextWindow,
-                    hintText: context.s.modelsContextWindowHint,
-                    helperText: context.s.modelsContextWindowHelper,
-                    suffixIcon: Icon(
-                      Icons.warning_amber_rounded,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (v) {
-                    final parsed = int.tryParse(v.trim());
-                    _contextWindow = parsed ?? 0;
-                  },
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return null; // 允许为空
-                    final parsed = int.tryParse(v.trim());
-                    if (parsed == null) {
-                      return context.s.modelsContextWindowValidNumber;
-                    }
-                    if (parsed <= 0) {
-                      return context.s.modelsContextWindowValidPositive;
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
-    ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
@@ -749,6 +802,12 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                 finalContextWindow = 128000; // 默认 128K
               }
 
+              // 解析最大输出：用户输入 > 默认 0 (llm_client 会用 12800 兜底)
+              int finalMaxOutputTokens = _maxOutputTokens;
+              if (_maxOutputTokensCtrl.text.trim().isEmpty) {
+                finalMaxOutputTokens = 0;
+              }
+
               widget.onSave(
                 _nameCtrl.text.trim(),
                 _urlCtrl.text.trim(),
@@ -757,6 +816,7 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                 _logoPath,
                 _provider.id,
                 finalContextWindow,
+                finalMaxOutputTokens,
               );
               Navigator.pop(context);
             }

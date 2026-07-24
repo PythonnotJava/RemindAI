@@ -777,6 +777,7 @@ class ApiServer {
       apiKey: card.apiKey,
       model: card.modelId,
       provider: LlmProviderX.fromId(card.provider),
+      maxOutputTokens: card.maxOutputTokens,
     );
 
     // 消息历史 (含 tool_use / tool_result 双向还原) + 顶层 system

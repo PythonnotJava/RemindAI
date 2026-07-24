@@ -23,7 +23,10 @@ typedef _ConvertedMessages = ({
 /// 架构参考 Cherry Studio 的 streamAdapter.ts，但使用 Dart 实现。
 class AnthropicSdkClient implements LlmClient {
   final AnthropicClient _client;
+
+  @override
   final String model;
+
   final int maxTokens;
 
   AnthropicSdkClient({

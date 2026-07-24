@@ -19,6 +19,9 @@ class ModelCard {
   /// 模型上下文窗口大小 (token 数)，0 表示未知。
   final int contextWindow;
 
+  /// 最大输出 token 数限制，0 表示使用默认值 (12800)。
+  final int maxOutputTokens;
+
   const ModelCard({
     required this.id,
     required this.name,
@@ -31,6 +34,7 @@ class ModelCard {
     this.logoPath = '',
     this.provider = 'openai',
     this.contextWindow = 0,
+    this.maxOutputTokens = 0,
   });
 
   factory ModelCard.fromRow(Row row) {
@@ -46,6 +50,7 @@ class ModelCard {
       logoPath: row['logo_path'] as String? ?? '',
       provider: row['provider'] as String? ?? 'openai',
       contextWindow: (row['context_window'] as int?) ?? 0,
+      maxOutputTokens: (row['max_output_tokens'] as int?) ?? 0,
     );
   }
 
@@ -59,6 +64,7 @@ class ModelCard {
     String? logoPath,
     String? provider,
     int? contextWindow,
+    int? maxOutputTokens,
   }) {
     return ModelCard(
       id: id,
@@ -72,6 +78,7 @@ class ModelCard {
       logoPath: logoPath ?? this.logoPath,
       provider: provider ?? this.provider,
       contextWindow: contextWindow ?? this.contextWindow,
+      maxOutputTokens: maxOutputTokens ?? this.maxOutputTokens,
     );
   }
 }

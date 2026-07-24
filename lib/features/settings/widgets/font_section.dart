@@ -441,7 +441,7 @@ Widget _buildFontDropdown(
     children: [
       Expanded(
         child: DropdownButtonFormField<String>(
-          value: effectiveFont,
+          initialValue: effectiveFont,
           decoration: InputDecoration(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,

@@ -16,6 +16,8 @@ class AnthropicClient implements LlmClient {
   final Dio _dio;
   final String baseUrl;
   final String apiKey;
+
+  @override
   final String model;
 
   /// Anthropic 要求显式 max_tokens。

@@ -1000,6 +1000,7 @@ class OnlineServer {
             (p) => p.name == userModel.provider,
             orElse: () => LlmProvider.openai,
           ),
+          maxOutputTokens: userModel.maxOutputTokens,
         );
       }
     }
@@ -1025,6 +1026,7 @@ class OnlineServer {
             (p) => p.name == m.provider,
             orElse: () => LlmProvider.openai,
           ),
+          maxOutputTokens: m.maxOutputTokens,
         );
       }
       return null;
@@ -1046,6 +1048,7 @@ class OnlineServer {
         (p) => p.name == card.provider,
         orElse: () => LlmProvider.openai,
       ),
+      maxOutputTokens: card.maxOutputTokens,
     );
   }
 
