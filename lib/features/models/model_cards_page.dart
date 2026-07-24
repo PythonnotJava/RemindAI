@@ -460,11 +460,12 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
       title: Text(isEdit ? context.s.modelsEditTitle : context.s.modelsAdd),
       content: SizedBox(
         width: 420,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
               // Logo 选择区
               Row(
                 children: [
@@ -730,6 +731,7 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
           ),
         ),
       ),
+    ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
