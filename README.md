@@ -189,7 +189,7 @@ flutter build macos --release --tree-shake-icons --split-debug-info=./debug-info
 | 📦 技能系统 | <img src="snapshots/skill_support.png" width="600" /> |
 
 </details>
-[index.html](../../PythonnotJava.github.io/extend/remindai/index.html)
+
 ---
 
 ## 🙏 致谢 
