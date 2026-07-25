@@ -3,7 +3,7 @@
     "type": "function",
     "function": {
       "name": "schedule_load",
-      "description": "加载并解析 SCHEDULE.md 文件。如果文件不存在则创建模板。返回当前所有任务的结构化数据。",
+      "description": "加载并解析 SCHEDULE.md 文件。如果文件不存在则创建模板。返回当前所有任务的结构化数据。注意：框架会自动注入计划摘要到对话上下文，你几乎不需要主动调用此工具（除非需要查看完整详情，如所有 P2 任务或已完成记录）。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -27,25 +27,25 @@
         "properties": {
           "task": {
             "type": "string",
-            "description": "任务描述文本"
+            "description": "任务描述文本。应简洁明确，避免过长或过于技术化。建议长度：10-50 字。"
           },
           "priority": {
             "type": "string",
             "enum": ["P0", "P1", "P2"],
-            "description": "优先级: P0=紧急阻塞, P1=重要, P2=一般"
+            "description": "优先级: P0=紧急阻塞性任务（立即处理），P1=重要任务（按顺序执行），P2=一般任务（有空再做）"
           },
           "after": {
             "type": "string",
-            "description": "插入到哪个任务之后（任务文本的前缀匹配）。留空则追加到该优先级末尾。"
+            "description": "插入到哪个任务之后（任务文本的前缀匹配）。留空则追加到该优先级末尾。用于控制任务顺序。"
           },
           "tags": {
             "type": "array",
             "items": { "type": "string" },
-            "description": "标签列表，如 ['feature', 'bugfix']"
+            "description": "标签列表，如 ['feature', 'bugfix', 'refactor', 'test', 'docs']。用于分类和筛选。"
           },
           "note": {
             "type": "string",
-            "description": "简要备注"
+            "description": "简要备注。适合记录依赖关系、阻塞原因、注意事项等。应简短（建议 < 50 字）。"
           },
           "path": {
             "type": "string",
@@ -67,7 +67,7 @@
         "properties": {
           "task_match": {
             "type": "string",
-            "description": "任务文本的前缀或关键词，用于匹配要完成的任务"
+            "description": "任务文本的前缀或关键词，用于匹配要完成的任务。支持模糊匹配（使用任务描述的前 20 字符）。如果有多个匹配项，会选择第一个。建议使用任务描述的前几个关键字以确保准确匹配。"
           },
           "summary": {
             "type": "string",
@@ -93,20 +93,20 @@
         "properties": {
           "task_match": {
             "type": "string",
-            "description": "要更新的任务文本前缀或关键词"
+            "description": "要更新的任务文本前缀或关键词。使用任务描述的前几个关键字以确保准确匹配。如果有多个匹配项，会选择第一个。"
           },
           "new_priority": {
             "type": "string",
             "enum": ["P0", "P1", "P2"],
-            "description": "新优先级（留空表示不变）"
+            "description": "新优先级（留空表示不变）。可用于提升紧急程度（如 P1→P0）或降低优先级（如 P0→P1）。"
           },
           "new_text": {
             "type": "string",
-            "description": "新的任务描述（留空表示不变）"
+            "description": "新的任务描述（留空表示不变）。用于修改任务内容或需求变更。"
           },
           "new_note": {
             "type": "string",
-            "description": "新的备注（留空表示不变）"
+            "description": "新的备注（留空表示不变）。会替换（非追加）原有备注。适合记录依赖关系、阻塞原因、进度状态等。"
           },
           "path": {
             "type": "string",
@@ -128,11 +128,11 @@
         "properties": {
           "task_match": {
             "type": "string",
-            "description": "任务文本的前缀或关键词，用于匹配要删除的任务"
+            "description": "任务文本的前缀或关键词，用于匹配要删除的任务。使用任务描述的前几个关键字以确保准确匹配。如果有多个匹配项，会选择第一个。"
           },
           "reason": {
             "type": "string",
-            "description": "删除原因（可选，不写入文件，仅日志记录）"
+            "description": "删除原因（可选，不写入文件，仅日志记录）。用于记录为什么取消此任务，便于后续回顾。"
           },
           "path": {
             "type": "string",
@@ -148,7 +148,7 @@
     "type": "function",
     "function": {
       "name": "schedule_review",
-      "description": "生成当前计划的进度报告。统计各优先级待办数、完成数，列出下一步建议。",
+      "description": "生成当前计划的进度报告。统计各优先级待办数、完成数，列出下一步建议。返回结构化数据，需要你用人类友好的方式重新组织后展示给用户。",
       "parameters": {
         "type": "object",
         "properties": {

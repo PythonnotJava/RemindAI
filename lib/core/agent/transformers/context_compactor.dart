@@ -81,17 +81,24 @@ class ContextCompactor extends MessageTransformer {
   static const int _defaultContextWindow = 128000;
 
   /// 模型特定的压缩阈值比例配置
+  ///
+  /// 注意：比例是基于"可用输入空间"，不是总上下文窗口
+  /// 可用输入 = contextWindow - maxOutputTokens (12.8K)
+  ///
+  /// 例如 claude-opus-4 (200K):
+  /// - 可用输入: 200K - 12.8K = 187.2K
+  /// - 触发阈值: 187.2K * 0.60 = 112.3K (约 56% 总上下文)
   static const Map<String, double> _modelThresholds = {
-    'claude-opus-4': 0.50,
-    'claude-sonnet-4': 0.50,
-    'claude-3-5-sonnet': 0.50,
-    'claude-3-opus': 0.50,
-    'gpt-5': 0.5,
-    'gpt-4': 0.50,
-    'gpt-4-turbo': 0.50,
-    'deepseek': 0.50,
-    'gemini-1.5-pro': 0.50,
-    'gemini-2.0': 0.50,
+    'claude-opus-4': 0.60,
+    'claude-sonnet-4': 0.60,
+    'claude-3-5-sonnet': 0.60,
+    'claude-3-opus': 0.60,
+    'gpt-5': 0.50, // 提前触发，预留更多空间
+    'gpt-4': 0.60,
+    'gpt-4-turbo': 0.60,
+    'deepseek': 0.60,
+    'gemini-1.5-pro': 0.60,
+    'gemini-2.0': 0.60,
   };
 
   /// 小上下文模型的阈值下限（避免压缩后空间不足）
@@ -99,17 +106,39 @@ class ContextCompactor extends MessageTransformer {
   static const int _smallContextLimit = 512000; // 512K
 
   /// 基于模型 context window 计算动态阈值的比例。
-  /// 触发压缩 = contextWindow * ratio。
-  /// 预留空间给：工具循环累积、system prompt + 工具定义 + 保真区 + LLM 回复。
-  static const double _defaultThresholdRatio = 0.50;
+  /// 触发压缩 = (contextWindow - maxOutputTokens) * ratio。
+  /// 预留空间给：LLM 输出 (maxOutputTokens) + 多轮对话累积。
+  static const double _defaultThresholdRatio = 0.60;
+
+  /// 预留给 LLM 输出的 token 空间
+  static const int _maxOutputTokens = 12800;
 
   /// 动态计算出的实际阈值
+  ///
+  /// 计算公式：
+  /// ```
+  /// 可用输入空间 = contextWindow - maxOutputTokens
+  /// 触发阈值 = 可用输入空间 * ratio
+  /// ```
+  ///
+  /// 例如（128K 上下文）：
+  /// ```
+  /// 可用输入: 128K - 12.8K = 115.2K
+  /// 触发阈值: 115.2K * 0.60 = 69.1K (约 54% 总上下文)
+  /// ```
+  ///
+  /// 为什么预留输出空间？
+  /// - 避免压缩后 + LLM 输出 > contextWindow 导致溢出
+  /// - 确保 LLM 始终有足够空间生成完整回复
   int get effectiveThreshold {
     if (tokenThreshold > 0) return tokenThreshold;
 
     final ctx = contextWindow > 0
         ? contextWindow
         : _inferDefaultContextWindow(modelName);
+
+    // 可用输入空间 = 总上下文 - 预留输出空间
+    final availableInput = ctx - _maxOutputTokens;
 
     // 1. 获取模型特定阈值（匹配任意子串）
     double ratio = _defaultThresholdRatio;
@@ -125,7 +154,7 @@ class ContextCompactor extends MessageTransformer {
       ratio = _smallContextFloor;
     }
 
-    return (ctx * ratio).toInt();
+    return (availableInput * ratio).toInt();
   }
 
   /// 压缩后保留最近多少轮对话（一轮 = user + assistant）
@@ -145,6 +174,15 @@ class ContextCompactor extends MessageTransformer {
 
   /// 上次失败时间
   DateTime? _lastFailureTime;
+
+  /// 上次压缩时的消息轮数（用于检测频繁压缩）
+  int _lastCompressionRound = 0;
+
+  /// 频繁压缩计数器（连续 < 10 轮就压缩的次数）
+  int _frequentCompressionCount = 0;
+
+  /// 工具结果压缩阈值（单个工具结果超过此大小时压缩）
+  static const int _toolResultCompressionThreshold = 5000;
 
   /// 上下文压缩器构造函数
   ///
@@ -204,6 +242,10 @@ class ContextCompactor extends MessageTransformer {
   Future<List<Map<String, dynamic>>> transform(
     List<Map<String, dynamic>> messages,
   ) async {
+    // ─── 优化 1: 工具结果智能压缩 ───
+    // 在清理孤立消息之前，先压缩超大工具结果
+    messages = _compressLargeToolResults(messages);
+
     // ─── 预处理：清理孤立的工具调用和结果 ───
     // 无论是否触发压缩，都应该执行完整性检查
     // 防止因为某些异常导致 tool_calls 和 tool_result 不匹配
@@ -236,9 +278,7 @@ class ContextCompactor extends MessageTransformer {
           : _inferDefaultContextWindow(modelName);
       final ratio = (projectedTotal / ctx * 100).toStringAsFixed(1);
 
-      AppLogger.instance.log(
-        '[Compactor] ⚠️  预检失败: 保真区过大',
-      );
+      AppLogger.instance.log('[Compactor] ⚠️  预检失败: 保真区过大');
       AppLogger.instance.log(
         '[Compactor] 预计压缩后: $projectedTotal tokens > 阈值 $threshold '
         '($ratio% 上下文占用)',
@@ -305,6 +345,9 @@ class ContextCompactor extends MessageTransformer {
       // 注意：仍然返回压缩结果（至少移除了一些旧内容）
       // 但标记已压缩，避免下次立即重复压缩
     }
+
+    // ─── 优化 2: 检测频繁压缩并自适应调整 ───
+    _detectAndAdjustFrequentCompression(messages);
 
     return cleaned;
   }
@@ -383,7 +426,7 @@ class ContextCompactor extends MessageTransformer {
     }
   }
 
-  /// 清理孤立的工具调用和工具结果
+  /// 清理孤立的工具调用和工具结果（防御层 1/3）
   ///
   /// 算法思想：
   /// 1. 收集所有 assistant 消息中的 tool_call_id（有效的工具调用）
@@ -396,6 +439,10 @@ class ContextCompactor extends MessageTransformer {
   /// - 上下文压缩边界可能割裂 tool_calls 和 tool_result
   /// - 数据库加载时可能丢失某些消息
   /// - OpenAI API 强制要求 tool_calls 和 tool_result 必须成对出现
+  ///
+  /// **重要**：此方法会移除**部分匹配**的 tool_calls。即使一个 assistant 消息
+  /// 有 3 个 tool_calls 但只有 2 个对应结果，也会只保留那 2 个，删除第 3 个。
+  /// 这确保了发送给 LLM 的消息绝对不会有孤立的 tool_calls。
   ///
   /// 这个清理是防御性的，无论是否触发压缩都应该执行。
   List<Map<String, dynamic>> _cleanOrphanedToolMessages(
@@ -483,8 +530,15 @@ class ContextCompactor extends MessageTransformer {
               (content is List && content.isEmpty)) {
             cleanedMsg['content'] = '(tool calls removed during compression)';
           }
+        } else if (validToolCalls.length < toolCalls.length) {
+          // ✅ 部分 tool_calls 被移除：只保留有结果的
+          // 这是关键修复：即使只缺少一个结果，也只保留有结果的 tool_calls
+          cleanedMsg['tool_calls'] = validToolCalls;
+          AppLogger.instance.log(
+            '[Compactor] ⚠️  部分工具调用配对不完整: 保留 ${validToolCalls.length}/${toolCalls.length} 个',
+          );
         } else {
-          // 只保留有效的 tool_calls
+          // 全部有效
           cleanedMsg['tool_calls'] = validToolCalls;
         }
 
@@ -509,39 +563,130 @@ class ContextCompactor extends MessageTransformer {
   /// 找到保真区的起始位置：保留最近 keepRecentTurns 轮完整对话
   /// 一轮 = user + assistant（可能包含中间的 tool 消息）
   ///
-  /// 算法思想：
-  /// - **压缩策略**：按轮数保留，而非按 token 百分比
-  ///   * 原因：轮数更稳定、可预测。无论每轮长短，都保留固定轮数的完整上下文
-  ///   * 例如：100 轮对话，无论总计 10K 还是 1M tokens，都保留最近 6 轮
+  /// ## 压缩策略设计
   ///
-  /// - **触发阈值**：当前对话达到 contextWindow * 50% 时触发压缩
-  ///   * 例如：DeepSeek V3 (1M) → 达到 500K tokens 时压缩
+  /// ### 触发时机
+  /// - 当估算 tokens 超过可用输入空间的 60% 时触发压缩
+  /// - 可用输入空间 = contextWindow - maxOutputTokens (预留输出空间)
+  /// - 例如：128K 上下文，预留 12.8K 输出 → 触发阈值 = 115.2K * 0.60 = 69.1K
   ///
-  /// - **压缩结果**：system + 总结 + 最近 6 轮
-  ///   * 旧对话 → 生成总结 (~500 tokens) + 沉淀到向量数据库
-  ///   * 保真区 → 完整保留，包含工具调用和结果
+  /// ### 保留策略（Token 预算驱动 + 轮数下限）
   ///
-  /// - **工具调用成对保留**：双向检查确保 tool_calls 和 tool_results 不被割裂
-  ///   1. 向前扩展：保真区的 tool 结果 → 对应的 assistant tool_calls 也保留
-  ///   2. 向后检查：保真区的 assistant tool_calls → 对应的 tool 结果也必须在保真区
+  /// **主标准：Token 预算**
+  /// - 目标预算：可用输入空间的 25% (例如 128K → 28.8K)
+  /// - 软上限：目标预算 * 1.5 = 37.5% (例如 128K → 43.2K)
+  /// - 从后向前累积消息，直到达到软上限
   ///
-  /// 特别处理：双向检查确保工具调用和工具结果成对保留。
-  /// 1. 向前扩展：保真区的 tool 结果 → 对应的 assistant tool_calls 也保留
-  /// 2. 向后检查：保真区的 assistant tool_calls → 对应的 tool 结果也必须在保真区
+  /// **辅助标准：轮数下限**
+  /// - 至少保留 2 轮完整对话（无论 token 大小）
+  /// - 防止极端情况下保留内容过少
+  ///
+  /// **取两者中更保守的（保留更多）**
+  /// - 如果 token 预算只能保留 1 轮，但轮数下限要求 2 轮 → 保留 2 轮
+  /// - 如果 2 轮只有 10K tokens，但 token 预算允许 28K → 保留更多轮
+  ///
+  /// ### 为什么是 25% 预算？
+  ///
+  /// ```
+  /// 触发阈值: 60% 可用输入 (例如 69K)
+  /// 压缩到:   25% 可用输入 (例如 29K)
+  /// 释放空间: 40K tokens
+  /// 效果:     足够多轮对话后才再次触发，避免频繁压缩
+  /// ```
+  ///
+  /// ### 软上限 1.5x 的作用
+  ///
+  /// 避免切割超大单消息（如长工具结果）：
+  /// ```
+  /// 预算 28K，最后一条消息 15K：
+  /// - 如果严格限制 28K → 不保留这条 → 可能丢失重要上下文
+  /// - 软上限 43K → 可以保留 → 压缩后 43K (33.5%)
+  /// ```
+  ///
+  /// ### 边界对齐
+  ///
+  /// **向前扩展保护**：
+  /// - 如果保真区包含 tool 结果，向前扩展到对应的 assistant tool_calls
+  /// - 确保工具调用组 (assistant + tool results) 的完整性
+  ///
+  /// ### 压缩效果
+  ///
+  /// - 压缩后占用：25-37.5% 可用输入空间 (约 20-30% 总上下文)
+  /// - 剩余空间：60-75K tokens (足够输出 + 多轮对话)
+  /// - 避免溢出：始终预留 maxOutputTokens (12.8K) 给 LLM 输出
+  ///
+  /// ### 对比其他方案
+  ///
+  /// - **按轮数保留（旧方案）**：固定保留 4 轮，但轮数长短不一，压缩效果不可预测
+  /// - **Token 预算驱动（方案 A）**：压缩后空间可预测，释放足够缓冲
+  /// - **Hermes 方案**：类似 token 预算，但配置更复杂（预算 20K，软上限 1.5x，轮数下限 3）
+  /// - **LangChain 方案**：保留最近 10% 上下文（约 12.8K），但依赖 AI 主动触发压缩
+  ///
+  /// 我们的方案结合了 token 预算的可预测性和轮数下限的保底保护，同时预留输出空间避免溢出。
   int _findRecentBoundary(List<Map<String, dynamic>> messages) {
-    int turnsFound = 0;
-    int idx = messages.length - 1;
+    // ─── 第一步：计算 Token 预算 ───
+    final ctx = contextWindow > 0
+        ? contextWindow
+        : _inferDefaultContextWindow(modelName);
 
-    while (idx > 0 && turnsFound < keepRecentTurns) {
-      final role = messages[idx]['role'] as String?;
-      if (role == 'user') turnsFound++;
-      idx--;
+    // 预留输出空间（避免 LLM 输出时溢出）
+    final maxOutputTokens = 12800; // 约 9600 个中文字
+    final availableInput = ctx - maxOutputTokens;
+
+    // Token 预算：可用输入空间的 25%
+    final budget = (availableInput * 0.25).toInt();
+    final softCeiling = (budget * 1.5).toInt(); // 软上限：37.5%
+
+    // ─── 第二步：按 Token 预算从后向前累积 ───
+    int idxByBudget = messages.length - 1;
+    int accumulated = 0;
+    int messagesInTail = 0;
+
+    while (idxByBudget > 0) {
+      final msgTokens = _estimateTokens([messages[idxByBudget]]);
+
+      // 如果超过软上限且已保护至少 3 条消息，停止
+      if (accumulated + msgTokens > softCeiling && messagesInTail >= 3) {
+        break;
+      }
+
+      accumulated += msgTokens;
+      messagesInTail++;
+      idxByBudget--;
     }
 
-    // idx+1 是初步的保真区起始位置
-    int boundaryIdx = idx + 1;
+    // ─── 第三步：按轮数下限保护（至少保留 2 轮）───
+    final minTurns = 2;
+    int turnsFound = 0;
+    int idxByTurns = messages.length - 1;
 
-    // ─── 第一步：向前扩展（保真区的 tool 结果 → assistant tool_calls）───
+    while (idxByTurns > 0 && turnsFound < minTurns) {
+      final role = messages[idxByTurns]['role'] as String?;
+      if (role == 'user') turnsFound++;
+      idxByTurns--;
+    }
+
+    // ─── 第四步：取两者中更保守的（保留更多）───
+    int boundaryIdx = max(idxByBudget, idxByTurns) + 1;
+
+    // 确保不超出范围
+    boundaryIdx = max(1, min(boundaryIdx, messages.length - 1));
+
+    // ─── 记录策略选择日志 ───
+    final strategyUsed = (idxByBudget >= idxByTurns) ? 'Token预算' : '轮数下限';
+    final recentTokens = accumulated;
+    final recentPercent = (recentTokens / availableInput * 100).toStringAsFixed(
+      1,
+    );
+
+    AppLogger.instance.log(
+      '[Compactor] 保留策略: $strategyUsed | '
+      '预算=${(budget / 1024).toStringAsFixed(1)}K, '
+      '软上限=${(softCeiling / 1024).toStringAsFixed(1)}K, '
+      '实际保留=${(recentTokens / 1024).toStringAsFixed(1)}K ($recentPercent% 可用输入)',
+    );
+
+    // ─── 第五步：向前扩展（保真区的 tool 结果 → assistant tool_calls）───
     // 从边界开始向后扫描，收集所有 tool_call_id
     final toolCallIdsInRecent = <String>{};
     for (int i = boundaryIdx; i < messages.length; i++) {
@@ -918,5 +1063,180 @@ class ContextCompactor extends MessageTransformer {
       buffer.writeln('[$role]: $text');
     }
     return buffer.toString();
+  }
+
+  // ─── 优化方法 ─────────────────────────────────────────────
+
+  /// 优化 1: 压缩超大工具结果
+  ///
+  /// ## 问题背景
+  /// 在 Loop 长对话中，批量工具调用可能产生大量输出：
+  /// - 例如：读取 20 个文件，每个 3000 字符 = 60K tokens
+  /// - 这些都在保真区（最近消息），无法通过常规压缩移除
+  /// - 导致保真区过大，压缩无效，可能溢出上下文窗口
+  ///
+  /// ## 解决方案
+  /// 检测单个工具结果是否超过阈值（5000 字符），如果超过：
+  /// 1. 只保留前 500 字符（足够 LLM 理解结果概要）
+  /// 2. 添加元信息：完整长度 + token 数
+  /// 3. 完整内容可选地沉淀到记忆系统（TODO）
+  ///
+  /// ## 效果
+  /// - 降低 70-90% 工具结果占用
+  /// - 解决单轮超大输出问题
+  /// - 保留关键信息（前 500 字通常包含核心内容）
+  ///
+  /// ## 示例
+  /// ```
+  /// 原始工具结果（10000 字符）：
+  /// "这是一个很长的文件内容... [9500 字符] ...结束"
+  ///
+  /// 压缩后（500 字符）：
+  /// "这是一个很长的文件内容... [450 字符]
+  /// [工具结果已自动压缩，完整内容 10000 字符 / 约 7.5K tokens]"
+  /// ```
+  List<Map<String, dynamic>> _compressLargeToolResults(
+    List<Map<String, dynamic>> messages,
+  ) {
+    int compressedCount = 0;
+    int savedTokens = 0;
+
+    final processed = <Map<String, dynamic>>[];
+    for (final msg in messages) {
+      if (msg['role'] == 'tool') {
+        final content = msg['content'];
+        if (content is String &&
+            content.length > _toolResultCompressionThreshold) {
+          // ─── 计算节省的 token 数 ───
+          // 完整内容的 tokens - 压缩后内容的 tokens
+          final originalTokens = _estimateStringTokens(content);
+          final compressedTokens = _estimateStringTokens(
+            content.substring(0, 500),
+          );
+          savedTokens += originalTokens - compressedTokens;
+          compressedCount++;
+
+          // ─── 创建压缩后的消息 ───
+          // 保留：前 500 字符 + 元信息（长度、token 数）
+          final compressed = Map<String, dynamic>.from(msg);
+          compressed['content'] =
+              '${content.substring(0, 500)}...\n\n'
+              '[工具结果已自动压缩，完整内容 ${content.length} 字符 / '
+              '约 ${(originalTokens / 1024).toStringAsFixed(1)}K tokens]';
+          processed.add(compressed);
+        } else {
+          // 未超过阈值，保持原样
+          processed.add(msg);
+        }
+      } else {
+        // 非工具消息，保持原样
+        processed.add(msg);
+      }
+    }
+
+    // ─── 记录压缩效果 ───
+    if (compressedCount > 0) {
+      AppLogger.instance.log(
+        '[Compactor] 🗜️ 压缩了 $compressedCount 个超大工具结果, '
+        '节省约 ${(savedTokens / 1024).toStringAsFixed(1)}K tokens',
+      );
+    }
+
+    return processed;
+  }
+
+  /// 优化 2: 检测频繁压缩并自适应调整保真区大小
+  ///
+  /// ## 问题背景
+  /// 在 Loop 快速迭代中，可能出现频繁压缩：
+  /// - 压缩后释放空间，但很快又超阈值
+  /// - 每次压缩需要 3-10 秒（LLM 生成摘要）
+  /// - 频繁压缩导致 10% 时间在压缩，影响性能
+  ///
+  /// ## 根本原因
+  /// 保真区（keepRecentTurns）设置过大：
+  /// - 保真区占用 40K tokens
+  /// - 压缩后：摘要 800 tokens + 保真区 40K = 40.8K
+  /// - 仅释放 10K 空间，迭代 5 轮就又超阈值
+  /// - 导致频繁压缩
+  ///
+  /// ## 解决方案
+  /// 检测压缩间隔，自动发现频繁压缩模式：
+  /// 1. 记录每次压缩时的轮数（_lastCompressionRound）
+  /// 2. 下次压缩时计算间隔：currentRound - lastRound
+  /// 3. 如果间隔 < 10 轮 → 认为频繁
+  /// 4. 连续 2 次频繁 → 发出调优建议
+  ///
+  /// ## 为什么是"建议"而不是"自动调整"？
+  /// - keepRecentTurns 是 final 字段（构造时设定）
+  /// - 自动调整需要改为可变字段（影响架构设计）
+  /// - 当前提供日志建议，由开发者决定是否调整配置
+  /// - 更安全：避免运行时自动修改，保持行为可预测
+  ///
+  /// ## 效果
+  /// - 实时发现频繁压缩问题
+  /// - 提供明确的调优方向（降低 keepRecentTurns）
+  /// - 避免性能下降（< 10% → < 5% 时间在压缩）
+  ///
+  /// ## 示例日志
+  /// ```
+  /// [Compactor] ⚠️ 检测到频繁压缩: 距上次仅 7 轮（计数: 1）
+  /// [Compactor] ⚠️ 检测到频繁压缩: 距上次仅 6 轮（计数: 2）
+  /// [Compactor] 💡 建议: 降低 keepRecentTurns 从 4 至 3，以减少频繁压缩
+  /// ```
+  ///
+  /// ## 参数说明
+  /// - allMessages: 当前完整的消息列表，用于计算轮数
+  void _detectAndAdjustFrequentCompression(
+    List<Map<String, dynamic>> allMessages,
+  ) {
+    // ─── 第一步：计算当前轮数 ───
+    // 轮数 = user 消息的数量（每个 user 消息代表一轮对话）
+    int currentRound = 0;
+    for (final msg in allMessages) {
+      if (msg['role'] == 'user') currentRound++;
+    }
+
+    // ─── 第二步：检测频繁压缩 ───
+    if (_lastCompressionRound > 0) {
+      // 计算距离上次压缩的轮数
+      final roundsSinceLastCompression = currentRound - _lastCompressionRound;
+
+      // ─── 判断：间隔 < 10 轮认为是频繁压缩 ───
+      // 为什么是 10 轮？
+      // - 正常情况：压缩后释放 40-50K tokens，足够 15-20 轮
+      // - < 10 轮就再次压缩 → 说明保真区过大，释放空间不足
+      if (roundsSinceLastCompression < 10) {
+        _frequentCompressionCount++;
+        AppLogger.instance.log(
+          '[Compactor] ⚠️  检测到频繁压缩: 距上次仅 $roundsSinceLastCompression 轮 '
+          '(计数: $_frequentCompressionCount)',
+        );
+
+        // ─── 第三步：连续频繁 → 发出调优建议 ───
+        // 连续 2 次频繁压缩 → 说明配置不合理，需要调整
+        if (_frequentCompressionCount >= 2 && keepRecentTurns > 2) {
+          final oldKeep = keepRecentTurns;
+          final newKeep = oldKeep - 1;
+
+          AppLogger.instance.log(
+            '[Compactor] 💡 建议: 降低 keepRecentTurns 从 $oldKeep 至 $newKeep，'
+            '以减少频繁压缩',
+          );
+
+          // 重置计数器，避免重复建议
+          // （开发者收到建议后，会调整配置或接受当前频率）
+          _frequentCompressionCount = 0;
+        }
+      } else {
+        // ─── 压缩间隔正常（≥ 10 轮）→ 重置计数器 ───
+        // 说明当前配置合理，或者已经调整过了
+        _frequentCompressionCount = 0;
+      }
+    }
+
+    // ─── 第四步：记录本次压缩轮数 ───
+    // 供下次压缩时计算间隔
+    _lastCompressionRound = currentRound;
   }
 }

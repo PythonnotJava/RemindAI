@@ -199,6 +199,28 @@ class AgentLoop {
       messages.add({'role': 'user', 'content': userInput});
     }
 
+    // ─── 对话开始时重置压缩标志（修复标志卡死问题）───
+    // 问题：上次对话可能因为异常（LLM 失败、网络超时、用户中断等）
+    // 而未执行 resetRound()，导致 _compactedThisRound 保持 true，
+    // 阻止后续所有压缩。新对话开始 = 新的压缩周期，必须重置。
+    for (final transformer in messagePipeline.transformers) {
+      if (transformer is ContextCompactor) {
+        transformer.resetRound();
+      }
+    }
+
+    // ─── 轻量级检查：记录是否需要压缩（不阻塞）───
+    final tokens = _estimateTokens(messages);
+    final threshold = _getEffectiveThreshold();
+    if (tokens > threshold) {
+      final ctx = contextWindow > 0 ? contextWindow : 128000;
+      final ratio = (tokens / ctx * 100).toStringAsFixed(1);
+      AppLogger.instance.log(
+        '[AgentLoop] 对话开始前检测到超阈值: $tokens > $threshold ($ratio% 上下文), '
+        '将在首轮工具调用后压缩',
+      );
+    }
+
     var round = 0;
     while (true) {
       round++;
@@ -210,8 +232,31 @@ class AgentLoop {
         return;
       }
 
+      // ─── 对话中压缩检查：第 1 轮后立即检查，之后每 5 轮检查一次 ───
+      // 为什么第 1 轮检查？如果对话开始前就超阈值，及时压缩避免溢出
+      // 为什么不在对话开始前压缩？避免阻塞用户消息，影响响应速度
+      if (round == 1 || round % 5 == 0) {
+        await _checkAndCompressIfNeeded(round, messages);
+      }
+
       // ─── 消息变换管线：在发送给 LLM 前处理消息列表 ───
       final effectiveMessages = await messagePipeline.process(messages);
+
+      // ─── 发送前最后验证（防御层 3/3）：检查工具调用配对完整性 ───
+      final validationError = _validateToolCallPairing(effectiveMessages);
+      if (validationError != null) {
+        AppLogger.instance.log('[AgentLoop] ⚠️  检测到工具调用配对问题: $validationError');
+        AppLogger.instance.log('[AgentLoop] 🔧 自动修复中...');
+
+        // 自动修复：移除所有孤立的 tool_calls
+        final fixed = _fixToolCallPairing(effectiveMessages);
+        effectiveMessages.clear();
+        effectiveMessages.addAll(fixed);
+
+        AppLogger.instance.log(
+          '[AgentLoop] ✅ 修复完成: ${messages.length} → ${fixed.length} 条消息',
+        );
+      }
 
       // ─── Hook: onBeforeLlmCall ───
       for (final hook in hooks) {
@@ -473,8 +518,117 @@ class AgentLoop {
         return transformer.effectiveThreshold;
       }
     }
-    // 默认：128K * 0.50 = 64K
+    // 默认：可用输入空间的 60%
+    // 可用输入 = contextWindow - maxOutputTokens (12.8K)
+    // 例如：128K - 12.8K = 115.2K → 115.2K * 0.60 = 69.1K
     final ctx = contextWindow > 0 ? contextWindow : 128000;
-    return (ctx * 0.50).toInt();
+    final availableInput = ctx - 12800;
+    return (availableInput * 0.60).toInt();
+  }
+
+  // ─── 工具调用配对验证（防御层 3/3）───────────────────────────
+
+  /// 验证消息列表中的工具调用配对完整性
+  ///
+  /// 检查所有 assistant 消息的 tool_calls 是否都有对应的 tool 结果。
+  /// 返回 null 表示验证通过，否则返回错误描述。
+  ///
+  /// 这是发送给 LLM 前的最后一道防线，确保即使压缩逻辑有漏洞，
+  /// 也不会发送无效的消息给 API（导致 HTTP 400）。
+  String? _validateToolCallPairing(List<Map<String, dynamic>> messages) {
+    final pendingToolCalls = <String, String>{}; // tool_call_id → tool_name
+
+    for (var i = 0; i < messages.length; i++) {
+      final msg = messages[i];
+
+      if (msg['role'] == 'assistant' && msg['tool_calls'] != null) {
+        final toolCalls = msg['tool_calls'] as List;
+        for (final tc in toolCalls) {
+          final id = tc['id'] as String?;
+          final name = tc['function']?['name'] as String? ?? 'unknown';
+          if (id != null) {
+            pendingToolCalls[id] = name;
+          }
+        }
+      } else if (msg['role'] == 'tool') {
+        final toolCallId = msg['tool_call_id'] as String?;
+        if (toolCallId != null) {
+          pendingToolCalls.remove(toolCallId);
+        }
+      }
+    }
+
+    if (pendingToolCalls.isNotEmpty) {
+      final examples = pendingToolCalls.values.take(3).join(', ');
+      return '缺少 ${pendingToolCalls.length} 个工具调用结果: $examples';
+    }
+
+    return null;
+  }
+
+  /// 修复工具调用配对不完整的问题
+  ///
+  /// 策略：从 assistant 消息中移除没有对应 tool 结果的 tool_calls。
+  /// 这比删除整个 assistant 消息更安全，保留了消息的文本内容。
+  ///
+  /// 两遍扫描：
+  /// 1. 收集所有存在的 tool results（有效的 tool_call_id 集合）
+  /// 2. 过滤 assistant 消息的 tool_calls，只保留有对应结果的
+  List<Map<String, dynamic>> _fixToolCallPairing(
+    List<Map<String, dynamic>> messages,
+  ) {
+    final fixed = <Map<String, dynamic>>[];
+    final availableResults = <String>{}; // 所有可用的 tool_call_id
+
+    // 第一遍：收集所有存在的 tool results
+    for (final msg in messages) {
+      if (msg['role'] == 'tool') {
+        final toolCallId = msg['tool_call_id'] as String?;
+        if (toolCallId != null) {
+          availableResults.add(toolCallId);
+        }
+      }
+    }
+
+    // 第二遍：过滤 assistant 消息的 tool_calls
+    for (final msg in messages) {
+      if (msg['role'] == 'assistant' && msg['tool_calls'] != null) {
+        final toolCalls = msg['tool_calls'] as List;
+        final validCalls = toolCalls.where((tc) {
+          final id = tc['id'] as String?;
+          return id != null && availableResults.contains(id);
+        }).toList();
+
+        if (validCalls.isEmpty) {
+          // 所有 tool_calls 都孤立，删除
+          final cleaned = Map<String, dynamic>.from(msg);
+          cleaned.remove('tool_calls');
+          final content = cleaned['content'];
+          if (content == null ||
+              (content is String && content.trim().isEmpty) ||
+              (content is List && content.isEmpty)) {
+            cleaned['content'] = '(tool calls removed)';
+          }
+          fixed.add(cleaned);
+        } else if (validCalls.length < toolCalls.length) {
+          // 部分孤立，只保留有结果的
+          final cleaned = Map<String, dynamic>.from(msg);
+          cleaned['tool_calls'] = validCalls;
+          fixed.add(cleaned);
+
+          final removedCount = toolCalls.length - validCalls.length;
+          AppLogger.instance.log(
+            '[AgentLoop] 🔧 移除 $removedCount 个孤立的 tool_calls',
+          );
+        } else {
+          // 全部有效
+          fixed.add(msg);
+        }
+      } else {
+        fixed.add(msg);
+      }
+    }
+
+    return fixed;
   }
 }

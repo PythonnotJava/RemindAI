@@ -35,7 +35,8 @@ class _GalleryViewerPageState extends State<GalleryViewerPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // 当应用进入后台或页面不可见时暂停动画
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       _controller.stop();
     } else if (state == AppLifecycleState.resumed) {
       // 恢复时继续动画
