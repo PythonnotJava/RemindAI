@@ -473,8 +473,8 @@ class AgentLoop {
         return transformer.effectiveThreshold;
       }
     }
-    // 默认：128K * 0.60 = 76.8K
+    // 默认：128K * 0.50 = 64K
     final ctx = contextWindow > 0 ? contextWindow : 128000;
-    return (ctx * 0.60).toInt();
+    return (ctx * 0.50).toInt();
   }
 }

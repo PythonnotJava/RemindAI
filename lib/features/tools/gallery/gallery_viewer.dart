@@ -11,13 +11,14 @@ class GalleryViewerPage extends StatefulWidget {
 }
 
 class _GalleryViewerPageState extends State<GalleryViewerPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _controller;
   bool _showStory = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(days: 1),
@@ -26,8 +27,22 @@ class _GalleryViewerPageState extends State<GalleryViewerPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 当应用进入后台或页面不可见时暂停动画
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _controller.stop();
+    } else if (state == AppLifecycleState.resumed) {
+      // 恢复时继续动画
+      if (!_controller.isAnimating) {
+        _controller.repeat();
+      }
+    }
   }
 
   @override

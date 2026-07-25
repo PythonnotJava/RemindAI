@@ -223,6 +223,34 @@ class ContextCompactor extends MessageTransformer {
       return messages;
     }
 
+    // ─── 预检：保真区大小检查 ───
+    final recentTokens = _estimateTokens(recent);
+    final threshold = effectiveThreshold;
+    final systemTokens = _estimateTokens([system]);
+    final summaryEstimate = 800; // 预估摘要大小
+
+    final projectedTotal = systemTokens + summaryEstimate + recentTokens;
+    if (projectedTotal > threshold) {
+      final ctx = contextWindow > 0
+          ? contextWindow
+          : _inferDefaultContextWindow(modelName);
+      final ratio = (projectedTotal / ctx * 100).toStringAsFixed(1);
+
+      AppLogger.instance.log(
+        '[Compactor] ⚠️  预检失败: 保真区过大',
+      );
+      AppLogger.instance.log(
+        '[Compactor] 预计压缩后: $projectedTotal tokens > 阈值 $threshold '
+        '($ratio% 上下文占用)',
+      );
+      AppLogger.instance.log(
+        '[Compactor] 保真区: ${recent.length}条消息, 约$recentTokens tokens',
+      );
+      AppLogger.instance.log(
+        '[Compactor] ⚠️  继续压缩但可能无效，建议减少 keepRecentTurns (当前=$keepRecentTurns)',
+      );
+    }
+
     AppLogger.instance.log(
       '[Compactor] 分区: system=1, 压缩区=${compressible.length}条, '
       '保真区=${recent.length}条',
@@ -248,10 +276,35 @@ class ContextCompactor extends MessageTransformer {
     final cleaned = _cleanOrphanedToolMessages(result);
 
     final newTokens = _estimateTokens(cleaned);
+    final oldTokens = _estimateTokens(messages);
     AppLogger.instance.log(
       '[Compactor] 压缩完成: ${messages.length}条→${cleaned.length}条, '
-      '估算 token: $newTokens',
+      '估算 token: $oldTokens → $newTokens',
     );
+
+    // ─── 第五步：验证压缩效果 ───
+    // 如果压缩后仍然超过阈值，说明保真区太大，压缩无效
+    if (newTokens > threshold) {
+      final ctx = contextWindow > 0
+          ? contextWindow
+          : _inferDefaultContextWindow(modelName);
+      final ratio = (newTokens / ctx * 100).toStringAsFixed(1);
+
+      AppLogger.instance.log(
+        '[Compactor] ⚠️  压缩后仍超阈值: $newTokens > $threshold '
+        '($ratio% 上下文占用)',
+      );
+      AppLogger.instance.log(
+        '[Compactor] 原因: 保真区过大 (${recent.length}条消息, 约${_estimateTokens(recent)} tokens)',
+      );
+      AppLogger.instance.log(
+        '[Compactor] 建议: 减少 keepRecentTurns (当前=$keepRecentTurns) '
+        '或增加上下文窗口',
+      );
+
+      // 注意：仍然返回压缩结果（至少移除了一些旧内容）
+      // 但标记已压缩，避免下次立即重复压缩
+    }
 
     return cleaned;
   }
@@ -336,7 +389,7 @@ class ContextCompactor extends MessageTransformer {
   /// 1. 收集所有 assistant 消息中的 tool_call_id（有效的工具调用）
   /// 2. 收集所有 tool 消息中的 tool_call_id（有效的工具结果）
   /// 3. 移除没有对应工具调用的 tool 结果（孤立结果）
-  /// 4. 移除没有对应工具结果的 assistant tool_calls（孤立调用）
+  /// 4. 从 assistant 消息中移除没有对应结果的 tool_calls（不删除整个消息）
   ///
   /// 为什么需要这个？
   /// - 并行工具调用时，某个工具执行失败可能导致缺少 tool result
@@ -368,8 +421,12 @@ class ContextCompactor extends MessageTransformer {
       }
     }
 
-    // 3. 过滤掉孤立的消息
-    final cleaned = messages.where((msg) {
+    // 3. 清理消息
+    final cleaned = <Map<String, dynamic>>[];
+    int removedToolResults = 0;
+    int removedToolCalls = 0;
+
+    for (final msg in messages) {
       // 移除没有对应工具调用的 tool 结果
       if (msg['role'] == 'tool') {
         final toolCallId = msg['tool_call_id'] as String?;
@@ -379,21 +436,26 @@ class ContextCompactor extends MessageTransformer {
           AppLogger.instance.log(
             '[Compactor] 🗑️  清理孤立的工具结果: tool_call_id=$toolCallId',
           );
+          removedToolResults++;
+          continue; // 跳过这个消息
         }
-        return isValid;
+        cleaned.add(msg);
+        continue;
       }
 
-      // 移除没有对应工具结果的 assistant tool_calls
+      // 清理 assistant 消息中没有对应结果的 tool_calls
       if (msg['role'] == 'assistant' && msg['tool_calls'] is List) {
         final toolCalls = msg['tool_calls'] as List;
-        // 检查所有 tool_calls 是否都有对应的结果
-        final allToolCallsHaveResults = toolCalls.every((tc) {
+
+        // 过滤出有对应结果的 tool_calls
+        final validToolCalls = toolCalls.where((tc) {
           final id = tc['id'] as String?;
           return id != null && validToolResultIds.contains(id);
-        });
+        }).toList();
 
-        if (!allToolCallsHaveResults) {
-          final missingIds = toolCalls
+        // 如果有 tool_calls 被移除，记录日志
+        if (validToolCalls.length < toolCalls.length) {
+          final removedIds = toolCalls
               .where((tc) {
                 final id = tc['id'] as String?;
                 return id == null || !validToolResultIds.contains(id);
@@ -402,18 +464,43 @@ class ContextCompactor extends MessageTransformer {
               .where((id) => id != null)
               .join(', ');
           AppLogger.instance.log(
-            '[Compactor] 🗑️  清理缺少工具结果的 assistant 消息: tool_call_ids=[$missingIds]',
+            '[Compactor] 🗑️  移除孤立的工具调用: tool_call_ids=[$removedIds]',
           );
-          return false;
+          removedToolCalls += (toolCalls.length - validToolCalls.length);
         }
+
+        // 创建清理后的消息副本
+        final cleanedMsg = Map<String, dynamic>.from(msg);
+
+        if (validToolCalls.isEmpty) {
+          // 所有 tool_calls 都被移除
+          cleanedMsg.remove('tool_calls');
+
+          // 如果 content 也为空，插入占位符
+          final content = cleanedMsg['content'];
+          if (content == null ||
+              (content is String && content.trim().isEmpty) ||
+              (content is List && content.isEmpty)) {
+            cleanedMsg['content'] = '(tool calls removed during compression)';
+          }
+        } else {
+          // 只保留有效的 tool_calls
+          cleanedMsg['tool_calls'] = validToolCalls;
+        }
+
+        cleaned.add(cleanedMsg);
+        continue;
       }
 
-      return true;
-    }).toList();
+      // 其他消息保持原样
+      cleaned.add(msg);
+    }
 
-    final removedCount = messages.length - cleaned.length;
-    if (removedCount > 0) {
-      AppLogger.instance.log('[Compactor] ✅ 完整性检查: 移除 $removedCount 条孤立消息');
+    if (removedToolResults > 0 || removedToolCalls > 0) {
+      AppLogger.instance.log(
+        '[Compactor] ✅ 完整性检查: 移除 $removedToolResults 个孤立工具结果, '
+        '$removedToolCalls 个孤立工具调用',
+      );
     }
 
     return cleaned;
