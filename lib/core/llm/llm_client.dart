@@ -618,22 +618,119 @@ class _ToolCallAccumulator {
     final fn = delta['function'] as Map<String, dynamic>?;
     if (fn != null) {
       if (fn['name'] != null) name = fn['name'] as String;
-      if (fn['arguments'] != null) _argsBuf.write(fn['arguments'] as String);
+      if (fn['arguments'] != null) {
+        final argChunk = fn['arguments'];
+        if (argChunk is String) {
+          _argsBuf.write(argChunk);
+        } else {
+          // 非标准实现：arguments 不是 String（可能是 Map 或其他类型）
+          print(
+            '[LLM] ⚠️ tool_call arguments 类型异常: ${argChunk.runtimeType} (tool=$name)',
+          );
+          // 尝试转成 JSON 字符串
+          try {
+            _argsBuf.write(jsonEncode(argChunk));
+          } catch (_) {
+            _argsBuf.write(argChunk.toString());
+          }
+        }
+      }
     }
   }
 
   ToolCall build() {
     Map<String, dynamic> args;
+    final rawArgs = _argsBuf.toString();
+
+    // ─── 诊断：arguments 累积情况 ───
+    if (rawArgs.isEmpty) {
+      // arguments 完全为空！说明流式传输中一个字符都没收到
+      // 常见原因：
+      // 1. 模型没有生成 arguments（只给了 function name）
+      // 2. 代理/API 截断了 arguments 字段
+      // 3. 模型把参数放到了 content 而不是 tool_calls
+      print(
+        '[LLM] ❌ tool_call arguments 为空 (tool=$name): '
+        '模型未返回任何参数内容，可能是内容过长导致生成失败',
+      );
+    }
+
     try {
-      args = jsonDecode(_argsBuf.toString()) as Map<String, dynamic>;
-    } catch (_) {
-      args = {};
+      args = rawArgs.isEmpty ? <String, dynamic>{} : jsonDecode(rawArgs) as Map<String, dynamic>;
+    } catch (e) {
+      // ─── arguments JSON 解析失败：尝试修复 ───
+      // 常见原因：
+      // 1. 流式传输被截断（网络中断、代理超时）
+      // 2. 模型输出不完整的 JSON（生成到一半就结束）
+      // 3. 特殊字符未正确转义
+      //
+      // 修复策略：
+      // 1. 尝试补全不完整的 JSON（添加缺少的 } 或 "）
+      // 2. 如果仍然失败，尝试提取已有的键值对
+      // 3. 最后兜底返回空 Map 并记录完整错误信息
+
+      args = _tryFixIncompleteJson(rawArgs);
+
+      if (args.isEmpty && rawArgs.isNotEmpty) {
+        // 修复也失败了，记录详细日志供排查
+        print(
+          '[LLM] ⚠️ tool_call arguments 解析失败 (tool=$name): $e\n'
+          '[LLM] 原始内容 (${rawArgs.length} chars): '
+          '${rawArgs.length > 200 ? '${rawArgs.substring(0, 200)}...' : rawArgs}',
+        );
+      }
     }
     return ToolCall(
       id: id ?? 'call_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       arguments: args,
     );
+  }
+
+  /// 尝试修复不完整的 JSON 字符串
+  ///
+  /// 策略：
+  /// 1. 如果缺少结尾的 } → 补全
+  /// 2. 如果字符串值未闭合 → 补全引号
+  /// 3. 如果末尾有多余的逗号 → 移除
+  /// 4. 如果完全无效 → 返回空 Map
+  static Map<String, dynamic> _tryFixIncompleteJson(String raw) {
+    if (raw.isEmpty) return {};
+
+    var fixed = raw.trim();
+
+    // 移除末尾不完整的键值对（如 "key": 或 "key": "val）
+    // 策略：从后向前找到最后一个完整的值
+    if (!fixed.endsWith('}')) {
+      // 尝试补全：移除末尾不完整的部分，加上 }
+      // 找到最后一个完整的值结束位置（", 或 数字, 或 true/false/null, 或 }]）
+      final lastComplete = RegExp(r'["\d\]}\w](,?)(?:\s*"[^"]*"\s*:\s*(?:"[^"]*$|[^,}\]]*$))?$');
+      final match = lastComplete.firstMatch(fixed);
+      if (match != null) {
+        // 截断到最后一个完整值
+        fixed = fixed.substring(0, match.start + 1);
+      }
+
+      // 移除末尾的逗号
+      fixed = fixed.trimRight();
+      if (fixed.endsWith(',')) {
+        fixed = fixed.substring(0, fixed.length - 1);
+      }
+
+      // 补全括号
+      final openBraces = '{'.allMatches(fixed).length;
+      final closeBraces = '}'.allMatches(fixed).length;
+      for (var i = 0; i < openBraces - closeBraces; i++) {
+        fixed += '}';
+      }
+    }
+
+    // 尝试解析修复后的 JSON
+    try {
+      return jsonDecode(fixed) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
   }
 }
 

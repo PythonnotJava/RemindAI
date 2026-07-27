@@ -937,6 +937,14 @@ class AgentContextBuilder {
       '无论你的底层模型是什么，在本次对话中你的身份是 RemindAI 助手。\n\n',
     );
 
+    // ─── 当前日期/时间注入 ───
+    // LLM 不知道"今天"是什么日期，必须显式告知。
+    // 否则模型会使用训练数据截止时间（如"2025年"），生成过期的时间信息。
+    final now = DateTime.now();
+    final dateStr = '${now.year}年${now.month}月${now.day}日';
+    final weekday = ['一', '二', '三', '四', '五', '六', '日'][now.weekday - 1];
+    parts.add('当前日期: $dateStr (星期$weekday)\n\n');
+
     // 领域专家
     final activeExpert = _ref.read(activeExpertProvider);
     if (activeExpert != null) {

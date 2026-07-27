@@ -200,6 +200,14 @@ toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<
 ### 文件写入
 - normal 模式: 先展示变更内容，确认后写入
 - auto 模式: 直接写入
+- **重要：长内容写入限制**
+  - `toolshell_write` 的 content 参数通过 JSON 传输，内容过长（超过 2000 字符）时可能导致参数传输失败
+  - 如果要写入的内容较长（如整理搜索结果、生成报告等），**必须使用 `toolshell_exec`** 通过 shell 写入：
+    ```
+    toolshell_exec(command: "cat > filename.md << 'HEREDOC'\n内容...\nHEREDOC")
+    ```
+  - 或者分多次 append：先 create 空文件，再多次 append 短内容
+  - 简短内容（< 2000 字符）可以直接使用 `toolshell_write`
 
 ### 命令执行
 - 使用 Bash 工具执行 Shell 命令

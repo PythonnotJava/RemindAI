@@ -173,21 +173,31 @@ class ToolPipeline {
       calls.add(_ParallelCall(tool: tool, args: callArgs));
     }
 
-    // 资源冲突安全兜底：写/删/执行/跑代码/嵌套并行 一律拒绝批量并行
-    final blocked = <String>{
-      for (final c in calls)
-        if (c.tool == 'toolshell_run_parallel' ||
-            kApprovalRequiredTools.contains(c.tool))
-          c.tool,
-    };
-    if (blocked.isNotEmpty) {
+    // ─── 资源冲突检测：只允许操作不同目标的并行 ───
+    // 策略：
+    // 1. 仍然禁止嵌套并行（toolshell_run_parallel）
+    // 2. 检测写/删/执行操作的目标冲突：
+    //    - 写/删：检查文件路径是否重复
+    //    - 执行：检查命令是否相同
+    // 3. 如果操作不同目标 → 允许并行 ✅
+    // 4. 如果操作相同目标 → 拒绝并行 ❌
+
+    // 禁止嵌套并行
+    if (calls.any((c) => c.tool == 'toolshell_run_parallel')) {
       return jsonEncode({
         'status': 'error',
         'code': 'PARALLEL_NOT_ALLOWED',
-        'detail':
-            '以下工具不允许出现在 toolshell_run_parallel 的批次中（涉及写/删/执行'
-            '或嵌套并行，存在资源竞态/需人工确认风险): ${blocked.join(", ")}。'
-            '请改为逐个串行调用这些工具。',
+        'detail': '不允许嵌套调用 toolshell_run_parallel',
+      });
+    }
+
+    // 检测资源冲突
+    final conflictCheck = _detectResourceConflict(calls);
+    if (conflictCheck != null) {
+      return jsonEncode({
+        'status': 'error',
+        'code': 'PARALLEL_NOT_ALLOWED',
+        'detail': conflictCheck,
       });
     }
 
@@ -211,6 +221,114 @@ class ToolPipeline {
       'count': results.length,
       'results': results,
     });
+  }
+
+  /// 检测资源冲突
+  ///
+  /// 检查并行调用中是否存在资源冲突：
+  /// 1. 写操作：多个写操作指向同一文件路径 → 冲突
+  /// 2. 删操作：多个删操作指向同一文件路径 → 冲突
+  /// 3. 写+删：同一文件同时被写入和删除 → 冲突
+  /// 4. 执行：多个 exec 执行相同命令 → 冲突
+  ///
+  /// 返回：
+  /// - null: 无冲突，允许并行
+  /// - String: 冲突描述，拒绝并行
+  String? _detectResourceConflict(List<_ParallelCall> calls) {
+    final writePaths = <String>[];
+    final deletePaths = <String>[];
+    final execCommands = <String>[];
+    final pythonScripts = <String>[];
+    final jsScripts = <String>[];
+
+    for (final call in calls) {
+      switch (call.tool) {
+        case 'toolshell_write':
+          final path = call.args['path'] as String?;
+          if (path == null || path.isEmpty) {
+            return 'toolshell_write 缺少 path 参数';
+          }
+          // 检测重复写入
+          if (writePaths.contains(path)) {
+            return '冲突: 多个写操作指向同一文件 "$path"';
+          }
+          // 检测写+删冲突
+          if (deletePaths.contains(path)) {
+            return '冲突: 文件 "$path" 同时被写入和删除';
+          }
+          writePaths.add(path);
+          break;
+
+        case 'toolshell_delete':
+          final path = call.args['path'] as String?;
+          if (path == null || path.isEmpty) {
+            return 'toolshell_delete 缺少 path 参数';
+          }
+          // 检测重复删除
+          if (deletePaths.contains(path)) {
+            return '冲突: 多个删除操作指向同一文件 "$path"';
+          }
+          // 检测删+写冲突
+          if (writePaths.contains(path)) {
+            return '冲突: 文件 "$path" 同时被写入和删除';
+          }
+          deletePaths.add(path);
+          break;
+
+        case 'toolshell_exec':
+          final command = call.args['command'] as String?;
+          if (command == null || command.isEmpty) {
+            return 'toolshell_exec 缺少 command 参数';
+          }
+          // 检测重复执行相同命令
+          if (execCommands.contains(command)) {
+            final preview = command.length > 50
+                ? '${command.substring(0, 50)}...'
+                : command;
+            return '冲突: 多个 exec 执行相同命令 "$preview"';
+          }
+          execCommands.add(command);
+          break;
+
+        case 'toolshell_run_python':
+          final code = call.args['code'] as String?;
+          if (code == null || code.isEmpty) {
+            return 'toolshell_run_python 缺少 code 参数';
+          }
+          // 检测重复执行相同代码
+          if (pythonScripts.contains(code)) {
+            return '冲突: 多个 run_python 执行相同代码';
+          }
+          pythonScripts.add(code);
+          break;
+
+        case 'toolshell_run_js':
+          final code = call.args['code'] as String?;
+          if (code == null || code.isEmpty) {
+            return 'toolshell_run_js 缺少 code 参数';
+          }
+          // 检测重复执行相同代码
+          if (jsScripts.contains(code)) {
+            return '冲突: 多个 run_js 执行相同代码';
+          }
+          jsScripts.add(code);
+          break;
+
+        // worktree 操作也需要权限，但通常不会并行调用，暂不检测
+        case 'toolshell_worktree_start':
+        case 'toolshell_worktree_finish':
+        case 'toolshell_worktree_revert':
+          // 这些操作涉及 git 状态修改，理论上不应该并行
+          // 但为了简单，允许（如果 LLM 真的尝试并行，让它自己承担后果）
+          break;
+
+        default:
+        // 其他工具（read, search 等）无需检测冲突
+      }
+    }
+
+    // 无冲突
+    return null;
   }
 
   /// 子调用返回的是 JSON 字符串，尝试解成结构化对象方便汇总展示；

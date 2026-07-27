@@ -231,6 +231,22 @@ class Executor {
   }
 
   Future<String> _write(Map<String, dynamic> args) async {
+    // ─── 参数完全为空的特殊处理 ───
+    // 这通常是因为 LLM 的 tool_call arguments 传输失败（内容过长、
+    // 流式截断、JSON 格式错误等），而不是 LLM 真的没给参数。
+    // 给出明确的修复建议，帮助 LLM 自我纠正。
+    if (args.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_write 参数为空（可能是内容过长导致参数传输失败）。\n'
+        '建议：\n'
+        '1. 如果要写入的内容很长，请先用 toolshell_exec 执行 echo/cat 命令写入\n'
+        '2. 或者分多次写入（先 create 空文件，再 append 内容）\n'
+        '3. 确保 path、content、mode 三个参数都已提供\n'
+        '必需参数: path (String), content (String), mode ("create"|"overwrite"|"append")',
+      );
+    }
+
     final pathArg = args['path'];
     if (pathArg == null || pathArg is! String || pathArg.isEmpty) {
       return _err(
