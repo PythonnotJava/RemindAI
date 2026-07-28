@@ -656,7 +656,9 @@ class _ToolCallAccumulator {
     }
 
     try {
-      args = rawArgs.isEmpty ? <String, dynamic>{} : jsonDecode(rawArgs) as Map<String, dynamic>;
+      args = rawArgs.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(rawArgs) as Map<String, dynamic>;
     } catch (e) {
       // ─── arguments JSON 解析失败：尝试修复 ───
       // 常见原因：
@@ -704,7 +706,9 @@ class _ToolCallAccumulator {
     if (!fixed.endsWith('}')) {
       // 尝试补全：移除末尾不完整的部分，加上 }
       // 找到最后一个完整的值结束位置（", 或 数字, 或 true/false/null, 或 }]）
-      final lastComplete = RegExp(r'["\d\]}\w](,?)(?:\s*"[^"]*"\s*:\s*(?:"[^"]*$|[^,}\]]*$))?$');
+      final lastComplete = RegExp(
+        r'["\d\]}\w](,?)(?:\s*"[^"]*"\s*:\s*(?:"[^"]*$|[^,}\]]*$))?$',
+      );
       final match = lastComplete.firstMatch(fixed);
       if (match != null) {
         // 截断到最后一个完整值

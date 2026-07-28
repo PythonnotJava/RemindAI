@@ -314,7 +314,7 @@ class SEn extends S {
 
   @override
   String get chatSupportsTools =>
-      'Supports file operations, shell commands, memory storage';
+      'Take AI beyond the chat box and let it truly get hands-on with your work';
 
   @override
   String get chatCreateWorkspace => 'Create workspace';

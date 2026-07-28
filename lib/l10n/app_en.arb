@@ -105,7 +105,7 @@
   "chatNewWorkspace": "New workspace",
   "chatNeedConfig": "API URL, key, and model name must be configured",
   "chatStartConversation": "Start conversation",
-  "chatSupportsTools": "Supports file operations, shell commands, memory storage",
+  "chatSupportsTools": "Take AI beyond the chat box and let it truly get hands-on with your work",
   "chatCreateWorkspace": "Create workspace",
   "chatAttachments": "Attachments",
   "chatSlashCommands": "Commands",

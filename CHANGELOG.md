@@ -10,7 +10,13 @@
 - 除此之外还优化了其他卡顿问题和UI
 
 ## en
-
+- Optimized the streaming UI to handle touch interruptions and prevent rendering when the user interrupts (though the data is still preserved in the context, even if the visual result is less polished).
+- Optimized performance to resolve UI rendering lag during very long conversations and when large amounts of UI content are generated near the end of a turn.
+- Refined the streaming UI experience during conversations.
+- Added configuration options for context window size and maximum output tokens to model cards (defaulting to 128K and 12.8K if not specified).
+- Enhanced support for the Anthropic protocol.
+- Added WebView-based H5 rendering code for Linux and macOS (though not yet verified).
+- Implemented various other UI and performance optimizations to reduce lag.
 
 # V1.0.4
 

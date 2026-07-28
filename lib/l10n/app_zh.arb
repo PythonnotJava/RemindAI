@@ -106,7 +106,7 @@
   "chatNewWorkspace": "新建工作目录",
   "chatNeedConfig": "需要配置 API 地址、密钥和模型名称",
   "chatStartConversation": "开始对话",
-  "chatSupportsTools": "支持文件操作、Shell 命令、记忆存储",
+  "chatSupportsTools": "让 AI 走出对话框，真正「上手」你的工作",
   "chatCreateWorkspace": "创建工作目录",
   "chatAttachments": "附件",
   "chatSlashCommands": "命令",

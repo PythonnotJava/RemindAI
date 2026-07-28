@@ -682,7 +682,7 @@ abstract class S {
   /// No description provided for @chatSupportsTools.
   ///
   /// In zh, this message translates to:
-  /// **'支持文件操作、Shell 命令、记忆存储'**
+  /// **'让 AI 走出对话框，真正「上手」你的工作'**
   String get chatSupportsTools;
 
   /// No description provided for @chatCreateWorkspace.
