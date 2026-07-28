@@ -63,7 +63,7 @@ SCHEDULE.md
 /android/app/debug
 /android/app/profile
 /android/app/release
-
+memory/
 
 _engine/
 
