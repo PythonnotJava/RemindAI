@@ -11,7 +11,13 @@ import 'theme_map.dart';
 ///
 /// Uses [SelectableText.rich] so the rendered code is selectable and copyable.
 /// Long lines scroll horizontally via a [SingleChildScrollView].
-class HighlightView extends StatelessWidget {
+///
+/// The built [TextSpan] is memoised: rebuilding with the same `code`,
+/// `language`, `theme` and `textStyle` reuses the previous span instead of
+/// re-running the highlight engine. That matters in chat UIs, where a
+/// streaming message rebuilds every frame while most of an already-finished
+/// code block never changes.
+class HighlightView extends StatefulWidget {
   /// Source code to highlight.
   final String code;
 
@@ -58,26 +64,65 @@ class HighlightView extends StatelessWidget {
   });
 
   @override
+  State<HighlightView> createState() => _HighlightViewState();
+}
+
+class _HighlightViewState extends State<HighlightView> {
+  /// Memoised highlight result. `null` until the first build.
+  TextSpan? _cachedSpan;
+
+  // 缓存键：只有这四个输入全都没变时才能复用已解析的 span。
+  // theme / textStyle 用 identical 比对——主题通常是顶层 const map，
+  // 身份稳定；调用方若每帧新建主题对象，这里只是少一次命中，不会串色。
+  String? _cachedCode;
+  String? _cachedLanguage;
+  HljsTheme? _cachedTheme;
+  TextStyle? _cachedTextStyle;
+
+  @override
+  void didUpdateWidget(covariant HighlightView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 换引擎（注册了别的语言）时旧 span 的解析结果不再可信。
+    if (!identical(oldWidget.highlighter, widget.highlighter)) {
+      _cachedSpan = null;
+    }
+  }
+
+  bool get _cacheHit =>
+      _cachedSpan != null &&
+      _cachedCode == widget.code &&
+      _cachedLanguage == widget.language &&
+      identical(_cachedTheme, widget.theme) &&
+      identical(_cachedTextStyle, widget.textStyle);
+
+  @override
   Widget build(BuildContext context) {
-    final themeMap = ThemeMap(theme);
+    final themeMap = ThemeMap(widget.theme);
 
     final baseStyle = const TextStyle(
       fontFamily: 'monospace',
       fontSize: 14,
       height: 1.5,
-    ).merge(textStyle);
+    ).merge(widget.textStyle);
 
-    final span = _buildSpan(themeMap, baseStyle);
-    final lineCount = '\n'.allMatches(code).length + 1;
+    if (!_cacheHit) {
+      _cachedSpan = _buildSpan(themeMap, baseStyle);
+      _cachedCode = widget.code;
+      _cachedLanguage = widget.language;
+      _cachedTheme = widget.theme;
+      _cachedTextStyle = widget.textStyle;
+    }
+    final span = _cachedSpan!;
+    final lineCount = '\n'.allMatches(widget.code).length + 1;
 
     final effectiveLineNumberStyle =
-        lineNumberStyle ??
+        widget.lineNumberStyle ??
         baseStyle.copyWith(
           color: (themeMap.rootStyle.color ?? const Color(0xFF888888))
               .withAlpha(128),
         );
 
-    Widget codeWidget = SingleChildScrollView(
+    final Widget codeWidget = SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SelectableText.rich(
         span,
@@ -85,14 +130,14 @@ class HighlightView extends StatelessWidget {
       ),
     );
 
-    Widget body;
-    if (showLineNumbers) {
+    final Widget body;
+    if (widget.showLineNumbers) {
       body = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           LineNumberGutter(
             lineCount: lineCount,
-            firstLineNumber: firstLineNumber,
+            firstLineNumber: widget.firstLineNumber,
             style: effectiveLineNumberStyle,
             lineHeight: baseStyle.height,
           ),
@@ -105,19 +150,19 @@ class HighlightView extends StatelessWidget {
 
     return Container(
       color: themeMap.backgroundColor,
-      padding: padding ?? const EdgeInsets.all(16),
+      padding: widget.padding ?? const EdgeInsets.all(16),
       width: double.infinity,
       child: body,
     );
   }
 
   TextSpan _buildSpan(ThemeMap themeMap, TextStyle baseStyle) {
-    final hl = highlighter ?? Highlight();
+    final hl = widget.highlighter ?? Highlight();
     HighlightResult result;
-    if (language != null) {
-      result = hl.highlight(code, language: language!);
+    if (widget.language != null) {
+      result = hl.highlight(widget.code, language: widget.language!);
     } else {
-      result = hl.highlightAuto(code);
+      result = hl.highlightAuto(widget.code);
     }
 
     final builder = TextSpanBuilder(themeMap: themeMap, baseStyle: baseStyle);
