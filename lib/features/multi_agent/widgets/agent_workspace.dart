@@ -6,7 +6,9 @@ import 'package:dock_panel/dock_panel.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/l10n/l10n_ext.dart';
+import '../../../core/logger/app_logger.dart';
 import '../../../core/utils/directory_picker.dart';
+import '../dock_layout_storage.dart';
 import '../models/agent_config.dart';
 import '../providers/multi_agent_provider.dart';
 import '../theme/agent_dock_theme.dart';
@@ -53,11 +55,19 @@ class _AgentWorkspaceState extends ConsumerState<AgentWorkspace> {
         ),
       );
     }
-    _setupDockLayout();
-    ref.listenManual(dockManagerProvider, _detectClosedPanels);
+    _setupPersistentDockLayout().whenComplete(() {
+      if (!mounted) return;
+      ref.listenManual(dockManagerProvider, _detectClosedPanels);
+      setState(() {});
+    });
   }
 
-  void _setupDockLayout() {
+  /// 注册工作台的常驻面板（管理器 + 指挥部）。
+  ///
+  /// 抽出来是因为"默认布局"和"从磁盘恢复布局"两条路都必须先把面板注册进
+  /// `DockManager` 的 registry —— `restore()` 只重建注册表里存在的面板，
+  /// 没注册的 id 会被直接丢弃。
+  ({DockPanel explorer, DockPanel command}) _registerCorePanels() {
     final dock = ref.read(dockManagerProvider.notifier);
     final explorer = DockPanel(
       id: '__explorer__',
@@ -75,6 +85,12 @@ class _AgentWorkspaceState extends ConsumerState<AgentWorkspace> {
     );
     dock.registerPanel(explorer);
     dock.registerPanel(command);
+    return (explorer: explorer, command: command);
+  }
+
+  void _setupDockLayout() {
+    final dock = ref.read(dockManagerProvider.notifier);
+    final panels = _registerCorePanels();
 
     dock.setLayout(
       DockLayout(
@@ -82,14 +98,40 @@ class _AgentWorkspaceState extends ConsumerState<AgentWorkspace> {
           id: generateNodeId(),
           axis: DockAxis.horizontal,
           children: [
-            DockGroup(id: generateNodeId(), panels: [explorer]),
-            DockGroup(id: generateNodeId(), panels: [command]),
+            DockGroup(id: generateNodeId(), panels: [panels.explorer]),
+            DockGroup(id: generateNodeId(), panels: [panels.command]),
           ],
           flexes: [0.18, 0.82],
         ),
       ),
     );
     _activePanelIds.addAll(['__explorer__', '__command_center__']);
+  }
+
+  /// 挂载持久化，并尝试恢复上次的布局；没有已存布局时回退到默认布局。
+  ///
+  /// 只恢复"布局结构"：存下来的面板 id 若不在注册表里（比如上次开着的
+  /// Agent 面板），`DockManager.restore()` 会自动丢弃它们，不会出现空壳面板。
+  Future<void> _setupPersistentDockLayout() async {
+    final dock = ref.read(dockManagerProvider.notifier);
+    _registerCorePanels();
+
+    try {
+      final storage = await FileDockStorage.open();
+      dock.setStorage(storage);
+      await dock.restore();
+    } catch (e) {
+      AppLogger.instance.log('[Dock] 布局恢复失败，回退默认布局: $e');
+    }
+
+    if (ref.read(dockManagerProvider).root == null) {
+      _setupDockLayout();
+      return;
+    }
+
+    // 恢复成功：把树里已有的面板 id 记进 _activePanelIds，
+    // 否则关面板时 _detectClosedPanels 的差集会算错。
+    _activePanelIds.addAll(_ids(ref.read(dockManagerProvider).root));
   }
 
   Future<void> _createNewAgent() async {
