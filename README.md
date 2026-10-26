@@ -162,6 +162,10 @@ RemindAI 的 Skill 系统采用**四层架构**，每一层都有独立的存储
 git clone https://github.com/PythonnotJava/RemindAI.git
 cd RemindAI
 
+# 版本号的唯一来源是 pubspec.yaml；改完版本后同步 Dart 侧常量
+# （test/settings/version_sync_test.dart 会守护两者一致，忘了跑会红）
+dart run tool/sync_version.dart
+
 # Windows
 flutter build windows --release --tree-shake-icons --split-debug-info=./debug-info
 

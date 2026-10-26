@@ -4,48 +4,52 @@
 
 ## 触发条件
 
-当项目根目录存在 `memory.json` 时自动激活，或用户明确要求使用 ToolShell 模式。
+只要用户在设置里选了工作目录，本技能的 `tools.json` 与这份说明就会被**自动加载**——
+不需要用户额外开启，也不依赖 `memory.json` 是否存在（`memory.json` 只决定权限模式与记忆开关）。
+没有工作目录（纯对话模式）时，ToolShell 的读写/执行工具不会被提供。
 
 ## 启动流程
 
-激活后你必须按顺序执行:
+`memory.json` 由**应用本身**在构建上下文时读取并生效，你不需要（也不必）自己去读它。
+你需要知道的是它决定了三件事：权限模式、记忆是否自动存储、记忆是否自动召回。
 
-1. 读取项目根目录的 `memory.json`，解析配置
-2. 确定操作模式 (MODE)、记忆策略 (MIND/REMIND)
-3. 如果 REMIND=true，在 `.toolshell/memory.db` 中检索相关历史记忆
-4. 将记忆注入当前上下文，开始工作
+激活后你按下面的顺序理解自己的处境即可：
+
+1. 当前工作目录已在系统提示词里给出，所有相对路径基于它解析
+2. 权限模式已确定（normal 由应用弹窗确认，auto 直接执行）
+3. 若开启了长期召回，相关历史记忆已经由应用**自动**追加到你的上下文里（表现为一条 `role=system` 的"自动召回的相关记忆"消息）
+4. 直接开始工作
 
 ## 配置字段
 
-从 `memory.json` 读取:
+工作目录下的 `memory.json`（由"新建工作目录"对话框或设置页写入），字段全部为小写：
 
 | 字段 | 值 | 含义 |
 |------|-----|------|
-| MODE | "normal" | 每次文件操作/命令执行前向用户确认 |
-| MODE | "auto" | 完全自主，直接执行所有操作 |
-| REMIND | true/false | 任务开始前是否召回历史记忆 |
-| MIND | true | 长期记忆: 跨会话持久存储 |
-| MIND | false | 短期记忆: 仅当前会话有效 |
+| `mode` | `"normal"` | 写/删/执行类操作前由**应用弹窗**向用户确认 |
+| `mode` | `"auto"` | 完全自主，直接执行所有操作（仍受受保护路径约束） |
+| `long_term_recall` | `true/false` | 每轮用户消息前是否语义召回历史记忆 |
+| `long_term_store` | `true/false` | Agent 回复完成后是否自动提取并存储长期记忆 |
+| `embeddings` | `true/false` | 是否启用 Qdrant 向量库（关闭则记忆降级为 SQLite 关键词匹配） |
+
+> 记忆的读写由应用侧的 Hook 自动完成；你也可以显式调用
+> `toolshell_memory_store` / `toolshell_memory_recall` 主动存取。
 
 ## 操作模式行为
 
 ### normal 模式
 
-每次执行破坏性操作前，必须按以下格式确认:
+需要确认的只有"写文件 / 删文件 / 执行命令 / 跑 Python / 跑 JS / Office 写改删 / worktree 开始·结束·回退"这几类
+（权威集合见应用代码 `kApprovalRequiredTools`）。确认动作由**应用的权限对话框**完成——用户点"允许"才会执行。
 
-```
-[ToolShell] 操作: WRITE → src/main.dart (新建, 42行)
-是否执行? [y/N/always]
-```
-
-用户回复:
-- y → 执行本次
-- N → 跳过
-- always → 本会话切换为 auto 模式
+你要做的是：
+- 调用工具即可，**不要**在回复里打印"是否执行? [y/N]"之类的伪确认文本，用户根本不会回答它
+- 被拒绝时会收到 `status=denied` 类错误，据此调整方案，不要反复重试同一操作
 
 ### auto 模式
 
-所有操作直接执行，无需确认。但仍遵守安全边界。
+所有操作直接执行，无需确认。但仍遵守下面的安全边界。
+
 
 ## 安全边界 (两种模式均生效)
 
@@ -155,11 +159,17 @@ toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<
 
 ### 存储位置
 
-项目根目录下 `.toolshell/memory.db` (SQLite)
+记忆由应用统一管理，**不在工作目录里落 `.db` 文件**：
+
+- 语义向量：Qdrant 本地实例的 `global_memory` collection（需配置嵌入模型）
+- 持久备份：应用数据库 `memory_entries` 表（SQLite）
+- 两者双写；Qdrant 不可用时自动降级为 SQLite 关键词检索
 
 ### 何时存储记忆
 
-主动识别并存储以下信息:
+写入由 `MemoryStoreHook` 在每轮回复完成后自动触发（LLM 提取），你也可以显式调用
+`toolshell_memory_store`。值得记的内容：
+
 - **fact**: 用户陈述的事实、项目约定、技术选型
 - **decision**: 做出的决策及原因
 - **context**: 项目背景、架构信息
@@ -176,47 +186,49 @@ toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<
 
 ### 何时召回记忆
 
-- REMIND=true 时，每次新任务开始前自动召回
-- 用户问"之前我们做过什么"时主动召回
-- 遇到可能有历史决策的问题时主动召回
+- `long_term_recall=true` 时由应用在每轮消息前**自动**召回（topK=5，相似度阈值 0.5）
+- 用户问"之前我们做过什么"、或遇到可能有历史决策的问题时，可主动调用 `toolshell_memory_recall`
+
+### 版本与失效
+
+被新事实取代的旧记忆不会物理删除，而是标记 `superseded` 并在检索时降权/过滤——
+所以"用户改口了"这类情况你直接存新值即可，不必先去删旧的。
 
 ### 向量检索 (可选)
 
-如果 `memory.json` 提供了以下三个字段且 API 可达:
-- QDRANT_EMBED_MODEL_URL
-- QDRANT_EMBED_MODEL_KEY  
-- QDRANT_EMBED_MODEL_NAME
-
-则存储记忆时同时生成向量嵌入，召回时使用语义相似度排序。
-否则使用 SQLite 关键词匹配。
+见上文 `memory.json` 的 `embeddings` 字段：开启则需要应用的设置里已配置好嵌入模型
+（Base URL / API Key / 模型名），否则记忆只在 SQLite 上做关键词匹配。
 
 ## 工具使用指南
 
-你已有的工具 (Read/Write/Bash等) 在此技能下的使用规范:
+本技能下你实际拥有的是 `toolshell_*` 系列工具（**不是**通用的 Read/Write/Bash）：
 
 ### 文件读取
-正常使用 Read 工具。记录读取过的关键文件路径到记忆。
+用 `toolshell_read`（支持 offset/limit 分段读）。读过的关键文件路径记到记忆里。
+需要同时看多个文件时，用 `toolshell_run_parallel` 一次并发读，别一问一答。
 
 ### 文件写入
-- normal 模式: 先展示变更内容，确认后写入
-- auto 模式: 直接写入
-- **重要：长内容写入限制**
-  - `toolshell_write` 的 content 参数通过 JSON 传输，内容过长（超过 2000 字符）时可能导致参数传输失败
-  - 如果要写入的内容较长（如整理搜索结果、生成报告等），**必须使用 `toolshell_exec`** 通过 shell 写入：
-    ```
-    toolshell_exec(command: "cat > filename.md << 'HEREDOC'\n内容...\nHEREDOC")
-    ```
-  - 或者分多次 append：先 create 空文件，再多次 append 短内容
-  - 简短内容（< 2000 字符）可以直接使用 `toolshell_write`
+`toolshell_write(path, content, mode)`，`mode` ∈ `create` / `overwrite` / `append`（默认 overwrite）。
+
+- normal 模式：调用后由应用弹窗确认，用户点了才真正写入
+- auto 模式：直接写入
+
+**长内容建议**：单次调用里塞几万字符的 content 会让请求体变大、也更容易被输出长度上限截断。
+推荐做法是**分块 append**——先 `create` 写第一段，再多次 `append` 追加后续段落；
+或先写到临时文件、再用 `toolshell_exec` / `toolshell_run_python` 做拼接。
+
+> ⚠️ 不要照抄 `cat > file << 'HEREDOC'` 这种写法：Windows 上的 shell 是
+> PowerShell / cmd，不支持 heredoc。要生成大文件请优先用 `append`，
+> 或 `toolshell_run_python` 里用 Python 写文件（跨平台可靠）。
 
 ### 命令执行
-- 使用 Bash 工具执行 Shell 命令
+用 `toolshell_exec(command)`。它会自动选择 shell（Windows: pwsh > powershell > cmd；Linux/macOS: bash > sh）。
 - 长时间命令 (build, install) 提醒用户可能需要等待
-- 命令失败时存储错误信息到记忆 (type=error)
+- 命令失败时把错误信息记进记忆 (type=error)
+- 输出会被内置 `rtk` 做 token 压缩，别指望看到完整日志；需要细节时用 `toolshell_read` 直接读日志文件
 
 ### 文件删除
-- normal 模式: 必须确认
-- auto 模式: 直接执行，但记录到记忆
+用 `toolshell_delete`。normal 模式必须确认，auto 模式直接执行但请记进记忆。
 
 ## 会话结束
 
@@ -317,7 +329,9 @@ toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<
 
 ### 前提条件
 
-工作目录必须是一个 git 仓库(有 `.git`)。不是的话调用会返回 `NOT_GIT_REPO`，可先用 `toolshell_exec` 执行 `git init`（如果用户希望这么做）。
+- 系统上必须能执行 `git`。**检测不到 git 时这 7 个 worktree 工具根本不会出现在你的工具列表里**
+  （应用在构建上下文阶段就把它们摘掉了，以免你看到工具却调不通），此时不要尝试调用。
+- 工作目录必须是一个 git 仓库(有 `.git`)。不是的话调用会返回 `NOT_GIT_REPO`，可先用 `toolshell_exec` 执行 `git init`（如果用户希望这么做）。
 
 ### 使用方式
 
@@ -330,6 +344,22 @@ toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<
    - 不满意 → `toolshell_worktree_finish(action="discard")`：直接丢弃工作树和分支，改动全部消失，主工作目录完全不受影响。
 
 结束后自动恢复对主工作目录的正常操作，不需要额外操作。
+
+### 存档点：走偏了就回退，不必丢掉整个实验
+
+除了 start/finish，你还有 5 个配套工具（全部只作用于隔离工作树）：
+
+| 工具 | 用途 |
+|---|---|
+| `toolshell_worktree_checkpoint(label=...)` | 打一个存档点（commit），供之后回退 |
+| `toolshell_worktree_list_checkpoints()` | 列出已有存档点 |
+| `toolshell_worktree_revert(checkpoint=...)` | **硬回退**到某个存档点（`reset --hard` + `clean -fd`，会丢弃未存档改动） |
+| `toolshell_worktree_diff(detail=false, paths=[...])` | 看工作树相对主分支改了什么；默认只给 `--stat`，`detail=true` 才返回完整 diff |
+| `toolshell_worktree_list(include_history=false)` | 列出当前工作目录关联的 worktree 会话（活跃 / 历史） |
+
+建议节奏：**start → 干活 → checkpoint（跑通一个阶段就存一次）→ 走偏了 revert → 满意后 finish(merge)**。
+`checkpoint` / `list_checkpoints` / `diff` / `list` 是无损操作，不需要用户确认；
+`start` / `finish` / `revert` 需要确认（会改 git 历史或不可逆丢改动）。
 
 ### 注意事项
 
