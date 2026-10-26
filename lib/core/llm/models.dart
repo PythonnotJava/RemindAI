@@ -13,6 +13,18 @@ class ChatMessage {
   final String? toolCallId;
   final DateTime timestamp;
 
+  /// 稳定的运行时标识 —— 只用于 UI 的 Element 复用（`ValueKey`）与差分，
+  /// **不参与序列化、不写库**。
+  ///
+  /// 为什么需要它：消息对象本身没有数据库 id（`chat_messages.id` 挂在 DAO
+  /// 的包装类型上），列表项没有 key 时 Flutter 按 index 复用 Element，
+  /// 于是"向上翻页前插历史 / 删除某条 / 重新生成"之后，`ToolCallCard._expanded`
+  /// 这类局部 state 会串到别的消息上。构造时生成一次，只要列表里还是同一个
+  /// 对象，key 就稳定。
+  final String uid;
+
+  static int _uidSeq = 0;
+
   /// 该消息是否由用户手动中断生成
   final bool interrupted;
 
@@ -41,7 +53,9 @@ class ChatMessage {
     this.htmlFiles = const [],
     this.svgFiles = const [],
     this.videoFiles = const [],
-  }) : timestamp = timestamp ?? DateTime.now();
+    String? uid,
+  }) : uid = uid ?? 'msg-${_uidSeq++}',
+       timestamp = timestamp ?? DateTime.now();
 
   /// 创建用户消息
   factory ChatMessage.user(

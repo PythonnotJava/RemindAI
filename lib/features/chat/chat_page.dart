@@ -512,10 +512,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 offsetIndex - messages.length - (hasSubReadersCard ? 1 : 0);
             // 活跃 tool calls 区
             if (afterSubReaders < activeToolCalls.length) {
-              return ToolCallCard(toolCall: activeToolCalls[afterSubReaders]);
+              final call = activeToolCalls[afterSubReaders];
+              return ToolCallCard(
+                key: ValueKey('tool-${call.id}'),
+                toolCall: call,
+              );
             }
             // 流式输出 bubble（用 RepaintBoundary 隔离）
             return RepaintBoundary(
+              key: const ValueKey('streaming-bubble'),
               child: StreamingBubble(text: chatState.streamingText),
             );
           },
@@ -533,6 +538,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       return const SizedBox.shrink();
     }
     return RepaintBoundary(
+      // 稳定的消息 key：向上翻页前插历史、删除、重新生成之后，Flutter 才会
+      // 按"同一条消息"复用 Element，而不是按 index 把局部 state 串到下一条上。
+      key: ValueKey('msg-${msg.uid}'),
       child: MessageBubble(
         message: msg,
         messageIndex: index,
