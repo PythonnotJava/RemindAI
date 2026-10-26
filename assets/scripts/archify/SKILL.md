@@ -22,7 +22,17 @@ The four typed renderers validate JSON against schemas via `ajv`. From this skil
 npm install
 ```
 
-Without it the renderers still run — they print a warning and skip schema validation, keeping their own layout checks. The **generated HTML never has dependencies**; only the renderers do.
+Without it the renderers still run — but they now say so **loudly** instead of failing silently:
+
+- `stderr` prints a boxed banner `archify: ⚠ JSON-SCHEMA VALIDATION IS DISABLED (ajv not found)`
+  plus one `schema validation SKIPPED for "<type>"` line per render;
+- only the renderers' own layout checks (overlap, label width, edge length, viewBox) still run —
+  type enums, required fields and extra keys are **not** verified;
+- set `ARCHIFY_STRICT=1` to turn the missing dependency into a hard error (exit 1) instead.
+
+If you see that banner while drawing a diagram, tell the user the JSON was not schema-checked and
+offer to run `npm install` in the skill folder. The **generated HTML never has dependencies**; only
+the renderers do.
 
 If you have no shell access at all (e.g. the skill was added as project knowledge), fall back to architecture mode for every request: hand-place SVG into `assets/template.html` following the Design System below, and run the self-review checklist before delivering.
 
