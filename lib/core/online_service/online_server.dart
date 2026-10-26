@@ -107,6 +107,28 @@ class OnlineServer {
 
   // ─── HTTP 请求路由 ──────────────────────────────────
 
+  /// 入口级访问控制：IP 白名单（本机始终放行；白名单为空表示不限制）。
+  ///
+  /// 以前只有 `/ws` 做校验，`/`、`/style.css`、`/app.js`、`/download/*` 全是
+  /// 裸奔的：任何能连上端口的人都能拿到 SPA 与产物文件，唯一秘密是 sessionId
+  /// 这个 UUID（而且 CORS 还是 `*`）。现在统一在入口拦一次——不在白名单的 IP
+  /// 连页面都拿不到，也就不会出现"页面打开了但聊天连不上"的困惑。
+  ///
+  /// 返回 true 表示放行；false 表示已写好拒绝响应，调用方直接 return。
+  Future<bool> _ensureAccess(HttpRequest request) async {
+    final ip = request.connectionInfo?.remoteAddress.address ?? 'unknown';
+    final isLocalhost = ip == '127.0.0.1' || ip == '::1' || ip == 'localhost';
+    final allowed =
+        isLocalhost || _config.whitelist.isEmpty || _config.matchIp(ip) != null;
+    if (allowed) return true;
+
+    request.response.statusCode = 403;
+    request.response.headers.set('Content-Type', 'text/plain; charset=utf-8');
+    request.response.write('403 Forbidden — 该 IP 不在 RemindAI 在线访问白名单中。');
+    await request.response.close();
+    return false;
+  }
+
   Future<void> _handleRequest(HttpRequest request) async {
     final path = request.uri.path;
     final method = request.method;
@@ -120,6 +142,12 @@ class OnlineServer {
     if (method == 'OPTIONS') {
       request.response.statusCode = 200;
       await request.response.close();
+      return;
+    }
+
+    // 统一入口鉴权：除 /health（无敏感信息，供探活）外，所有路径都要求
+    // 命中 IP 白名单。SPA 静态资源与 /download/* 以前完全没有校验。
+    if (path != '/health' && !await _ensureAccess(request)) {
       return;
     }
 
@@ -190,16 +218,11 @@ class OnlineServer {
       return;
     }
 
-    // 白名单检查 (本机始终放行)
+    // 白名单检查已上移到 [_handleRequest] 入口统一处理（本机始终放行）；
+    // 这里只需要算出会话身份。
     final isLocalhost =
         clientIp == '127.0.0.1' || clientIp == '::1' || clientIp == 'localhost';
     final entry = _config.matchIp(clientIp);
-    if (!isLocalhost && _config.whitelist.isNotEmpty && entry == null) {
-      request.response.statusCode = 403;
-      request.response.write(jsonEncode({'error': '不在白名单中'}));
-      await request.response.close();
-      return;
-    }
 
     // 升级 WebSocket
     final ws = await WebSocketTransformer.upgrade(request);
