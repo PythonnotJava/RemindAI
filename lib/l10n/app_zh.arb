@@ -443,6 +443,7 @@
   "wsDialogPermMode": "权限模式",
   "wsDialogPermAuto": "自动执行 (auto)",
   "wsDialogPermNormal": "操作需确认 (normal)",
+  "wsDialogPermAutoTip": "自动执行 (auto)：模型可以写文件、删文件、执行命令、跑代码，不再逐次弹窗确认。\n\n只建议用于你信任的工作目录；目录里有重要文件时请保持 normal（每次操作先问你）。\n\n会话中可随时在输入框旁临时切换。",
   "wsDialogEmbeddings": "向量记忆 (embeddings)",
   "wsDialogEmbeddingsHint": "需先在设置中配置嵌入模型",
   "wsDialogAutoStore": "自动存储记忆",

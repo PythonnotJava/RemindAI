@@ -1245,6 +1245,10 @@ class SZh extends S {
   String get wsDialogPermNormal => '操作需确认 (normal)';
 
   @override
+  String get wsDialogPermAutoTip =>
+      '自动执行 (auto)：模型可以写文件、删文件、执行命令、跑代码，不再逐次弹窗确认。\n\n只建议用于你信任的工作目录；目录里有重要文件时请保持 normal（每次操作先问你）。\n\n会话中可随时在输入框旁临时切换。';
+
+  @override
   String get wsDialogEmbeddings => '向量记忆 (embeddings)';
 
   @override

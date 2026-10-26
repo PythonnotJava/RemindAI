@@ -266,6 +266,9 @@ class _NewWorkspaceDialogState extends ConsumerState<NewWorkspaceDialog> {
                     ? context.s.wsDialogPermAuto
                     : context.s.wsDialogPermNormal,
                 value: _mode == 'auto',
+                // auto 模式等于把"写文件/删文件/执行命令"的逐次确认交出去，
+                // 是这里有实际风险的开关，必须让用户在勾选前看到后果。
+                tooltip: context.s.wsDialogPermAutoTip,
                 onChanged: (v) => setState(() => _mode = v ? 'auto' : 'normal'),
               ),
               const Divider(height: 1, indent: 48),
@@ -317,10 +320,37 @@ class _NewWorkspaceDialogState extends ConsumerState<NewWorkspaceDialog> {
     required bool value,
     required ValueChanged<bool> onChanged,
     bool enabled = true,
+    String? tooltip,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // 标题 + 可选的说明图标：桌面端鼠标悬停即出提示，触摸端长按出提示。
+    final titleWidget = (tooltip == null || tooltip.trim().isEmpty)
+        ? Text(title, style: const TextStyle(fontSize: 13))
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(title, style: const TextStyle(fontSize: 13)),
+              ),
+              const SizedBox(width: 6),
+              Tooltip(
+                message: tooltip,
+                waitDuration: const Duration(milliseconds: 200),
+                showDuration: const Duration(seconds: 15),
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Icon(
+                  Icons.info_outline,
+                  size: 15,
+                  color: colorScheme.outline,
+                ),
+              ),
+            ],
+          );
+
     return SwitchListTile(
       secondary: Icon(icon, size: 20),
-      title: Text(title, style: const TextStyle(fontSize: 13)),
+      title: titleWidget,
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 11)),
       value: value,
       onChanged: enabled ? onChanged : null,

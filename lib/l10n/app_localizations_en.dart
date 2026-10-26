@@ -1273,6 +1273,10 @@ class SEn extends S {
   String get wsDialogPermNormal => 'Require confirmation (normal)';
 
   @override
+  String get wsDialogPermAutoTip =>
+      'Auto-execute (auto): the model may write/delete files, run commands and execute code without asking each time.\n\nOnly use it for working directories you trust; keep normal when the directory holds important files (you are asked before every such operation).\n\nYou can still switch temporarily from the toggle next to the input box during a conversation.';
+
+  @override
   String get wsDialogEmbeddings => 'Vector memory (embeddings)';
 
   @override

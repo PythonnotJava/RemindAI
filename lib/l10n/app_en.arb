@@ -422,6 +422,7 @@
   "wsDialogPermMode": "Permission mode",
   "wsDialogPermAuto": "Auto-execute (auto)",
   "wsDialogPermNormal": "Require confirmation (normal)",
+  "wsDialogPermAutoTip": "Auto-execute (auto): the model may write/delete files, run commands and execute code without asking each time.\n\nOnly use it for working directories you trust; keep normal when the directory holds important files (you are asked before every such operation).\n\nYou can still switch temporarily from the toggle next to the input box during a conversation.",
   "wsDialogEmbeddings": "Vector memory (embeddings)",
   "wsDialogEmbeddingsHint": "Configure embedding model in settings first",
   "wsDialogAutoStore": "Auto-store memory",

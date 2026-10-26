@@ -331,14 +331,20 @@ class _WindowWrapperState extends ConsumerState<_WindowWrapper>
 
   @override
   void onWindowClose() async {
-    final shouldMinimize = await _showCloseDialog();
-    if (shouldMinimize) {
-      await windowManager.hide();
-    } else {
-      await _cleanupBeforeExit();
-      await trayManager.destroy();
-      await windowManager.setPreventClose(false);
-      await windowManager.close();
+    final action = await _showCloseDialog();
+    switch (action) {
+      case _CloseAction.minimize:
+        await windowManager.hide();
+      case _CloseAction.exit:
+        await _cleanupBeforeExit();
+        await trayManager.destroy();
+        await windowManager.setPreventClose(false);
+        await windowManager.close();
+      case _CloseAction.cancel:
+        // 点了"取消"或按 Esc / 点窗外关闭对话框：什么都不做。
+        // setPreventClose(true) 还在生效，窗口原地保留——
+        // 这正是防误触的意义，不能悄悄退化成"最小化"。
+        break;
     }
   }
 
@@ -358,26 +364,32 @@ class _WindowWrapperState extends ConsumerState<_WindowWrapper>
     }
   }
 
-  Future<bool> _showCloseDialog() async {
+  Future<_CloseAction> _showCloseDialog() async {
     final s = context.s;
-    final result = await showDialog<bool>(
+    final result = await showDialog<_CloseAction>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(s.dialogCloseTitle),
         content: Text(s.dialogCloseContent),
         actions: [
+          // 取消：显式放在最左边，和"退出程序"拉开距离，避免误点。
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(_CloseAction.cancel),
+            child: Text(s.commonCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(_CloseAction.exit),
             child: Text(s.dialogCloseExit),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () => Navigator.of(ctx).pop(_CloseAction.minimize),
             child: Text(s.dialogCloseMinimize),
           ),
         ],
       ),
     );
-    return result ?? true; // 默认最小化
+    // 对话框被 Esc / 点窗外关闭时 result 为 null → 按"取消"处理（不做任何动作）。
+    return result ?? _CloseAction.cancel;
   }
 
   @override
@@ -468,3 +480,10 @@ class _WindowWrapperState extends ConsumerState<_WindowWrapper>
     await ScreenshotEditor.show(context, image);
   }
 }
+
+/// 点右上角关闭按钮时用户的选择。
+///
+/// 之前只有"最小化 / 退出"两分支，误点多一次就直接退出应用（未保存的
+/// 对话状态、跑着的工具子进程都会被一起带走），所以补一个 [cancel]：
+/// 什么都不做，窗口原地保留。
+enum _CloseAction { minimize, exit, cancel }
