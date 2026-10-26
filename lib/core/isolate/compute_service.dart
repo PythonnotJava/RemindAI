@@ -30,25 +30,35 @@ class ComputeService {
   // =========================================================================
 
   /// JSON 编码，大数据走 Isolate
+  ///
+  /// 判断"大不大"只用顶层容器的元素个数粗估（约 100 字节/元素），
+  /// 不去"先编码一遍再量长度"——那样大数据的编码开销已经付在主 isolate 上了，
+  /// 分派反而更慢。旧实现两条分支返回同一个变量，isolate 那条是死代码。
   static Future<String> jsonEncode(
     dynamic data, {
     int threshold = 50000,
   }) async {
-    // 快速路径: 小数据直接执行
-    final result = jsonEncodeTask(data);
-    if (result.length < threshold || !_pool.isInitialized) {
-      return result;
+    if (!_pool.isInitialized || !_looksLargeJson(data, threshold)) {
+      return jsonEncodeTask(data);
     }
-    // 大数据: 因为已经编码了，直接返回
-    // 实际场景中应该传原始数据到 Isolate，但 Map 序列化本身有开销
-    // 所以只在预知数据大时使用
-    return result;
+    return _pool.run(jsonEncodeTask, data);
   }
 
   /// JSON 编码（强制走 Isolate，用于已知的大数据）
   static Future<String> jsonEncodeAsync(dynamic data) async {
     if (!_pool.isInitialized) return jsonEncodeTask(data);
     return _pool.run(jsonEncodeTask, data);
+  }
+
+  /// 廉价预判：只看顶层容器规模，不做任何序列化。
+  static bool _looksLargeJson(dynamic data, int threshold) {
+    // 按"每元素约 100 字节"折算成元素个数阈值
+    final elementBudget = threshold ~/ 100;
+    if (data is List) return data.length > elementBudget;
+    if (data is Map) return data.length > elementBudget;
+    if (data is String) return data.length > threshold;
+    if (data is Iterable) return data.length > elementBudget;
+    return false;
   }
 
   /// JSON 解码，大字符串走 Isolate

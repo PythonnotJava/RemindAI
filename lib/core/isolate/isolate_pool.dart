@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io' show Platform;
 import 'dart:isolate';
 
 /// Isolate 池 — 管理一组常驻 worker isolate，复用以避免反复创建销毁的开销。
@@ -112,20 +113,12 @@ class IsolatePool {
 
   static int _cpuCores() {
     // Dart 没有直接获取 CPU 核数的 API，通过 Platform.numberOfProcessors
-    // 获取（dart:io）。
-    try {
-      return _platformProcessors();
-    } catch (_) {
-      return 4; // fallback
-    }
+    // 获取（dart:io）。取不到时退回 4 核（→ 池大小 2）。
+    //
+    // 历史坑：这里曾经硬编码 `return 4`，于是 _defaultPoolSize() 恒等于 2，
+    // 池大小和机器核心数完全无关，`clamp(2, 6)` 这行看起来在调参其实从未生效。
+    return Platform.numberOfProcessors;
   }
-}
-
-/// 获取平台 CPU 核数 — 独立顶层函数避免 import 问题
-int _platformProcessors() {
-  // dart:io 的 Platform.numberOfProcessors
-  // 使用 dart:io 在 isolate 内也可访问
-  return 4; // 保守默认值，实际在 init 时可传入
 }
 
 // =============================================================================
