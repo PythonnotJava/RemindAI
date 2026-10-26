@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 /// Schedule 技能工具执行器
 /// 解析和操作 SCHEDULE.md 文件
 class ScheduleExecutor {
@@ -28,10 +30,24 @@ class ScheduleExecutor {
 
   // ─── 路径解析 ─────────────────────────────────────────────
 
+  /// 把调度文件的相对路径解析成绝对路径，并强制落在 [projectRoot] 内。
+  ///
+  /// 旧实现只拦 `..` 字面量，然后直接 `'$projectRoot/$filename'` 拼接：
+  /// 传 `C:\Windows\System32\drivers\etc\hosts` 这类绝对路径（或 `\foo`、
+  /// 带盘符的写法）就能写到工作目录之外，因为 Windows 上绝对路径会覆盖
+  /// 前缀。这里改成和 `Executor._resolve` 同一口径——规范化后判断是否仍在
+  /// 根目录内，越界直接抛错（`run()` 会转成 `EXCEPTION` 回给模型）。
   String _resolvePath(String? path) {
-    final filename = path ?? 'SCHEDULE.md';
-    if (filename.contains('..')) throw Exception('路径不安全');
-    return '$projectRoot/$filename';
+    final raw = (path ?? '').trim();
+    final filename = raw.isEmpty ? 'SCHEDULE.md' : raw;
+
+    final root = p.canonicalize(projectRoot);
+    final resolved = p.canonicalize(p.join(root, filename));
+
+    if (resolved != root && !p.isWithin(root, resolved)) {
+      throw Exception('路径越界（必须位于工作目录内）: $filename');
+    }
+    return resolved;
   }
 
   // ─── schedule_load ────────────────────────────────────────
