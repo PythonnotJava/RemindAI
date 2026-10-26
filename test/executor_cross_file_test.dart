@@ -58,9 +58,10 @@ void main() {
       print('读取结果: $result');
 
       // 应该成功读取
+      // 注意：Executor 成功返回的载荷是 `{"status":"ok", ...}`（见 executor.dart
+      // 的 _ok()），早年这里断言的是 "success"，与实际实现漂移，导致用例常红。
       expect(result, contains('外部文件内容'));
-      expect(result, contains('status'));
-      expect(result, contains('success'));
+      expect(result, contains('"status":"ok"'));
     });
 
     test('allowOutsideRoot=true 相对路径仍然相对 projectRoot', () async {
@@ -102,8 +103,8 @@ void main() {
 
       print('写入结果: $result');
 
-      // 应该成功写入
-      expect(result, contains('success'));
+      // 应该成功写入（同上：成功载荷是 status=ok，不是 success）
+      expect(result, contains('"status":"ok"'));
 
       // 验证文件确实被创建
       expect(await File(outsideWritePath).exists(), isTrue);

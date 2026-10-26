@@ -9,7 +9,7 @@ import 'package:remind_ai/core/toolshell/executor.dart';
 /// 在一个真实的小型开发项目 (Node/Express 结构) 上验证
 /// toolshell_run_parallel 的实际收益与安全边界。
 ///
-/// 项目位于 C:\Users\25654\Desktop\test\demo_project，结构:
+/// 项目需要外部准备，结构:
 ///   package.json
 ///   src/index.js
 ///   src/api/user.js
@@ -18,9 +18,13 @@ import 'package:remind_ai/core/toolshell/executor.dart';
 ///   src/utils/logger.js
 ///   tests/user.test.js
 ///
-/// 测试完成后不删除该项目，便于人工检查产物。
+/// 路径可用环境变量 `REMIND_DEMO_PROJECT` 指定；默认落在系统临时目录。
+/// **不再硬编码桌面路径**——以前写死 `C:\Users\25654\Desktop\test\demo_project`，
+/// 每次跑测试都会在桌面创建一个 test 目录。
 void main() {
-  const projectRoot = r'C:\Users\25654\Desktop\test\demo_project';
+  final projectRoot =
+      Platform.environment['REMIND_DEMO_PROJECT'] ??
+      '${Directory.systemTemp.path}${Platform.pathSeparator}remind_demo_project';
 
   ToolPipeline buildPipeline() {
     final executor = Executor(
@@ -39,13 +43,9 @@ void main() {
     return jsonDecode(raw) as Map<String, dynamic>;
   }
 
-  setUpAll(() {
-    expect(
-      Directory(projectRoot).existsSync(),
-      isTrue,
-      reason: '需要先准备好示例开发项目: $projectRoot',
-    );
-  });
+  // 依赖外部示例项目的 opt-in 集成测试：目录不存在时整组 skip，
+  // 而不是让 `flutter test` 在全新 checkout 上直接报红。
+  final fixtureReady = Directory(projectRoot).existsSync();
 
   group('toolshell_run_parallel - 真实开发项目场景', () {
     test('场景1: 一次性并行摸清项目结构 (5个源码文件同时读取)', () async {
@@ -247,5 +247,5 @@ void main() {
 
       print('[场景6] 串行读取5个文件耗时: ${sw.elapsedMilliseconds}ms (对照组，用于对比场景1的并行耗时)');
     });
-  });
+  }, skip: fixtureReady ? null : '未找到示例开发项目 $projectRoot（可用环境变量 REMIND_DEMO_PROJECT 指定）');
 }

@@ -10,18 +10,22 @@ import 'package:remind_ai/core/toolshell/worktree_manager.dart';
 
 /// 验证 Worktree 隔离功能 (toolshell_worktree_start/finish 背后的核心逻辑)。
 ///
-/// 测试对象是真实克隆的大型开源项目 Express.js:
-///   C:\Users\25654\Desktop\test\worktree_demo_project
+/// 测试对象是一个**外部准备好的真实 git 项目**（有意义的提交历史/文件规模），
+/// 路径用环境变量 `REMIND_WORKTREE_DEMO` 指定，默认落在系统临时目录。
+/// **不再硬编码桌面路径**——以前写死 `C:\Users\25654\Desktop\test\worktree_demo_project`，
+/// 每次跑测试都会在桌面创建一个 test 目录。
 /// 之所以用真实项目而不是临时合成的小仓库，是为了在有意义的提交历史/
 /// 文件规模下验证 worktree add/merge/discard 的实际行为——这与
 /// toolshell_run_parallel 那次"效果不明显"的反馈是同一个教训:
 /// 简单的玩具场景验证不出真实价值，真实项目才有说服力。
 ///
-/// 测试完成后不清理 worktree_demo_project 仓库本身，保留代码与产物供人工检查。
+/// 测试完成后不清理该仓库本身，保留代码与产物供人工检查。
 /// 但每个测试内部产生的临时 worktree/分支会按各自场景收尾(merge 或 discard)，
 /// 避免反复运行本文件时在 git 历史里无限堆积孤立分支。
 void main() {
-  const projectRoot = r'C:\Users\25654\Desktop\test\worktree_demo_project';
+  final projectRoot =
+      Platform.environment['REMIND_WORKTREE_DEMO'] ??
+      '${Directory.systemTemp.path}${Platform.pathSeparator}remind_worktree_demo';
 
   Future<ProcessResult> git(List<String> args, {String? cwd}) =>
       Process.run('git', ['-C', cwd ?? projectRoot, ...args]);
@@ -31,13 +35,10 @@ void main() {
     return r.stdout.toString().trim().isNotEmpty;
   }
 
-  setUpAll(() {
-    expect(
-      Directory(projectRoot).existsSync(),
-      isTrue,
-      reason: '需要先准备好真实的大型 git 项目: $projectRoot (已通过 git clone express.js 准备)',
-    );
-  });
+  // 这套"真实项目"用例依赖外部准备好的 git 仓库，属于 opt-in 集成测试。
+  // 目录不存在时整组 skip（而不是 expect 硬失败——否则全新 checkout 上跑
+  // `flutter test` 会平白多出十几个红叉，让人误以为改坏了代码）。
+  final fixtureReady = Directory(projectRoot).existsSync();
 
   setUp(() async {
     // 每个测试开始前确认主仓库处于干净状态，避免上一个测试的残留状态互相干扰。
@@ -289,5 +290,5 @@ void main() {
       expect(await Directory(worktreePath).exists(), isTrue);
       await manager.finish(worktreePath: worktreePath, action: 'discard');
     });
-  });
+  }, skip: fixtureReady ? null : '未找到真实 git 项目 $projectRoot（可用环境变量 REMIND_WORKTREE_DEMO 指定）');
 }
