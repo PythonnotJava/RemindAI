@@ -1,7 +1,8 @@
 name: remind_ai
 description: "RemindAI - AI Assistant with ToolShell, Skills, MCP and Memory"
 publish_to: 'none'
-version: 1.0.5+1
+homepage: https://github.com/PythonnotJava/RemindAI
+version: 1.0.5+2
 
 environment:
   sdk: ^3.12.1
@@ -91,6 +92,12 @@ flutter:
     - assets/default_skills/toolshell/
     - assets/default_skills/schedule/
     - assets/default_skills/system/
+    - assets/default_skills/office/
+    - assets/office_engine/
+    - assets/office_engine/word/
+    - assets/office_engine/word/word_engine/
+    - assets/office_engine/excel/
+    - assets/office_engine/excel/excel_engine/
     - assets/web/
     - assets/icons/
     - assets/scripts/
