@@ -101,7 +101,7 @@ flutter build macos --release --tree-shake-icons --split-debug-info=./debug-info
 
 ## 旅程
 
-RemindAI创建于2026.03，现在完全由自身和其他Agent维护且不在发布新的编译版本，为了工作需要我可能会更新且可能偶尔同步一下源代码。 
+RemindAI创建于2026.03，现在完全由自身和其他Agent维护且不再发布新的编译版本，为了工作需要我可能会更新且可能偶尔同步一下源代码。 
 
 ## 📄 许可证
 

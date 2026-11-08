@@ -97,7 +97,7 @@ Thanks to **Yu** for designing RemindAI's refined, agile logo — it gives the p
 
 ## Journey
 
-RemindAI was started in March 2026. It is now maintained entirely by itself and other agents.For work-related purposes, I may update the source code and occasionally synchronize it.
+RemindAI was created in March 2026. It is now maintained entirely by itself and other agents; no new compiled versions will be released. I may, however, update it or occasionally synchronize the source code as required for my work.
 
 ## 📄 License
 
