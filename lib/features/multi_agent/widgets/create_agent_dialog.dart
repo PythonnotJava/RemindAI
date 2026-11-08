@@ -27,6 +27,7 @@ class _CreateAgentDialogState extends ConsumerState<CreateAgentDialog> {
   static const _availableSkillIds = [
     ('system', Icons.computer),
     ('toolshell', Icons.terminal),
+    ('office', Icons.description_outlined),
   ];
 
   // 权限
@@ -169,9 +170,11 @@ class _CreateAgentDialogState extends ConsumerState<CreateAgentDialog> {
                 runSpacing: 6,
                 children: _availableSkillIds.map((s) {
                   final (id, icon) = s;
-                  final label = id == 'system'
-                      ? context.s.createAgentSysDetect
-                      : context.s.createAgentFileCmd;
+                  final label = switch (id) {
+                    'system' => context.s.createAgentSysDetect,
+                    'office' => 'Office',
+                    _ => context.s.createAgentFileCmd,
+                  };
                   final selected = _selectedSkills.contains(id);
                   return FilterChip(
                     selected: selected,

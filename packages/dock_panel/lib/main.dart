@@ -302,7 +302,7 @@ class _FileExplorerPanel extends StatelessWidget {
       ('test/', Icons.folder, true),
       ('  widget_test.dart', Icons.code, false),
       ('pubspec.yaml', Icons.settings, false),
-      ('README.md', Icons.description, false),
+      ('README_long.md', Icons.description, false),
     ];
 
     return Container(

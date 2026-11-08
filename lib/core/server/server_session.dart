@@ -9,10 +9,12 @@ import '../agent/tool_pipeline.dart';
 import '../agent/transformers/context_compactor.dart';
 import '../db/daos/memory_dao.dart';
 import '../db/tables/model_cards.dart';
+import '../llm/context_capacity.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import '../logger/app_logger.dart';
 import '../mcp/mcp_client.dart';
+import '../mcp/mcp_tool_names.dart';
 import '../memory/memory_manager.dart';
 import '../memory/project_config.dart';
 import '../memory/qdrant_service.dart';
@@ -237,11 +239,24 @@ class ServerSessionBuilder {
       if (client == null || cached == null) continue;
       selectedMcpClients[serverId] = client;
       selectedMcpCache[serverId] = cached;
-      for (final t in cached) {
-        sourceMapping[(t['function'] as Map)['name'] as String] =
-            'MCP:$serverId';
-        tools.add(t);
+    }
+    // 暴露名与路由表同源：与内置工具/彼此重名的 MCP 工具会被改名为
+    // mcp__<serverId>__<name>，调用时再还原成原始名（见 ToolPipeline）。
+    final selectedMcpRoutes = buildMcpToolRoutes(selectedMcpCache);
+    final defsByKey = <String, Map<String, dynamic>>{};
+    for (final entry in selectedMcpCache.entries) {
+      for (final def in entry.value) {
+        final name = mcpToolDefName(def);
+        if (name != null) defsByKey['${entry.key}\u0000$name'] = def;
       }
+    }
+    for (final route in selectedMcpRoutes) {
+      final def = defsByKey['${route.serverId}\u0000${route.toolName}'];
+      if (def == null) continue;
+      sourceMapping[route.exposedName] = 'MCP:${route.serverId}';
+      tools.add(
+        route.namespaced ? renameMcpToolDef(def, route.exposedName) : def,
+      );
     }
 
     // 搜索能力
@@ -291,6 +306,7 @@ class ServerSessionBuilder {
       middlewares: <ToolMiddleware>[],
       mcpClients: selectedMcpClients,
       mcpToolsCache: selectedMcpCache,
+      mcpToolRoutes: selectedMcpRoutes,
       customHandlers: customHandlers,
     );
 
@@ -333,6 +349,14 @@ class ServerSessionBuilder {
           // contextWindow 为 0 时，ContextCompactor 用 128K 兜底
           contextWindow: card.contextWindow,
           modelName: card.modelId,
+          // 输出预留跟模型卡走，避免阈值仍按 12.8K 预留导致触发过晚
+          maxOutputTokens: card.maxOutputTokens,
+          // 自学习：按 (baseUrl, model) 记住这条通道的实际容量
+          capacityKey: ContextCapacityRegistry.keyOf(card.baseUrl, card.modelId),
+          autoCapacity: ContextCapacityRegistry.instance.resolveCapForKey(
+            ContextCapacityRegistry.keyOf(card.baseUrl, card.modelId),
+            card.contextWindow,
+          ),
         ),
     ]);
 

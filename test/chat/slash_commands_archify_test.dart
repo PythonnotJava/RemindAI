@@ -29,7 +29,12 @@ void main() {
     expect(expanded.expandedText, contains('archify'));
     expect(expanded.expandedText, contains('SKILL.md'));
     expect(expanded.expandedText, contains('render-'));
-    expect(expanded.expandedText, contains('assets/scripts/archify'));
+    // 技能目录是绝对路径，分隔符随平台变化（Windows 是反斜杠），
+    // 所以这里按"路径片段"匹配，不写死 POSIX 风格的斜杠。
+    expect(
+      expanded.expandedText,
+      matches(RegExp(r'assets[\\/]scripts[\\/]archify')),
+    );
   });
 
   test('命令前缀不完整时按普通消息处理', () {

@@ -1,0 +1,166 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "office_word_read",
+      "description": "读取 Word 文档（.docx/.doc），输出 Markdown、JSON、图片、批注和稳定 block_id。读取工作目录里的 Word 文件时优先用它，不要用 toolshell_read 直接读二进制。默认输出到 .toolshell/office_engine/<文档名>/。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Word 文件路径（相对工作目录或绝对路径）"},
+          "output_dir": {"type": "string", "description": "可选输出目录；默认 .toolshell/office_engine/<文档名>"},
+          "options": {
+            "type": "object",
+            "description": "可选：max_chars、max_images、include_images、mode",
+            "properties": {
+              "max_chars": {"type": "integer", "default": 100000},
+              "max_images": {"type": "integer", "default": 200},
+              "include_images": {"type": "boolean", "default": true},
+              "mode": {"type": "string", "enum": ["full", "text"], "default": "full"}
+            }
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "office_word_create",
+      "description": "从 Markdown 或结构化 blocks 新建 Word 文档（只输出 .docx）。适合从零生成报告，不用于修改现有复杂文档。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "output": {"type": "string", "description": "输出 .docx 路径"},
+          "markdown": {"type": "string", "description": "Markdown 内容；与 blocks 二选一"},
+          "blocks": {"type": "array", "description": "结构化 blocks；与 markdown 二选一"},
+          "images": {"type": "array", "description": "额外图片 [{path, caption}]"},
+          "title": {"type": "string", "description": "可选文档标题"},
+          "options": {
+            "type": "object",
+            "properties": {
+              "highlight": {"type": "string", "enum": ["none", "visual"], "default": "none"}
+            }
+          }
+        },
+        "required": ["output"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "office_word_edit",
+      "description": "修改现有 Word 文档（.docx）。默认输出新文件，原文件不动；只有用户明确要求覆盖时才用 in_place=true。支持替换文本、插入/删除段落、设置表格单元格、插入/删除图片、表格居中；删除（n）编号段落会自动重编号。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {"type": "string", "description": "源 .docx 路径"},
+          "output": {"type": "string", "description": "输出 .docx 路径；默认 <源文件名>.edited.docx"},
+          "in_place": {"type": "boolean", "default": false, "description": "是否覆盖原文件；默认 false，且会自动备份"},
+          "document_hash": {"type": "string", "description": "read 返回的 document_hash，用于防止文件已变更"},
+          "options": {
+            "type": "object",
+            "properties": {
+              "highlight": {"type": "string", "enum": ["none", "visual"], "default": "visual"},
+              "keep_deleted": {"type": "boolean", "default": false}
+            }
+          },
+          "operations": {
+            "type": "array",
+            "description": "编辑操作列表。常用：replace_text、insert_paragraph_after、insert_paragraph_before、delete_block、set_table_cell、insert_image_after、delete_image、center_tables、insert_table_row、delete_table_row。",
+            "items": {
+              "type": "object",
+              "properties": {
+                "op": {"type": "string"},
+                "block_id": {"type": "string"},
+                "table_id": {"type": "string"},
+                "find": {"type": "string"},
+                "replace": {"type": "string"},
+                "text": {"type": "string"},
+                "style": {"type": "string"},
+                "row": {"type": "integer"},
+                "col": {"type": "integer"},
+                "value": {"type": "string"},
+                "path": {"type": "string"},
+                "image_id": {"type": "string"},
+                "width_cm": {"type": "number"},
+                "caption": {"type": "string"}
+              },
+              "required": ["op"]
+            }
+          }
+        },
+        "required": ["source", "operations"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "office_word_file",
+      "description": "Word 文件级操作：info 查看信息；delete 默认移动到可恢复的 .deleted-时间戳 副本，permanent 需 confirm=true；copy/move 复制或移动。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "operation": {"type": "string", "enum": ["info", "delete", "copy", "move"]},
+          "path": {"type": "string"},
+          "dest": {"type": "string"},
+          "mode": {"type": "string", "enum": ["trash", "permanent"], "default": "trash"},
+          "confirm": {"type": "boolean", "default": false}
+        },
+        "required": ["operation", "path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "office_excel_read",
+      "description": "读取 Excel（.xlsx/.xls），输出工作簿摘要、Markdown 预览、JSON 和每个 sheet 的 CSV。宽表只给预览，完整数据在 sheets/*.csv；读取 Excel 时优先用它，不要用 pandas/Python 重新解析。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "Excel 文件路径"},
+          "output_dir": {"type": "string", "description": "可选输出目录；默认 .toolshell/office_engine/<工作簿名>"},
+          "options": {
+            "type": "object",
+            "properties": {
+              "sheet": {"type": "string"},
+              "range": {"type": "string", "description": "如 A1:F100；必须同时指定 sheet"},
+              "header_row": {"type": "integer", "default": 1},
+              "max_rows": {"type": "integer", "default": 200},
+              "max_cols": {"type": "integer", "default": 50},
+              "max_cells": {"type": "integer", "default": 20000},
+              "max_scan_cells": {"type": "integer", "default": 1000000},
+              "max_csv_rows": {"type": "integer", "default": 200000},
+              "include_hidden": {"type": "boolean", "default": true},
+              "include_formulas": {"type": "boolean", "default": true},
+              "include_images": {"type": "boolean", "default": true}
+            }
+          }
+        },
+        "required": ["path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "office_excel_file",
+      "description": "Excel 文件级操作：info 查看信息；delete 默认移动到可恢复的 .deleted-时间戳 副本，permanent 需 confirm=true；copy/move 复制或移动。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "operation": {"type": "string", "enum": ["info", "delete", "copy", "move"]},
+          "path": {"type": "string"},
+          "dest": {"type": "string"},
+          "mode": {"type": "string", "enum": ["trash", "permanent"], "default": "trash"},
+          "confirm": {"type": "boolean", "default": false}
+        },
+        "required": ["operation", "path"]
+      }
+    }
+  }
+]

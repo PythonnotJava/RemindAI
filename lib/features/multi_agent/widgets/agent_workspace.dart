@@ -482,8 +482,10 @@ class _SnapshotPickerDialogState extends State<_SnapshotPickerDialog> {
       try {
         await File(snap.filePath).delete();
       } catch (_) {}
+      // showDialog + 文件删除都是异步的，期间用户可能已经关掉这个对话框
+      if (!mounted) return;
       setState(() => _snapshots.removeAt(index));
-      if (_snapshots.isEmpty && mounted) {
+      if (_snapshots.isEmpty) {
         Navigator.pop(context);
       }
     }

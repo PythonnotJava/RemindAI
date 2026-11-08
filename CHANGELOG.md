@@ -1,3 +1,18 @@
+# V1.0.5+2
+
+## zh
+- 实现了子图模型代理，方便文生图、图生图
+- 强化了执行工具
+- 优化了循环模式
+- 支持长截图导出
+
+## en
+- Implemented a subgraph model proxy to facilitate text-to-image and image-to-image generation
+- Enhanced execution tools
+- Optimized loop modes
+- Added support for exporting long screenshots
+
+
 # V1.0.5
 
 ## zh

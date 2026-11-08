@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import 'app.dart';
 import 'core/db/database.dart';
 import 'core/font/custom_font_loader.dart';
 import 'core/logger/app_logger.dart';
+import 'core/llm/context_capacity.dart';
 import 'core/settings/app_settings.dart';
 import 'core/shortcuts/shortcut_config.dart';
 import 'core/memory/qdrant_service.dart';
@@ -15,6 +17,7 @@ import 'core/pet/pet_economy.dart';
 import 'core/isolate/isolate_pool.dart';
 import 'core/tools/tool_bootstrap.dart';
 import 'core/tools/tool_registry.dart';
+import 'providers/session_provider.dart';
 
 Future<void> main() async {
   await runZoned(
@@ -30,6 +33,9 @@ Future<void> main() async {
       // 初始化日志系统 (使用设置中的路径，若为空则用默认)
       await AppLogger.instance.init(settings?.logsPath);
 
+      // 恢复"自学习"得到的模型上下文容量（失败只记日志）
+      await ContextCapacityRegistry.instance.ensureLoaded();
+
       // 窗口管理初始化
       await windowManager.ensureInitialized();
 
@@ -42,6 +48,15 @@ Future<void> main() async {
       );
 
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        // Windows 任务栏读取的是窗口图标（WM_SETICON），不是 exe 资源里的
+        // 图标；只设置 WNDCLASS.hIcon 时部分系统会回退成通用 exe 图标。
+        if (Platform.isWindows) {
+          try {
+            await windowManager.setIcon('assets/icons/app_icon.ico');
+          } catch (e) {
+            AppLogger.instance.log('[Window] 设置任务栏图标失败: $e');
+          }
+        }
         await windowManager.show();
         await windowManager.focus();
       });
@@ -97,7 +112,16 @@ Future<void> main() async {
 
       runApp(
         ProviderScope(
-          overrides: [toolRegistryProvider.overrideWithValue(toolRegistry)],
+          overrides: [
+            toolRegistryProvider.overrideWithValue(toolRegistry),
+            // 子画图 Agent 选择持久化在 settings.json 中，启动时水合到会话状态。
+            sessionImageAgentModelIdProvider.overrideWith(
+              (ref) => settings?.imageAgentModelId ?? '',
+            ),
+            sessionImageFallbackToMainProvider.overrideWith(
+              (ref) => settings?.imageAgentFallbackToMain ?? false,
+            ),
+          ],
           child: const RemindAIApp(),
         ),
       );

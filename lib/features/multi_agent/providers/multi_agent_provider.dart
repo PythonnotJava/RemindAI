@@ -14,6 +14,7 @@ import '../../../core/llm/llm_provider.dart';
 import '../../../core/db/tables/model_cards.dart';
 import '../../../core/pet/pet_economy.dart';
 import '../../../core/toolshell/agent_loop.dart';
+import '../../../core/toolshell/budget.dart';
 import '../../../core/toolshell/combined_executor.dart';
 import '../../../providers/database_provider.dart';
 import '../models/agent_config.dart';
@@ -493,9 +494,22 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
 
     // 权限 → 工具名映射 (用于过滤)
     const permToolFilter = <String, List<String>>{
-      'fileRead': ['toolshell_read', 'toolshell_search'],
-      'fileWrite': ['toolshell_write'],
-      'fileDelete': ['toolshell_delete'],
+      'fileRead': [
+        'toolshell_read',
+        'toolshell_search',
+        'office_word_read',
+        'office_excel_read',
+      ],
+      'fileWrite': [
+        'toolshell_write',
+        'office_word_create',
+        'office_word_edit',
+      ],
+      'fileDelete': [
+        'toolshell_delete',
+        'office_word_file',
+        'office_excel_file',
+      ],
       'exec': ['toolshell_exec', 'toolshell_run_python'],
       'network': [], // 暂无独立网络工具
     };
@@ -527,6 +541,10 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
           case 'schedule':
             json = await rootBundle.loadString(
               'assets/default_skills/schedule/tools.json',
+            );
+          case 'office':
+            json = await rootBundle.loadString(
+              'assets/default_skills/office/tools.json',
             );
           default:
             continue; // 未知技能跳过
@@ -636,6 +654,7 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
     final executor = CombinedExecutor(
       projectRoot: state.workingDirectory ?? '',
       allowOutsideRoot: true, // 允许跨工作目录访问
+      autoInstallPython: true, // 多智能体本身是 auto 模式
       mcpClients: {},
       mcpToolsCache: {},
     );
@@ -689,7 +708,8 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
           case AgentHtmlGenerated():
           case AgentSvgGenerated():
           case AgentVideoGenerated():
-            // 可视化文件生成事件，多 Agent 场景不处理
+          case AgentImageGenerated():
+            // 可视化/画图文件生成事件，多 Agent 场景不处理
             break;
           case AgentDone(content: final content):
             _addAssistantMessage(agentId, content);
@@ -708,6 +728,22 @@ class MultiAgentNotifier extends StateNotifier<MultiAgentState> {
               agentId,
               '⚠️ 本轮回复内部工具调用次数过多(已达上限 $rounds 次)，已中止，请换个方式重新提问',
             );
+          case AgentBudgetTick():
+          case AgentBudgetExtended():
+            // 预算心跳/续预算提示，多 Agent 场景不展示
+            break;
+          case AgentBudgetStop(
+            reason: final reason,
+            checkpoint: final checkpoint,
+          ):
+            _addAssistantMessage(
+              agentId,
+              '⚠️ 执行预算已用尽：${reason.humanReason}\n\n'
+              '${checkpoint.toMarkdown(reason: reason)}',
+            );
+            runtime.status = AgentStatus.error;
+            runtime.streamingText = '';
+            _notifyUpdate();
             runtime.status = AgentStatus.error;
             runtime.streamingText = '';
             _notifyUpdate();

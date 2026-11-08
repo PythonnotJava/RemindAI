@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 
+import '../logger/app_logger.dart';
 import 'llm_client.dart';
 
 /// Google Gemini 原生客户端 — generateContent / streamGenerateContent。
@@ -15,10 +16,40 @@ class GeminiClient implements LlmClient {
   @override
   final String model;
 
+  /// 模型卡配置的最大输出 token（0 = 未配置，回落 [kDefaultMaxOutputTokens]）。
+  final int maxOutputTokens;
+
+  /// 上次被上游拒绝 maxOutputTokens 后学到的上限（null = 还没被拒过）。
+  int? _maxTokensCeiling;
+
+  @override
+  int get outputTokenBudget {
+    final configured = maxOutputTokens > 0
+        ? maxOutputTokens
+        : kDefaultMaxOutputTokens;
+    final ceiling = _maxTokensCeiling;
+    return (ceiling != null && ceiling < configured) ? ceiling : configured;
+  }
+
+  /// 把输出预算往下降一档；没有更小的档位时返回 false。
+  bool _degradeMaxTokens() {
+    final next = nextLowerMaxTokens(outputTokenBudget);
+    if (next == null) return false;
+    _maxTokensCeiling = next;
+    return true;
+  }
+
+  /// 把调用方传入的临时预算（截断自愈时抬高）夹到"上游接受过的上限"以内。
+  int _clampToCeiling(int value) {
+    final ceiling = _maxTokensCeiling;
+    return (ceiling != null && ceiling < value) ? ceiling : value;
+  }
+
   GeminiClient({
     required this.baseUrl,
     required this.apiKey,
     required this.model,
+    this.maxOutputTokens = 0,
   }) : _dio = Dio(
          BaseOptions(
            baseUrl: _normalizeBase(baseUrl),
@@ -235,8 +266,9 @@ class GeminiClient implements LlmClient {
 
   Map<String, dynamic> _buildBody(
     List<Map<String, dynamic>> messages,
-    List<Map<String, dynamic>>? tools,
-  ) {
+    List<Map<String, dynamic>>? tools, {
+    int? maxTokensOverride,
+  }) {
     final converted = _convertMessages(messages);
     final geminiTools = _convertTools(tools);
     return {
@@ -246,6 +278,11 @@ class GeminiClient implements LlmClient {
         'systemInstruction': converted.systemInstruction,
       // ignore: use_null_aware_elements
       if (geminiTools != null) 'tools': geminiTools,
+      'generationConfig': {
+        'maxOutputTokens': _clampToCeiling(
+          maxTokensOverride ?? outputTokenBudget,
+        ),
+      },
     };
   }
 
@@ -257,12 +294,49 @@ class GeminiClient implements LlmClient {
     List<Map<String, dynamic>>? tools,
   }) async {
     final body = _buildBody(messages, tools);
-    final response = await _dio.post(
-      '/models/$model:generateContent',
-      queryParameters: {'key': apiKey},
-      data: body,
-    );
-    return _parseNonStream(response.data as Map<String, dynamic>);
+    try {
+      final response = await _dio.post(
+        '/models/$model:generateContent',
+        queryParameters: {'key': apiKey},
+        data: body,
+      );
+      return _parseNonStream(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final detail = await _describeError(e);
+      final status = e.response?.statusCode;
+      // 上游不接受声明的 maxOutputTokens → 降档重试（对用户透明）
+      if (status != null &&
+          status >= 400 &&
+          status < 500 &&
+          looksLikeMaxTokensRejected(detail) &&
+          _degradeMaxTokens()) {
+        AppLogger.instance.log(
+          '[Gemini] maxOutputTokens 被上游拒绝，已降档到 $outputTokenBudget 并重试: '
+          '${detail.length > 160 ? '${detail.substring(0, 160)}…' : detail}',
+        );
+        return chat(messages, tools: tools);
+      }
+      throw Exception('HTTP ${status ?? '?'}: $detail');
+    }
+  }
+
+  /// 从 DioException 里尽量取出上游错误正文（兼容 stream / Map / String）。
+  Future<String> _describeError(DioException e) async {
+    final data = e.response?.data;
+    if (data == null) return e.message ?? e.type.name;
+    if (data is Stream) {
+      try {
+        final bytes = await (data as Stream<List<int>>).fold<List<int>>(
+          [],
+          (prev, chunk) => prev..addAll(chunk),
+        );
+        return utf8.decode(bytes, allowMalformed: true);
+      } catch (_) {
+        return e.message ?? e.type.name;
+      }
+    }
+    if (data is Map || data is List) return jsonEncode(data);
+    return data.toString();
   }
 
   ChatResponse _parseNonStream(Map<String, dynamic> json) {
@@ -302,8 +376,13 @@ class GeminiClient implements LlmClient {
   Stream<StreamEvent> chatStreamFull(
     List<Map<String, dynamic>> messages, {
     List<Map<String, dynamic>>? tools,
+    int? maxTokensOverride,
   }) async* {
-    final body = _buildBody(messages, tools);
+    final body = _buildBody(
+      messages,
+      tools,
+      maxTokensOverride: maxTokensOverride,
+    );
 
     final Response response;
     try {
@@ -314,18 +393,25 @@ class GeminiClient implements LlmClient {
         options: Options(responseType: ResponseType.stream),
       );
     } on DioException catch (e) {
-      String detail = e.message ?? e.type.name;
-      if (e.response?.data != null) {
-        try {
-          final errorStream = e.response!.data.stream as Stream<List<int>>;
-          final bytes = await errorStream.fold<List<int>>(
-            [],
-            (prev, chunk) => prev..addAll(chunk),
-          );
-          detail = utf8.decode(bytes, allowMalformed: true);
-        } catch (_) {}
+      final detail = await _describeError(e);
+      final status = e.response?.statusCode;
+
+      // 上游不接受声明的 maxOutputTokens → 降档重试（每次降一档）；
+      // 降档后不再复用调用方传入的 maxTokensOverride（那个值只会更大）。
+      if (status != null &&
+          status >= 400 &&
+          status < 500 &&
+          looksLikeMaxTokensRejected(detail) &&
+          _degradeMaxTokens()) {
+        AppLogger.instance.log(
+          '[Gemini Stream] maxOutputTokens 被上游拒绝，已降档到 $outputTokenBudget 并重试: '
+          '${detail.length > 160 ? '${detail.substring(0, 160)}…' : detail}',
+        );
+        yield* chatStreamFull(messages, tools: tools);
+        return;
       }
-      throw Exception('HTTP ${e.response?.statusCode ?? '?'}: $detail');
+
+      throw Exception('HTTP ${status ?? '?'}: $detail');
     }
 
     yield* _parseSse(response.data.stream as Stream<List<int>>);

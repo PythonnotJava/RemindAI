@@ -314,6 +314,7 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
     _urlCtrl.dispose();
     _keyCtrl.dispose();
     _contextWindowCtrl.dispose();
+    _maxOutputTokensCtrl.dispose();
     super.dispose();
   }
 
@@ -323,6 +324,9 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
       type: FileType.image,
       dialogTitle: '选择模型 Logo',
     );
+    // pickFiles 会拉起系统文件选择器，期间对话框可能已被关闭；
+    // 此时 setState 会抛 "called after dispose"。
+    if (!mounted) return;
     final path = result?.files.single.path;
     if (path != null) {
       setState(() => _logoPath = path);
@@ -802,7 +806,7 @@ class _ModelCardDialogState extends State<ModelCardDialog> {
                 finalContextWindow = 128000; // 默认 128K
               }
 
-              // 解析最大输出：用户输入 > 默认 0 (llm_client 会用 12800 兜底)
+              // 解析最大输出：用户输入 > 默认 0 (llm_client 会用 128K 兜底)
               int finalMaxOutputTokens = _maxOutputTokens;
               if (_maxOutputTokensCtrl.text.trim().isEmpty) {
                 finalMaxOutputTokens = 0;

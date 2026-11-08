@@ -93,6 +93,9 @@ class _EmbeddingEditorDialogState extends ConsumerState<EmbeddingEditorDialog> {
         ),
       );
 
+      // 网络请求期间对话框可能已被关闭：之后还会 setState / 读 context.s
+      if (!mounted) return;
+
       final data = response.data;
       final embedding = data['data']?[0]?['embedding'];
       if (embedding is List) {

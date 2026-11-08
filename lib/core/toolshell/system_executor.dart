@@ -65,6 +65,14 @@ class SystemExecutor {
     'db': ['sqlite3', 'psql', 'mysql', 'redis-cli', 'mongosh', 'mongo'],
     'network': ['curl', 'wget', 'ssh', 'openssl', 'nmap', 'nc'],
     'doc': ['pandoc', 'xelatex', 'pdflatex', 'typst', 'wkhtmltopdf'],
+    'android': [
+      'adb',
+      'emulator',
+      'sdkmanager',
+      'avdmanager',
+      'aapt2',
+      'scrcpy',
+    ],
   };
 
   /// 版本参数映射 (部分工具用不同的参数获取版本)
@@ -129,6 +137,8 @@ class SystemExecutor {
             Platform.environment['COMSPEC'] ??
             '',
       };
+      // Android 设备/SDK：模型装应用前最需要的一条信息，顺手带上。
+      allResults['android_devices'] = await _androidDetails();
       return _ok(allResults);
     }
 
@@ -138,7 +148,63 @@ class SystemExecutor {
       return _err('INVALID_CATEGORY', '未知类别: $category');
     }
     final results = await _probeTools(tools);
+    if (category == 'android') {
+      return _ok({
+        'category': category,
+        'tools': results,
+        ...await _androidDetails(),
+      });
+    }
     return _ok({'category': category, 'tools': results});
+  }
+
+  /// Android 环境：SDK 环境变量 + 当前已连接设备（`adb devices -l`）。
+  ///
+  /// 为什么单独做：模型准备 `adb install` 时最常见的两个坑是"不知道 SDK/adb 在哪"
+  /// 和"连着多台设备导致 more than one device"。先探测一次就能省掉几轮试错，
+  /// 也让它在多设备时知道该传 `env: {"ANDROID_SERIAL": "..."}`。
+  Future<Map<String, dynamic>> _androidDetails() async {
+    final env = <String, String>{};
+    for (final key in const ['ANDROID_HOME', 'ANDROID_SDK_ROOT', 'JAVA_HOME']) {
+      final value = Platform.environment[key];
+      if (value != null && value.trim().isNotEmpty) env[key] = value;
+    }
+
+    final result = <String, dynamic>{'env': env};
+    try {
+      final run = await Process.run(
+        'adb',
+        ['devices', '-l'],
+      ).timeout(const Duration(seconds: 6));
+      final raw = '${run.stdout}'.trim();
+      final devices = <Map<String, String>>[];
+      for (final line in raw.split(RegExp(r'\r?\n'))) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty || trimmed.startsWith('List of devices')) continue;
+        final parts = trimmed.split(RegExp(r'\s+'));
+        if (parts.length < 2) continue;
+        final device = <String, String>{
+          'serial': parts.first,
+          'state': parts[1],
+        };
+        for (final part in parts.skip(2)) {
+          final idx = part.indexOf(':');
+          if (idx > 0) {
+            device[part.substring(0, idx)] = part.substring(idx + 1);
+          }
+        }
+        devices.add(device);
+      }
+      result['devices'] = devices;
+      result['exit_code'] = run.exitCode;
+      final stderr = '${run.stderr}'.trim();
+      if (stderr.isNotEmpty) result['stderr'] = stderr;
+    } on TimeoutException {
+      result['devices_error'] = 'adb devices 超时（6s）';
+    } catch (e) {
+      result['devices_error'] = '$e';
+    }
+    return result;
   }
 
   /// 批量探测工具列表，返回每个工具的探测结果。

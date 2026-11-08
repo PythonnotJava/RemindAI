@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:anthropic_sdk_dart/anthropic_sdk_dart.dart';
 
+import '../logger/app_logger.dart';
 import 'llm_client.dart';
 
 /// 将 OpenAI → Anthropic SDK 消息转换的返回类型
@@ -27,13 +28,43 @@ class AnthropicSdkClient implements LlmClient {
   @override
   final String model;
 
+  /// 模型卡未配置时的兜底输出上限（与其它两个协议共用
+  /// [kDefaultMaxOutputTokens]，见 llm_client.dart）。
   final int maxTokens;
+
+  /// 模型卡配置的最大输出 token（0 = 未配置，回落 maxTokens）。
+  final int maxOutputTokens;
+
+  /// 上次被上游拒绝 maxTokens 后学到的上限（null = 还没被拒过）。
+  int? _maxTokensCeiling;
+
+  @override
+  int get outputTokenBudget {
+    final configured = maxOutputTokens > 0 ? maxOutputTokens : maxTokens;
+    final ceiling = _maxTokensCeiling;
+    return (ceiling != null && ceiling < configured) ? ceiling : configured;
+  }
+
+  /// 把输出预算往下降一档；没有更小的档位时返回 false。
+  bool _degradeMaxTokens() {
+    final next = nextLowerMaxTokens(outputTokenBudget);
+    if (next == null) return false;
+    _maxTokensCeiling = next;
+    return true;
+  }
+
+  /// 把调用方传入的临时预算（截断自愈时抬高）夹到"上游接受过的上限"以内。
+  int _clampToCeiling(int value) {
+    final ceiling = _maxTokensCeiling;
+    return (ceiling != null && ceiling < value) ? ceiling : value;
+  }
 
   AnthropicSdkClient({
     required String baseUrl,
     required String apiKey,
     required this.model,
-    this.maxTokens = 4096,
+    this.maxTokens = kDefaultMaxOutputTokens,
+    this.maxOutputTokens = 0,
   }) : _client = AnthropicClient(
          config: AnthropicConfig(
            authProvider: ApiKeyProvider(apiKey),
@@ -187,7 +218,7 @@ class AnthropicSdkClient implements LlmClient {
       final response = await _client.messages.create(
         MessageCreateRequest(
           model: model,
-          maxTokens: maxTokens,
+          maxTokens: outputTokenBudget,
           system: converted.system,
           messages: converted.messages,
           tools: anthropicTools,
@@ -196,6 +227,16 @@ class AnthropicSdkClient implements LlmClient {
 
       return _parseResponse(response);
     } on ApiException catch (e) {
+      // 上游不接受声明的 max_tokens（超出模型输出上限 / 输入+输出超窗口）
+      // → 降档重试，对用户透明。
+      final detail = e.message;
+      if (looksLikeMaxTokensRejected(detail) && _degradeMaxTokens()) {
+        AppLogger.instance.log(
+          '[AnthropicSDK] max_tokens 被上游拒绝，已降档到 $outputTokenBudget 并重试: '
+          '${detail.length > 160 ? '${detail.substring(0, 160)}…' : detail}',
+        );
+        return chat(messages, tools: tools);
+      }
       throw _handleApiException(e);
     } on AnthropicException catch (e) {
       throw Exception('Anthropic SDK 错误: ${e.message}');
@@ -227,6 +268,7 @@ class AnthropicSdkClient implements LlmClient {
   Stream<StreamEvent> chatStreamFull(
     List<Map<String, dynamic>> messages, {
     List<Map<String, dynamic>>? tools,
+    int? maxTokensOverride,
   }) async* {
     final converted = _convertMessages(messages);
     final anthropicTools = _convertTools(tools);
@@ -236,13 +278,23 @@ class AnthropicSdkClient implements LlmClient {
       stream = _client.messages.createStream(
         MessageCreateRequest(
           model: model,
-          maxTokens: maxTokens,
+          maxTokens: _clampToCeiling(maxTokensOverride ?? outputTokenBudget),
           system: converted.system,
           messages: converted.messages,
           tools: anthropicTools,
         ),
       );
     } on ApiException catch (e) {
+      // 上游不接受声明的 max_tokens → 降档重试（每次降一档）
+      final detail = e.message;
+      if (looksLikeMaxTokensRejected(detail) && _degradeMaxTokens()) {
+        AppLogger.instance.log(
+          '[AnthropicSDK Stream] max_tokens 被上游拒绝，已降档到 $outputTokenBudget 并重试: '
+          '${detail.length > 160 ? '${detail.substring(0, 160)}…' : detail}',
+        );
+        yield* chatStreamFull(messages, tools: tools);
+        return;
+      }
       throw _handleApiException(e);
     } on AnthropicException catch (e) {
       throw Exception('Anthropic SDK 错误: ${e.message}');

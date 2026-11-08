@@ -308,7 +308,7 @@ class SZh extends S {
   String get chatStartConversation => '开始对话';
 
   @override
-  String get chatSupportsTools => '让 AI 走出对话框，真正「上手」你的工作';
+  String get chatSupportsTools => '希望「Remind AI」陪伴你每一次工作。';
 
   @override
   String get chatCreateWorkspace => '创建工作目录';
@@ -674,11 +674,11 @@ class SZh extends S {
   String get modelsMaxOutputTokensHint => '例如: 8192';
 
   @override
-  String get modelsMaxOutputTokensHelper => '留空默认 12800';
+  String get modelsMaxOutputTokensHelper => '留空默认 128K（上游拒绝时自动降档）';
 
   @override
   String get modelsMaxOutputTokensTooltip =>
-      '最大输出 token 数限制\n留空则使用默认值 12800\n常见配置：\n  • DeepSeek V3: 8192\n  • Claude: 16384\n  • GPT-4: 8192';
+      '最大输出 token 数限制\n留空则使用默认值 128000 (128K)\n上游若不接受该值会自动降档重试\n常见配置：\n  • DeepSeek V3: 8192\n  • Claude: 16384\n  • GPT-4: 8192';
 
   @override
   String get modelsProtocolType => '协议类型';
@@ -1406,6 +1406,28 @@ class SZh extends S {
 
   @override
   String get exportSaveTitle => '保存导出文件';
+
+  @override
+  String get exportLongImageFormat => '长截图 (PNG)';
+
+  @override
+  String get exportLongImagePreparing => '正在排版完整对话…';
+
+  @override
+  String exportLongImageProgress(int current, int total) {
+    return '正在渲染第 $current/$total 段…';
+  }
+
+  @override
+  String exportLongImageParts(int count) {
+    return '内容较长，已保存 $count 张图片';
+  }
+
+  @override
+  String get exportLongImageEmpty => '当前对话没有可导出的内容';
+
+  @override
+  String get exportLongImageHtmlCard => '交互式 HTML 图表（长截图无法呈现，请打开原文件查看）';
 
   @override
   String get commonCancel => '取消';
@@ -3520,6 +3542,57 @@ class SZh extends S {
   String get chatLoopAutoApproveHint => 'Loop 模式下工具操作将自动执行，无需逐次确认。';
 
   @override
+  String get chatBudgetTitle => '任务预算';
+
+  @override
+  String get chatBudgetDesc => '按任务类型选档位：软上限到线先检查进展，有进展自动原地续预算，无进展才停下。';
+
+  @override
+  String get chatBudgetTierQuick => '简单问答';
+
+  @override
+  String get chatBudgetTierQuickDesc => '10～20 轮 · 30 次调用';
+
+  @override
+  String get chatBudgetTierCoding => '日常编码';
+
+  @override
+  String get chatBudgetTierCodingDesc => '60～100 轮 · 320 次调用';
+
+  @override
+  String get chatBudgetTierRefactor => '大型重构';
+
+  @override
+  String get chatBudgetTierRefactorDesc => '150～200 轮 · 800 次调用';
+
+  @override
+  String get chatBudgetTierCustom => '自定义';
+
+  @override
+  String get chatBudgetSoftRounds => '软上限轮次';
+
+  @override
+  String get chatBudgetHardRounds => '硬上限轮次';
+
+  @override
+  String get chatBudgetToolCalls => '工具调用上限';
+
+  @override
+  String get chatBudgetUsedRounds => '工具轮';
+
+  @override
+  String get chatBudgetUsedCalls => '调用';
+
+  @override
+  String get chatBudgetPlanning => '规划';
+
+  @override
+  String get chatBudgetExtend => '追加预算继续';
+
+  @override
+  String get chatBudgetPaused => '预算已用尽，已停在检查点';
+
+  @override
   String get chatKnowledgeBase => '知识库';
 
   @override
@@ -3690,6 +3763,35 @@ class SZh extends S {
 
   @override
   String get settingsRootPath => '数据根目录 (.RemindAI)';
+
+  @override
+  String get chatImageAgent => '画图';
+
+  @override
+  String get chatImageAgentTitle => '子画图 Agent';
+
+  @override
+  String get chatImageAgentOff => '关闭（不启用）';
+
+  @override
+  String get chatImageAgentOffDesc => '不注册画图工具，Agent 不会主动生成图片';
+
+  @override
+  String get chatImageAgentHint =>
+      '支持文生图、图生图和改图：直接上传图片说“把这张改成…”或说“基于上一张…”，Agent 会按意图选择对应模式；失败会先重试，只有开启「主模型兜底画图」且主模型支持图片输出时才用主模型兜底。';
+
+  @override
+  String get chatImageAgentFallbackMain => '主模型也支持画图';
+
+  @override
+  String get chatImageAgentFallbackMainDesc =>
+      '默认关闭。关闭时子模型失败会直接提示“主模型不支持画图”；只有主模型本身能出图时才开启兜底。';
+
+  @override
+  String get chatImageAgentEmpty => '还没有模型卡，请先到「模型」页面添加';
+
+  @override
+  String get chatImageAgentMissing => '画图模型已删除';
 
   @override
   String get galleryToolName => 'Gallery';

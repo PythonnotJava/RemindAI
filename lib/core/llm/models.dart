@@ -76,6 +76,7 @@ class ChatMessage {
     List<String> htmlFiles = const [],
     List<String> svgFiles = const [],
     List<String> videoFiles = const [],
+    List<FileAttachment> attachments = const [],
   }) => ChatMessage(
     role: ChatRole.assistant,
     content: content,
@@ -85,6 +86,7 @@ class ChatMessage {
     htmlFiles: htmlFiles,
     svgFiles: svgFiles,
     videoFiles: videoFiles,
+    attachments: attachments,
   );
 
   /// 创建工具结果消息
@@ -179,7 +181,8 @@ class ModelCard {
   /// 0 表示未知，会使用保守默认值。
   final int contextWindow;
 
-  /// 最大输出 token 数限制，0 表示使用默认值 (12800)。
+  /// 最大输出 token 数限制，0 表示使用默认值 (128K，见 LlmClient 的
+  /// `kDefaultMaxOutputTokens`；上游拒绝时会自动降档重试)。
   final int maxOutputTokens;
 
   const ModelCard({

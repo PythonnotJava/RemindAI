@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import '../../isolate/compute_service.dart';
+import '../../llm/context_capacity.dart';
 import '../../llm/llm_client.dart';
 import '../../logger/app_logger.dart';
 import '../../memory/memory_manager.dart';
@@ -82,63 +83,65 @@ class ContextCompactor extends MessageTransformer {
 
   /// 模型特定的压缩阈值比例配置
   ///
-  /// 注意：比例是基于"可用输入空间"，不是总上下文窗口
-  /// 可用输入 = contextWindow - maxOutputTokens (12.8K)
-  ///
-  /// 例如 claude-opus-4 (200K):
-  /// - 可用输入: 200K - 12.8K = 187.2K
-  /// - 触发阈值: 187.2K * 0.60 = 112.3K (约 56% 总上下文)
+  /// 注意：比例是基于"可用输入空间"（有效上下文 - 输出预留），不是总上下文窗口。
+  /// 数值整体从 0.60 下调到 0.45：压缩后还要放摘要 + 保真区 + 输出，
+  /// 贴着上限触发会压完立刻再超。
   static const Map<String, double> _modelThresholds = {
-    'claude-opus-4': 0.60,
-    'claude-sonnet-4': 0.60,
-    'claude-3-5-sonnet': 0.60,
-    'claude-3-opus': 0.60,
-    'gpt-5': 0.50, // 提前触发，预留更多空间
-    'gpt-4': 0.60,
-    'gpt-4-turbo': 0.60,
-    'deepseek': 0.60,
-    'gemini-1.5-pro': 0.60,
-    'gemini-2.0': 0.60,
+    'claude-opus-4': 0.45,
+    'claude-sonnet-4': 0.45,
+    'claude-3-5-sonnet': 0.45,
+    'claude-3-opus': 0.45,
+    'gpt-5': 0.40, // 提前触发，预留更多空间
+    'gpt-4': 0.45,
+    'gpt-4-turbo': 0.45,
+    'deepseek': 0.45,
+    'gemini-1.5-pro': 0.45,
+    'gemini-2.0': 0.45,
   };
 
-  /// 小上下文模型的阈值下限（避免压缩后空间不足）
-  static const double _smallContextFloor = 0.75;
-  static const int _smallContextLimit = 512000; // 512K
+  /// 基于"有效上下文"计算动态阈值的默认比例。
+  ///
+  /// 触发压缩 = (有效上下文 - 输出预留) * ratio。
+  ///
+  /// 用 0.45 而不是原来的 0.60：压缩后要同时容纳【摘要 + 保真区(最多 37.5%)
+  /// + 输出预留】，贴着上限触发会导致"压完立刻又超"。
+  static const double _defaultThresholdRatio = 0.45;
 
-  /// 基于模型 context window 计算动态阈值的比例。
-  /// 触发压缩 = (contextWindow - maxOutputTokens) * ratio。
-  /// 预留空间给：LLM 输出 (maxOutputTokens) + 多轮对话累积。
-  static const double _defaultThresholdRatio = 0.60;
+  /// 模型卡没配 maxOutputTokens 时的输出预留（token）
+  static const int _defaultMaxOutputTokens = 12800;
 
-  /// 预留给 LLM 输出的 token 空间
-  static const int _maxOutputTokens = 12800;
+  /// 摘要请求自身的输入上限（token）。超过就分块滚动摘要，
+  /// 避免"用更大的请求去解决请求太大"。
+  static const int _maxSummaryInputTokens = 24000;
+
+  /// 分块摘要时每块的 token 预算
+  static const int _summaryChunkTokens = 16000;
+
+  /// 触发阈值之外必须留出的余量（token），防止比例被模型表/小上下文下限放大到贴边
+  static const int _thresholdSafetyMargin = 8000;
 
   /// 动态计算出的实际阈值
   ///
   /// 计算公式：
   /// ```
-  /// 可用输入空间 = contextWindow - maxOutputTokens
+  /// 有效上下文 = min(模型窗口, 接入实际上限)
+  /// 可用输入空间 = 有效上下文 - 输出预留
   /// 触发阈值 = 可用输入空间 * ratio
   /// ```
   ///
-  /// 例如（128K 上下文）：
-  /// ```
-  /// 可用输入: 128K - 12.8K = 115.2K
-  /// 触发阈值: 115.2K * 0.60 = 69.1K (约 54% 总上下文)
-  /// ```
+  /// 为什么用"有效上下文"而不是模型窗口？
+  /// - 1M 上下文模型按 0.6 算要 59 万 token 才压缩，第三方中转早就 400 了；
+  /// - 真正限制请求大小的是接入方，不是模型理论值。
   ///
-  /// 为什么预留输出空间？
-  /// - 避免压缩后 + LLM 输出 > contextWindow 导致溢出
-  /// - 确保 LLM 始终有足够空间生成完整回复
+  /// 为什么要预留输出空间？
+  /// - 避免压缩后 + LLM 输出 > 上下文上限导致溢出
   int get effectiveThreshold {
     if (tokenThreshold > 0) return tokenThreshold;
 
-    final ctx = contextWindow > 0
-        ? contextWindow
-        : _inferDefaultContextWindow(modelName);
-
-    // 可用输入空间 = 总上下文 - 预留输出空间
-    final availableInput = ctx - _maxOutputTokens;
+    final availableInput = max(
+      1,
+      effectiveContextWindow - effectiveOutputReserve,
+    );
 
     // 1. 获取模型特定阈值（匹配任意子串）
     double ratio = _defaultThresholdRatio;
@@ -149,19 +152,163 @@ class ContextCompactor extends MessageTransformer {
       }
     }
 
-    // 2. 小上下文模型调整：提高阈值延迟压缩
-    if (ctx < _smallContextLimit && ratio < _smallContextFloor) {
-      ratio = _smallContextFloor;
+    // 2. 运行时收紧（上游报过上下文超限后会打对折）
+    ratio *= _ratioScale;
+
+    var threshold = (availableInput * ratio).toInt();
+
+    // 4. 安全夹紧：不管比例怎么算，都不能吃掉最后的输出余量
+    final maxAllowed = availableInput - _thresholdSafetyMargin;
+    if (maxAllowed > 0 && threshold > maxAllowed) {
+      threshold = maxAllowed;
+    }
+    return threshold < 0 ? 0 : threshold;
+  }
+
+  /// 实际生效的输出预留：优先用模型卡配置
+  int get outputReserve =>
+      maxOutputTokens > 0 ? maxOutputTokens : _defaultMaxOutputTokens;
+
+  /// 预算计算用的输出预留。
+  ///
+  /// 不允许超过有效上下文的一半：模型卡若填了不合理的大值（如 1M 窗口配
+  /// 256K 输出），会把"可用输入"压成 0 → 每轮都触发压缩且压不出效果。
+  int get effectiveOutputReserve {
+    final raw = outputReserve;
+    final cap = (effectiveContextWindow * 0.5).toInt();
+    return raw > cap ? cap : raw;
+  }
+
+  /// 有效上下文 = min(模型卡窗口, 实际可用上限)
+  ///
+  /// 上限来源优先级：运行时学到的 > 显式传入 > 注册表推算 > 构建设时快照 > 不封顶。
+  /// 直接查注册表（而不是只用构造时快照）是为了让"别的会话学到的容量"立刻生效。
+  int get effectiveContextWindow {
+    final modelCtx = contextWindow > 0
+        ? contextWindow
+        : _inferDefaultContextWindow(modelName);
+
+    int? cap = _learnedCapacity;
+    if (cap == null && relayContextCap != null && relayContextCap! > 0) {
+      cap = relayContextCap;
+    }
+    final key = capacityKey;
+    if (cap == null && key != null) {
+      final auto = ContextCapacityRegistry.instance.resolveCapForKey(
+        key,
+        contextWindow,
+      );
+      if (auto > 0) cap = auto;
+    }
+    if (cap == null && autoCapacity != null && autoCapacity! > 0) {
+      cap = autoCapacity;
     }
 
-    return (availableInput * ratio).toInt();
+    if (cap != null && cap > 0 && cap < modelCtx) return cap;
+    return modelCtx;
+  }
+
+  /// 运行时更新容量（AgentLoop 从上游报文学到后调用）
+  void applyCapacity(int? cap) {
+    if (cap == null || cap <= 0) return;
+    if (_learnedCapacity == cap) return;
+    _learnedCapacity = cap;
+    // 容量变小意味着阈值要立刻按新口径重算，允许本轮再压一次
+    _compactedThisRound = false;
+    AppLogger.instance.log(
+      '[Compactor] 🧭 容量更新为 $cap tokens，新阈值≈$effectiveThreshold',
+    );
+  }
+
+  /// 运行时收紧压缩阈值 —— 上游报"上下文超限"后由 AgentLoop 调用。
+  ///
+  /// 静态推算永远猜不准各家中转的真实上限，这条才是自适应兜底。
+  void tightenThreshold([double scale = 0.5]) {
+    final next = max(0.2, _ratioScale * scale);
+    _ratioScale = next;
+    _compactedThisRound = false;
+    _forceNextCompaction = true;
+    AppLogger.instance.log(
+      '[Compactor] ⏬ 阈值收紧: ratioScale=$_ratioScale, '
+      '新阈值≈$effectiveThreshold tokens',
+    );
   }
 
   /// 压缩后保留最近多少轮对话（一轮 = user + assistant）
-  final int keepRecentTurns;
+  ///
+  /// 可变：检测到"频繁压缩"时会自动下调（见 [_detectAndAdjustFrequentCompression]）。
+  int keepRecentTurns;
 
   /// 摘要的目标最大 token 数
   final int summaryMaxTokens;
+
+  /// 模型卡配置的最大输出 token（0 = 未配置，回落默认 12800）。
+  ///
+  /// 必须跟模型卡走：用户把"最大输出"改成 256K 后，阈值仍按 12.8K 预留
+  /// 会让触发点偏晚，最后直接撞上游的上下文/输出上限。
+  final int maxOutputTokens;
+
+  /// 接入方（中转/网关）实际能接受的上下文上限。
+  ///
+  /// - `null`（默认）：自动推算（见 [autoCapacity] 与运行时学习的 `applyCapacity`）
+  /// - `> 0`：用户/调用方显式指定，优先级高于自动值
+  /// - `<= 0`：同样视为"不封顶"
+  final int? relayContextCap;
+
+  /// 自动推算出的容量（来自 ContextCapacityRegistry），null = 尚无线索
+  final int? autoCapacity;
+
+  /// 运行时从上游报文学到的容量（最高优先级，覆盖上面两者）
+  int? _learnedCapacity;
+
+  /// 容量学习标识（`baseUrl|modelId`）；null 表示不做学习（测试/未接线）
+  final String? capacityKey;
+
+  /// 从上游错误报文学习真实上下文上限，学到就立刻生效
+  ///
+  /// 返回学到的上限（null = 报文里没有可用的数字）。
+  int? learnCapacityFromError(String errorText) {
+    final key = capacityKey;
+    if (key == null) return null;
+    final parsed = ContextCapacityRegistry.instance.learnFromErrorForKey(
+      key: key,
+      errorText: errorText,
+      cardContextWindow: contextWindow,
+    );
+    if (parsed != null) applyCapacity(parsed);
+    return parsed;
+  }
+
+  /// 记录一次成功请求的实测输入量（用于向上校准容量）
+  void observeUsage(int? promptTokens) {
+    final key = capacityKey;
+    if (key == null || promptTokens == null || promptTokens <= 0) return;
+    ContextCapacityRegistry.instance.observeSuccessForKey(
+      key: key,
+      promptTokens: promptTokens,
+      measured: true,
+      cardContextWindow: contextWindow,
+    );
+    // 实测可能把容量抬高（模型卡填小了 / 起点猜低了）
+    final cap = ContextCapacityRegistry.instance.resolveCapForKey(
+      key,
+      contextWindow,
+    );
+    if (_learnedCapacity == null || cap > _learnedCapacity!) {
+      _learnedCapacity = cap;
+    }
+  }
+
+  /// 摘要是否优先复用前缀（有机会命中 provider 的 prompt cache）。
+  ///
+  /// 上游不支持缓存时，复用前缀反而更贵，可关掉退回"只发可压缩文本"。
+  final bool cacheAlignedSummary;
+
+  /// 运行时阈值缩放（<1 表示更早压缩），由 [tightenThreshold] 调整
+  double _ratioScale = 1.0;
+
+  /// 下一次 pipeline 调用是否强制压缩（不看阈值，用于超限后的自适应重试）
+  bool _forceNextCompaction = false;
 
   /// 是否已在当前 pipeline 调用中执行过压缩（防止同一轮重复压缩）
   bool _compactedThisRound = false;
@@ -181,6 +328,9 @@ class ContextCompactor extends MessageTransformer {
   /// 频繁压缩计数器（连续 < 10 轮就压缩的次数）
   int _frequentCompressionCount = 0;
 
+  /// 上一次沉淀到记忆的批次指纹（防止同一批内容重复写入记忆）
+  String? _lastSunkFingerprint;
+
   /// 工具结果压缩阈值（单个工具结果超过此大小时压缩）
   static const int _toolResultCompressionThreshold = 5000;
 
@@ -188,19 +338,13 @@ class ContextCompactor extends MessageTransformer {
   ///
   /// 参数说明：
   /// - [tokenThreshold]: 手动指定的压缩触发阈值（0 表示自动计算）
-  /// - [contextWindow]: 模型上下文窗口大小（用于计算默认阈值）
-  /// - [keepRecentTurns]: 保留最近 N 轮对话（默认 6 轮）
+  /// - [contextWindow]: 模型上下文窗口（模型卡的理论值）
+  /// - [maxOutputTokens]: 模型卡配置的最大输出 token（0 = 用默认 12800）
+  /// - [relayContextCap]: 接入方实际能接受的上限（0 = 不封顶，默认 128K）
+  /// - [keepRecentTurns]: 保留最近 N 轮对话（默认 4 轮）
   /// - [summaryMaxTokens]: 总结的最大长度（默认 800 tokens）
   ///
-  /// 阈值计算逻辑：
-  /// 1. 如果 tokenThreshold > 0：直接使用该值
-  /// 2. 如果 contextWindow > 0：使用 contextWindow * 50%
-  /// 3. 否则：使用保守兜底值 128K * 50% = 64K
-  ///
-  /// 为什么是 50%？
-  /// - 给输出留足空间：输入占 50%，输出可以用剩余 50%
-  /// - 避免"满载崩溃"：压缩后立即生成长回答不会超限
-  /// - 实际压缩比通常 > 90%：压缩后远低于 50%，下次触发有充足缓冲
+  /// 阈值计算见 [effectiveThreshold]：基于 `min(模型窗口, 接入上限) - 输出预留`。
   ContextCompactor({
     required this.llm,
     this.memoryManager,
@@ -211,6 +355,11 @@ class ContextCompactor extends MessageTransformer {
     this.modelName = '',
     this.keepRecentTurns = 4, // Loop 模式降低保留轮数，减少请求体大小
     this.summaryMaxTokens = 800,
+    this.maxOutputTokens = 0,
+    this.relayContextCap,
+    this.autoCapacity,
+    this.capacityKey,
+    this.cacheAlignedSummary = true,
   });
 
   @override
@@ -218,6 +367,12 @@ class ContextCompactor extends MessageTransformer {
 
   @override
   bool shouldActivate(List<Map<String, dynamic>> messages) {
+    // 上游报过"上下文超限"后会置位，本次强制压缩（不看阈值）
+    if (_forceNextCompaction) {
+      _forceNextCompaction = false;
+      AppLogger.instance.log('[Compactor] ⚡ 强制压缩（上下文超限自适应重试）');
+      return true;
+    }
     // 消息太少不需要压缩
     if (messages.length < (keepRecentTurns * 2 + 3)) return false;
     // 估算 token 超阈值才激活
@@ -225,9 +380,7 @@ class ContextCompactor extends MessageTransformer {
     final tokens = _estimateTokens(messages);
     if (tokens > threshold && !_compactedThisRound) {
       // 计算实际使用的比例（用于日志）
-      final ctx = contextWindow > 0
-          ? contextWindow
-          : _inferDefaultContextWindow(modelName);
+      final ctx = effectiveContextWindow;
       final actualRatio = threshold / ctx;
       AppLogger.instance.log(
         '[Compactor] 触发压缩: 估算 $tokens tokens > 阈值 $threshold '
@@ -273,9 +426,7 @@ class ContextCompactor extends MessageTransformer {
 
     final projectedTotal = systemTokens + summaryEstimate + recentTokens;
     if (projectedTotal > threshold) {
-      final ctx = contextWindow > 0
-          ? contextWindow
-          : _inferDefaultContextWindow(modelName);
+      final ctx = effectiveContextWindow;
       final ratio = (projectedTotal / ctx * 100).toStringAsFixed(1);
 
       AppLogger.instance.log('[Compactor] ⚠️  预检失败: 保真区过大');
@@ -296,14 +447,14 @@ class ContextCompactor extends MessageTransformer {
       '保真区=${recent.length}条',
     );
 
-    // ─── 第一步：沉淀到长期记忆 ───
-    if (memoryManager != null && memoryCollection != null) {
-      await _sinkToMemory(compressible);
-    }
-
-    // ─── 第二步：生成摘要 ───
+    // ─── 第一步：生成摘要（先摘要，后沉淀）───
+    // 顺序很重要：摘要失败会走降级摘要，此时消息同样会被压缩掉，所以沉淀要在其后；
+    // 反之先沉淀再摘要，若摘要失败则上下文其实仍在，记忆里却多一份 → 重复沉淀。
     final compressibleEnd = messages.length - recentCount;
     final summary = await _summarizeCacheAligned(messages, compressibleEnd);
+
+    // ─── 第二步：沉淀到长期记忆（此时已确定原始消息要被丢弃）───
+    await _sinkIfNeeded(compressible);
 
     // ─── 第三步：重组消息列表 ───
     final result = <Map<String, dynamic>>[
@@ -325,9 +476,7 @@ class ContextCompactor extends MessageTransformer {
     // ─── 第五步：验证压缩效果 ───
     // 如果压缩后仍然超过阈值，说明保真区太大，压缩无效
     if (newTokens > threshold) {
-      final ctx = contextWindow > 0
-          ? contextWindow
-          : _inferDefaultContextWindow(modelName);
+      final ctx = effectiveContextWindow;
       final ratio = (newTokens / ctx * 100).toStringAsFixed(1);
 
       AppLogger.instance.log(
@@ -625,13 +774,11 @@ class ContextCompactor extends MessageTransformer {
   /// 我们的方案结合了 token 预算的可预测性和轮数下限的保底保护，同时预留输出空间避免溢出。
   int _findRecentBoundary(List<Map<String, dynamic>> messages) {
     // ─── 第一步：计算 Token 预算 ───
-    final ctx = contextWindow > 0
-        ? contextWindow
-        : _inferDefaultContextWindow(modelName);
-
-    // 预留输出空间（避免 LLM 输出时溢出）
-    final maxOutputTokens = 12800; // 约 9600 个中文字
-    final availableInput = ctx - maxOutputTokens;
+    // 与 effectiveThreshold 用同一套口径：有效上下文 - 输出预留
+    final availableInput = max(
+      1,
+      effectiveContextWindow - effectiveOutputReserve,
+    );
 
     // Token 预算：可用输入空间的 25%
     final budget = (availableInput * 0.25).toInt();
@@ -773,6 +920,25 @@ class ContextCompactor extends MessageTransformer {
   ///
   /// 每 3 轮对话为一组，调用 LLM 提取值得记忆的信息并存储。
   /// 这确保了即使摘要被再次压缩，重要信息仍可通过语义检索召回。
+  /// 带指纹去重的沉淀入口。
+  ///
+  /// 摘要失败重试、或同一批消息在相邻两次压缩里重复出现时，
+  /// 不该把同样的内容反复写进长期记忆（会造成重复召回、虚增记忆库）。
+  Future<void> _sinkIfNeeded(List<Map<String, dynamic>> compressible) async {
+    if (memoryManager == null || memoryCollection == null) return;
+    if (compressible.isEmpty) return;
+
+    final last = compressible.last;
+    final fingerprint =
+        '${compressible.length}:${last['role']}:${(last['content'] ?? '').toString().hashCode}';
+    if (fingerprint == _lastSunkFingerprint) {
+      AppLogger.instance.log('[Compactor] 沉淀跳过: 与上次批次相同');
+      return;
+    }
+    _lastSunkFingerprint = fingerprint;
+    await _sinkToMemory(compressible);
+  }
+
   Future<void> _sinkToMemory(List<Map<String, dynamic>> messages) async {
     AppLogger.instance.log('[Compactor] 开始记忆沉淀: ${messages.length}条消息');
 
@@ -782,7 +948,7 @@ class ContextCompactor extends MessageTransformer {
 
     for (int i = 0; i < messages.length; i += batchSize) {
       final batch = messages.sublist(i, min(i + batchSize, messages.length));
-      final text = _messagesToText(batch);
+      final text = messagesToText(batch);
       if (text.length < 50) continue; // 太短跳过
 
       try {
@@ -828,19 +994,116 @@ class ContextCompactor extends MessageTransformer {
     AppLogger.instance.log('[Compactor] 沉淀完成: 存入 $stored 条记忆');
   }
 
-  /// 生成对话摘要（Cache-Aligned 方式）
+  /// 摘要入口 —— 先按"摘要请求自身预算"决定单次还是分块。
   ///
-  /// 复用原始消息上下文结构，将摘要指令作为普通 user 消息追加，
-  /// 使得前缀部分能够命中 LLM 的 prompt cache，节省 90-97% 的摘要成本。
-  ///
-  /// [allMessages] 完整的原始消息列表（包含 system + 历史 + 保真区）
-  /// [compressibleEnd] 可压缩区的结束位置索引
+  /// 压缩的本质是"上下文太大"，如果摘要请求把整个可压缩区再完整发一次，
+  /// 就是"用更大的请求解决请求太大"：一旦接近上游上限，摘要必失败，
+  /// 只能退到降级摘要（信息大量丢失）。所以这里先限流。
   Future<String> _summarizeCacheAligned(
     List<Map<String, dynamic>> allMessages,
     int compressibleEnd,
   ) async {
     final compressible = allMessages.sublist(1, compressibleEnd);
+    if (compressible.isEmpty) return _previousSummary ?? '';
 
+    final compressibleTokens = _estimateTokens(compressible);
+    if (compressibleTokens > _maxSummaryInputTokens) {
+      return _summarizeInChunks(compressible, compressibleTokens);
+    }
+    return _summarizeOnce(allMessages, compressibleEnd, compressible);
+  }
+
+  /// 分块滚动摘要：每块 ≤ [_summaryChunkTokens]，逐块合并进已有摘要。
+  ///
+  /// 好处：摘要请求大小恒定（不随历史长度增长），超长会话也能压。
+  Future<String> _summarizeInChunks(
+    List<Map<String, dynamic>> compressible,
+    int totalTokens,
+  ) async {
+    final chunks = chunkByTokenBudget(compressible, _summaryChunkTokens);
+    AppLogger.instance.log(
+      '[Compactor] 🧩 分块摘要: 可压缩区约 $totalTokens tokens '
+      '> 上限 $_maxSummaryInputTokens，切成 ${chunks.length} 块',
+    );
+
+    var merged = _previousSummary ?? '';
+    for (var i = 0; i < chunks.length; i++) {
+      final chunkText = messagesToText(chunks[i]);
+      final prompt = <Map<String, dynamic>>[
+        {'role': 'system', 'content': _summarySystemPrompt},
+        {
+          'role': 'user',
+          'content':
+              '${merged.isEmpty ? '' : '【已有摘要】\n$merged\n\n'}'
+              '【本段对话】\n$chunkText\n\n'
+              '请按固定小节输出"合并后"的最新摘要（不是本段的摘要）。',
+        },
+      ];
+      try {
+        final response = await llm.chat(prompt);
+        final text = response.content?.trim() ?? '';
+        _recordTokenUsage(prompt, text);
+        if (text.isNotEmpty) {
+          merged = text;
+          _previousSummary = merged;
+          _compressionFailures = 0;
+          _lastFailureTime = null;
+        }
+        AppLogger.instance.log(
+          '[Compactor] 🧩 第 ${i + 1}/${chunks.length} 块完成'
+          '（累计摘要 ${merged.length} 字符）',
+        );
+      } catch (e) {
+        _compressionFailures++;
+        _lastFailureTime = DateTime.now();
+        AppLogger.instance.log(
+          '[Compactor] ❌ 分块摘要第 ${i + 1}/${chunks.length} 块失败: $e',
+        );
+        final fallback = buildFallbackSummary(chunks[i]);
+        if (fallback.isNotEmpty) {
+          merged = merged.isEmpty ? fallback : '$merged\n$fallback';
+        }
+      }
+    }
+
+    if (merged.isEmpty) return buildFallbackSummary(compressible);
+    return merged;
+  }
+
+  /// 把消息按 token 预算切成若干块（保持原始顺序，单条超预算也单独成块）。
+  List<List<Map<String, dynamic>>> chunkByTokenBudget(
+    List<Map<String, dynamic>> messages,
+    int budget,
+  ) {
+    final chunks = <List<Map<String, dynamic>>>[];
+    var current = <Map<String, dynamic>>[];
+    var used = 0;
+    for (final msg in messages) {
+      final tokens = _estimateTokens([msg]);
+      if (current.isNotEmpty && used + tokens > budget) {
+        chunks.add(current);
+        current = <Map<String, dynamic>>[];
+        used = 0;
+      }
+      current.add(msg);
+      used += tokens;
+    }
+    if (current.isNotEmpty) chunks.add(current);
+    return chunks;
+  }
+
+  /// 摘要的固定小节（结构化，避免"要点格式"随手丢关键约束）
+  static const String _summarySystemPrompt = '你是一个对话压缩器。只输出摘要正文，不要解释、不要寒暄。';
+
+  /// 生成对话摘要（单次请求）
+  ///
+  /// [allMessages] 完整的原始消息列表（包含 system + 历史 + 保真区）
+  /// [compressibleEnd] 可压缩区的结束位置索引
+  Future<String> _summarizeOnce(
+    List<Map<String, dynamic>> allMessages,
+    int compressibleEnd,
+    List<Map<String, dynamic>> compressible,
+  ) async {
     // ─── 估算对比数据（不实际调用，仅用于日志展示）───
     final traditionalEstimate = _estimateTraditionalSummaryCost(compressible);
     final cacheAlignedEstimate = _estimateCacheAlignedSummaryCost(
@@ -877,46 +1140,52 @@ class ContextCompactor extends MessageTransformer {
     if (_shouldSkipLLMCompression()) {
       AppLogger.instance.log('[Compactor] 跳过 LLM 压缩，使用降级方案');
       print('[Compactor] 跳过 LLM 压缩，使用降级方案');
-      return _fallbackSummary(compressible);
+      return buildFallbackSummary(compressible);
     }
 
     try {
-      // ─── 构造 Cache-Aligned 请求 ───
-      // 保留原始消息结构（包括 system、所有历史消息），仅追加摘要指令
+      // ─── 构造摘要指令（固定小节，避免随手丢关键约束）───
       final summaryInstruction = StringBuffer();
-
-      // 如果有上一次的总结，先展示它
       if (_previousSummary != null && _previousSummary!.isNotEmpty) {
         summaryInstruction.write(
-          '【上一次的总结】：\n'
-          '$_previousSummary\n\n'
-          '现在，请基于上述历史总结，更新并补充下面新对话的内容。\n\n',
+          '【已有摘要】\n$_previousSummary\n\n'
+          '请把"本段新对话"合并进上面的摘要，输出更新后的完整摘要。\n\n',
         );
       }
-
       summaryInstruction.write(
-        '请为${_previousSummary != null ? "新" : "上述"}对话生成一段简洁摘要。要求：\n'
-        '- 保留关键信息：用户需求、决策、结论\n'
-        '- 保留技术细节：文件、函数、配置、错误\n'
-        '- 保留进度状态：已完成、正在进行、待办\n',
+        '把对话压成一份"交接摘要"，供后续继续工作时直接使用。'
+        '严格按下面小节输出，没有内容写"无"，不要额外解释：\n'
+        '## 目标与用户约束\n'
+        '（用户要什么、明确禁止/必须遵守的约束）\n'
+        '## 已完成\n'
+        '## 涉及的文件 / 命令 / 配置\n'
+        '（路径、关键参数，便于后续直接引用）\n'
+        '## 未完成与待办\n'
+        '## 关键决策与失败原因\n'
+        '（做了哪些取舍、什么试过但失败了，避免重复踩坑）\n\n'
+        '总长不超过 ${_previousSummary != null ? 800 : 600} 字，直接输出摘要正文。',
       );
 
-      if (_previousSummary != null) {
-        summaryInstruction.write(
-          '- 将新信息与历史总结合并，保持时间顺序\n'
-          '- 去除重复信息，突出新的进展\n',
-        );
+      // ─── 两种请求形态 ───
+      // cacheAligned：复用整个前缀（有机会命中 provider 的 prompt cache）
+      // 传统：只发可压缩区文本（上游不支持缓存时更便宜、也更不容易超限）
+      final List<Map<String, dynamic>> summaryRequest;
+      if (cacheAlignedSummary) {
+        summaryRequest = [
+          ...allMessages.sublist(0, compressibleEnd), // 复用前缀，命中 cache
+          {'role': 'user', 'content': summaryInstruction.toString()},
+        ];
+      } else {
+        summaryRequest = [
+          {'role': 'system', 'content': _summarySystemPrompt},
+          {
+            'role': 'user',
+            'content':
+                '${summaryInstruction.toString()}\n\n'
+                '【本段对话】\n${messagesToText(compressible)}',
+          },
+        ];
       }
-
-      summaryInstruction.write(
-        '- 使用要点格式，控制在 ${_previousSummary != null ? "600" : "400"} 字以内\n'
-        '- 直接输出摘要，不要前缀或解释',
-      );
-
-      final summaryRequest = [
-        ...allMessages.sublist(0, compressibleEnd), // 复用前缀，命中 cache
-        {'role': 'user', 'content': summaryInstruction.toString()},
-      ];
 
       AppLogger.instance.log('[Compactor] ⏱️  调用 LLM 生成摘要...');
       print('[Compactor] ⏱️  调用 LLM 生成摘要...');
@@ -978,7 +1247,7 @@ class ContextCompactor extends MessageTransformer {
         _lastFailureTime = null;
       }
 
-      return summary.isEmpty ? _fallbackSummary(compressible) : summary;
+      return summary.isEmpty ? buildFallbackSummary(compressible) : summary;
     } catch (e) {
       // 记录失败
       _compressionFailures++;
@@ -1002,13 +1271,13 @@ class ContextCompactor extends MessageTransformer {
       print(cooldown);
       print(endSeparator);
 
-      return _fallbackSummary(compressible);
+      return buildFallbackSummary(compressible);
     }
   }
 
   /// 估算传统方式的摘要成本（不实际调用 LLM）
   int _estimateTraditionalSummaryCost(List<Map<String, dynamic>> messages) {
-    final text = _messagesToText(messages);
+    final text = messagesToText(messages);
     // 传统方式：system prompt (~300 tokens) + 格式化文本 + 输出 (~400 tokens)
     return 300 + _estimateStringTokens(text) + 400;
   }
@@ -1023,27 +1292,76 @@ class ContextCompactor extends MessageTransformer {
     return 150 + 400;
   }
 
-  /// 降级摘要：LLM 调用失败时，取每轮对话的首 50 字符
-  String _fallbackSummary(List<Map<String, dynamic>> messages) {
-    final lines = <String>[];
+  /// 降级摘要 —— LLM 摘要不可用时的"结构化应急摘要"。
+  ///
+  /// 原实现只取前 20 条消息、每条 50 字，长任务里等于把历史烧成灰。
+  /// 这里改为抽取"继续工作真正需要的东西"：用户需求/约束、出现过的文件路径、
+  /// 最近几条结论，总长 ≤ 2000 字符。
+  String buildFallbackSummary(List<Map<String, dynamic>> messages) {
+    final userLines = <String>[];
+    final assistantLines = <String>[];
+    final paths = <String>{};
+    final pathRe = RegExp(
+      r'[A-Za-z]:\\[^\s<>|?*]+'
+      r'|[\w\-.]+\.(?:dart|html|js|ts|py|json|md|ya?ml|css|txt|xlsx|docx|png|exe)\b',
+    );
+
     for (final msg in messages) {
       final role = msg['role'] as String? ?? '';
-      if (role == 'user' || role == 'assistant') {
-        final content = msg['content'];
-        final text = content is String ? content : '';
-        if (text.isNotEmpty) {
-          final preview = text.length > 80
-              ? '${text.substring(0, 80)}...'
-              : text;
-          lines.add('[$role] $preview');
-        }
+      final content = msg['content'];
+      final text = content is String ? content : '';
+      if (text.isEmpty) continue;
+      for (final match in pathRe.allMatches(text)) {
+        if (paths.length >= 30) break;
+        paths.add(match.group(0)!);
+      }
+      if (role == 'user') {
+        userLines.add(_clipLine(text, 200));
+      } else if (role == 'assistant') {
+        assistantLines.add(_clipLine(text, 300));
       }
     }
-    return lines.take(20).join('\n');
+
+    final buffer = StringBuffer('[自动降级摘要：LLM 摘要不可用，以下为结构化抽取，可能不完整]\n');
+    if (userLines.isNotEmpty) {
+      buffer.writeln('## 用户需求（节选）');
+      for (final line in userLines.take(10)) {
+        buffer.writeln('- $line');
+      }
+    }
+    if (paths.isNotEmpty) {
+      buffer.writeln('## 涉及的文件 / 路径');
+      for (final path in paths.take(20)) {
+        buffer.writeln('- $path');
+      }
+    }
+    if (assistantLines.isNotEmpty) {
+      buffer.writeln('## 最近结论（节选）');
+      final tail = assistantLines.length > 3
+          ? assistantLines.sublist(assistantLines.length - 3)
+          : assistantLines;
+      for (final line in tail) {
+        buffer.writeln('- $line');
+      }
+    }
+
+    final result = buffer.toString().trim();
+    if (userLines.isEmpty && paths.isEmpty && assistantLines.isEmpty) return '';
+    return result.length > 2000 ? '${result.substring(0, 2000)}…' : result;
+  }
+
+  static String _clipLine(String text, int max) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return normalized.length > max
+        ? '${normalized.substring(0, max)}…'
+        : normalized;
   }
 
   /// 将消息列表格式化为可读文本（供 LLM 阅读）
-  String _messagesToText(List<Map<String, dynamic>> messages) {
+  String messagesToText(
+    List<Map<String, dynamic>> messages, {
+    int maxCharsPerMessage = 500,
+  }) {
     final buffer = StringBuffer();
     for (final msg in messages) {
       final role = msg['role'] as String? ?? 'unknown';
@@ -1059,7 +1377,9 @@ class ContextCompactor extends MessageTransformer {
       }
       if (text.isEmpty) continue;
       // 截断过长的单条消息（避免摘要输入过大）
-      if (text.length > 500) text = '${text.substring(0, 500)}...';
+      if (text.length > maxCharsPerMessage) {
+        text = '${text.substring(0, maxCharsPerMessage)}...';
+      }
       buffer.writeln('[$role]: $text');
     }
     return buffer.toString();
@@ -1107,22 +1427,37 @@ class ContextCompactor extends MessageTransformer {
         final content = msg['content'];
         if (content is String &&
             content.length > _toolResultCompressionThreshold) {
-          // ─── 计算节省的 token 数 ───
-          // 完整内容的 tokens - 压缩后内容的 tokens
+          // ─── 头 + 尾保留 ───
+          // 工具结果有用的部分常在尾部（测试失败列表、堆栈末尾、编译错误最后一行），
+          // 只留开头会把这些全砍掉。
+          const headChars = 400;
+          const tailChars = 400;
+          final head = content.substring(0, min(headChars, content.length));
+          final tail = content.length > headChars + tailChars
+              ? content.substring(content.length - tailChars)
+              : '';
+          final omitted = content.length - head.length - tail.length;
+
           final originalTokens = _estimateStringTokens(content);
+          final replacement = StringBuffer(head);
+          if (tail.isNotEmpty) {
+            replacement
+              ..write('\n\n…[中间省略 $omitted 字符]…\n\n')
+              ..write(tail);
+          }
+          replacement.write(
+            '\n\n[工具结果已自动压缩，原始 ${content.length} 字符 / '
+            '约 ${(originalTokens / 1024).toStringAsFixed(1)}K tokens]',
+          );
+
           final compressedTokens = _estimateStringTokens(
-            content.substring(0, 500),
+            replacement.toString(),
           );
           savedTokens += originalTokens - compressedTokens;
           compressedCount++;
 
-          // ─── 创建压缩后的消息 ───
-          // 保留：前 500 字符 + 元信息（长度、token 数）
           final compressed = Map<String, dynamic>.from(msg);
-          compressed['content'] =
-              '${content.substring(0, 500)}...\n\n'
-              '[工具结果已自动压缩，完整内容 ${content.length} 字符 / '
-              '约 ${(originalTokens / 1024).toStringAsFixed(1)}K tokens]';
+          compressed['content'] = replacement.toString();
           processed.add(compressed);
         } else {
           // 未超过阈值，保持原样
@@ -1213,19 +1548,16 @@ class ContextCompactor extends MessageTransformer {
           '(计数: $_frequentCompressionCount)',
         );
 
-        // ─── 第三步：连续频繁 → 发出调优建议 ───
-        // 连续 2 次频繁压缩 → 说明配置不合理，需要调整
+        // ─── 第三步：连续频繁 → 真正下调保真区 ───
+        // 连续 2 次频繁压缩 → 说明保真区偏大、释放空间不足，这里直接调小
+        // （以前只打一条"建议"日志，从不生效，等于没有自适应）
         if (_frequentCompressionCount >= 2 && keepRecentTurns > 2) {
           final oldKeep = keepRecentTurns;
-          final newKeep = oldKeep - 1;
-
+          keepRecentTurns = max(2, keepRecentTurns - 1);
           AppLogger.instance.log(
-            '[Compactor] 💡 建议: 降低 keepRecentTurns 从 $oldKeep 至 $newKeep，'
-            '以减少频繁压缩',
+            '[Compactor] 🔧 已自动下调 keepRecentTurns: $oldKeep → $keepRecentTurns'
+            '（缓解频繁压缩）',
           );
-
-          // 重置计数器，避免重复建议
-          // （开发者收到建议后，会调整配置或接受当前频率）
           _frequentCompressionCount = 0;
         }
       } else {

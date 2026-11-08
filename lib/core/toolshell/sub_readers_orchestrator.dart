@@ -5,6 +5,7 @@ import '../isolate/compute_service.dart';
 import '../llm/llm_client.dart';
 import '../pet/pet_economy.dart';
 import 'agent_loop.dart';
+import 'budget.dart';
 import 'executor.dart';
 
 /// 单个只读子任务的定义（来自规划阶段）
@@ -305,10 +306,23 @@ class SubReadersOrchestrator {
           case AgentHtmlGenerated():
           case AgentSvgGenerated():
           case AgentVideoGenerated():
-            // 可视化文件生成事件，子 Agent 不处理
+          case AgentImageGenerated():
+            // 可视化/画图文件生成事件，子 Agent 不处理
             break;
           case AgentLoopLimitReached(rounds: final rounds):
             throw Exception('子 Agent 单轮 tool_call 轮次达到上限($rounds)，未能收敛');
+          case AgentBudgetTick():
+          case AgentBudgetExtended():
+            // 子 Agent 不展示预算心跳
+            break;
+          case AgentBudgetStop(
+            reason: final reason,
+            checkpoint: final checkpoint,
+          ):
+            throw Exception(
+              '子 Agent 执行预算耗尽(${reason.humanReason})'
+              '\n${checkpoint.toMarkdown(reason: reason)}',
+            );
         }
       }
       return buffer.toString();

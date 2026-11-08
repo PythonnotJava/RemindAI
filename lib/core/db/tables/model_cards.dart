@@ -1,5 +1,7 @@
 import 'package:sqlite3/sqlite3.dart';
 
+import '../../llm/models.dart' as llm;
+
 class ModelCard {
   final String id;
   final String name;
@@ -19,7 +21,8 @@ class ModelCard {
   /// 模型上下文窗口大小 (token 数)，0 表示未知。
   final int contextWindow;
 
-  /// 最大输出 token 数限制，0 表示使用默认值 (12800)。
+  /// 最大输出 token 数限制，0 表示使用默认值 (128K，见
+  /// `kDefaultMaxOutputTokens`；上游拒绝时 LlmClient 会自动降档重试)。
   final int maxOutputTokens;
 
   const ModelCard({
@@ -81,4 +84,21 @@ class ModelCard {
       maxOutputTokens: maxOutputTokens ?? this.maxOutputTokens,
     );
   }
+
+  /// 转成 LLM 侧使用的模型卡。
+  ///
+  /// 这里是"数据库卡 → 运行时卡"的唯一映射点：以前各处手抄字段，
+  /// 漏掉 maxOutputTokens 会让 LlmClient 悄悄回落到默认兜底值（128K），
+  /// 用户在模型卡里设置的最大输出 token 就完全不生效。
+  llm.ModelCard toLlmCard() => llm.ModelCard(
+    id: id,
+    name: name,
+    baseUrl: baseUrl,
+    apiKey: apiKey,
+    model: modelId,
+    logoPath: logoPath,
+    provider: provider,
+    contextWindow: contextWindow,
+    maxOutputTokens: maxOutputTokens,
+  );
 }

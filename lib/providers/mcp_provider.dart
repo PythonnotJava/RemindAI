@@ -8,6 +8,8 @@ import '../core/logger/app_logger.dart';
 import '../core/mcp/local_process_launcher.dart';
 import '../core/mcp/mcp_client.dart';
 import '../core/mcp/mcp_registry.dart';
+import '../core/mcp/mcp_reconnect_policy.dart';
+import '../core/mcp/mcp_tool_names.dart';
 import '../core/mcp/transports/mcp_transport.dart';
 import 'database_provider.dart';
 
@@ -97,11 +99,20 @@ class McpConnectionState {
   /// (子进程生命周期已经在 StdioTransport 内部管理) 都不会出现在这里。
   final Map<String, LocalProcessLauncher> localProcesses;
 
+  /// 各服务器最近一次异常断开的原因（用于 UI 提示/排查）。
+  /// 主动 disconnect 不会写入这里。
+  final Map<String, String> lastErrors;
+
+  /// 各服务器当前进行到第几次自动重连（1-based；0/缺省 = 未在重连）。
+  final Map<String, int> reconnectAttempts;
+
   const McpConnectionState({
     this.clients = const {},
     this.statuses = const {},
     this.toolsCache = const {},
     this.localProcesses = const {},
+    this.lastErrors = const {},
+    this.reconnectAttempts = const {},
   });
 
   McpConnectionState copyWith({
@@ -109,17 +120,29 @@ class McpConnectionState {
     Map<String, McpConnectionStatus>? statuses,
     Map<String, List<Map<String, dynamic>>>? toolsCache,
     Map<String, LocalProcessLauncher>? localProcesses,
+    Map<String, String>? lastErrors,
+    Map<String, int>? reconnectAttempts,
   }) {
     return McpConnectionState(
       clients: clients ?? this.clients,
       statuses: statuses ?? this.statuses,
       toolsCache: toolsCache ?? this.toolsCache,
       localProcesses: localProcesses ?? this.localProcesses,
+      lastErrors: lastErrors ?? this.lastErrors,
+      reconnectAttempts: reconnectAttempts ?? this.reconnectAttempts,
     );
   }
 }
 
-enum McpConnectionStatus { disconnected, connecting, connected, error }
+enum McpConnectionStatus {
+  disconnected,
+  connecting,
+  connected,
+
+  /// 连接断了，正在按指数退避自动重连（见 [McpReconnectPolicy]）。
+  reconnecting,
+  error,
+}
 
 /// MCP 连接管理 Provider
 final mcpConnectionsProvider =
@@ -128,10 +151,138 @@ final mcpConnectionsProvider =
     });
 
 class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
-  McpConnectionsNotifier() : super(const McpConnectionState());
+  /// serverId → 断线监听。真正的"进程崩了/连接断了"由它来发现：
+  /// 以前 onDisconnected 没有任何订阅者，传输层断开后 status 仍停在
+  /// connected，UI 与 Agent 都会继续使用一个已经死掉的连接。
+  final Map<String, StreamSubscription<String>> _disconnectSubs = {};
+
+  /// serverId → 连接配置（自动重连需要它，否则只能拿到 client 没法重连）。
+  final Map<String, McpServerConfig> _configs = {};
+
+  /// serverId → 待触发的重连定时器。
+  final Map<String, Timer> _retryTimers = {};
+
+  /// serverId → 已经尝试过的自动重连次数。
+  final Map<String, int> _retryAttempts = {};
+
+  /// 重连策略（指数退避 + 次数上限）。
+  final McpReconnectPolicy reconnectPolicy;
+
+  McpConnectionsNotifier({this.reconnectPolicy = const McpReconnectPolicy()})
+    : super(const McpConnectionState());
+
+  /// 订阅某个连接的断线事件。主动 disconnect 前会先 cancel。
+  void _watchDisconnect(String serverId, McpClient client) {
+    _disconnectSubs.remove(serverId)?.cancel();
+    final stream = client.onDisconnected;
+    if (stream == null) return;
+    _disconnectSubs[serverId] = stream.listen(
+      (reason) => _onUnexpectedDisconnect(serverId, reason),
+      onError: (Object e) => _onUnexpectedDisconnect(serverId, e.toString()),
+    );
+  }
+
+  /// 连接在非预期情况下断开：立刻把状态改成 error 并把工具下线，
+  /// 避免模型继续调用已经不可用的工具；随后按指数退避自动重连。
+  void _onUnexpectedDisconnect(String serverId, String reason) {
+    if (!mounted) return;
+    // 已经处于 error/reconnecting 态说明已经安排过重连，不重复处理
+    final current = state.statuses[serverId];
+    if (current == null ||
+        current == McpConnectionStatus.error ||
+        current == McpConnectionStatus.reconnecting) {
+      return;
+    }
+
+    AppLogger.instance.log('[MCP] 连接意外断开 ($serverId): $reason');
+    state = state.copyWith(
+      statuses: {...state.statuses, serverId: McpConnectionStatus.error},
+      toolsCache: Map<String, List<Map<String, dynamic>>>.from(state.toolsCache)
+        ..remove(serverId),
+      lastErrors: {...state.lastErrors, serverId: reason},
+    );
+
+    _scheduleReconnect(serverId);
+  }
+
+  /// 安排下一次自动重连（指数退避；超过上限就停在 error 态）。
+  ///
+  /// 只有"意外断开"才走这里——用户主动 disconnect 会先取消定时器。
+  void _scheduleReconnect(String serverId) {
+    if (!mounted) return;
+    final config = _configs[serverId];
+    if (config == null) return; // 没记住配置就没法重连（理论上不会发生）
+    if (_retryTimers.containsKey(serverId)) return;
+
+    final attempt = (_retryAttempts[serverId] ?? 0) + 1;
+    if (!reconnectPolicy.shouldRetry(attempt)) {
+      final reason = state.lastErrors[serverId] ?? '连接断开';
+      AppLogger.instance.log(
+        '[MCP] $serverId 自动重连已达上限 (${reconnectPolicy.maxAttempts} 次)，停止重试',
+      );
+      state = state.copyWith(
+        statuses: {...state.statuses, serverId: McpConnectionStatus.error},
+        lastErrors: {
+          ...state.lastErrors,
+          serverId:
+              '$reason（已自动重连 ${reconnectPolicy.maxAttempts} 次仍失败，请手动重连）',
+        },
+        reconnectAttempts: Map<String, int>.from(state.reconnectAttempts)
+          ..remove(serverId),
+      );
+      _retryAttempts.remove(serverId);
+      return;
+    }
+
+    _retryAttempts[serverId] = attempt;
+    final delay = reconnectPolicy.delayForAttempt(attempt);
+    state = state.copyWith(
+      statuses: {...state.statuses, serverId: McpConnectionStatus.reconnecting},
+      reconnectAttempts: {...state.reconnectAttempts, serverId: attempt},
+    );
+    AppLogger.instance.log(
+      '[MCP] ${delay.inSeconds}s 后第 $attempt/${reconnectPolicy.maxAttempts} 次重连 $serverId',
+    );
+
+    _retryTimers[serverId] = Timer(delay, () {
+      _retryTimers.remove(serverId);
+      if (!mounted) return;
+      unawaited(_reconnect(serverId, config));
+    });
+  }
+
+  /// 执行一次重连；失败则继续排下一次（直到策略上限）。
+  Future<void> _reconnect(String serverId, McpServerConfig config) async {
+    if (!mounted) return;
+    try {
+      await connect(config, isReconnect: true);
+      AppLogger.instance.log(
+        '[MCP] $serverId 重连成功（第 ${_retryAttempts[serverId] ?? 1} 次尝试）',
+      );
+    } catch (e) {
+      AppLogger.instance.log('[MCP] $serverId 重连失败: $e');
+      if (!mounted) return;
+      // connect() 失败已把状态置为 error，这里接着排下一次退避
+      _scheduleReconnect(serverId);
+    }
+  }
 
   /// 连接到 MCP 服务器
-  Future<List<Map<String, dynamic>>> connect(McpServerConfig config) async {
+  ///
+  /// [isReconnect] 由自动重连内部使用：为 true 时不会重置重连计数，
+  /// 否则失败后计数会被清零，退避永远停在第一档（等于无限快重试）。
+  Future<List<Map<String, dynamic>>> connect(
+    McpServerConfig config, {
+    bool isReconnect = false,
+  }) async {
+    // 手动连接时取消尚未触发的自动重连并清零计数（用户已介入，重新给满配额）
+    if (!isReconnect) {
+      _retryTimers.remove(config.id)?.cancel();
+      _retryAttempts.remove(config.id);
+    }
+    // 记住配置：断线后的自动重连需要它重建连接
+    _configs[config.id] = config;
+
     // 更新状态为 connecting
     state = state.copyWith(
       statuses: {...state.statuses, config.id: McpConnectionStatus.connecting},
@@ -239,7 +390,16 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
         localProcesses: launcher != null
             ? {...state.localProcesses, config.id: launcher}
             : state.localProcesses,
+        // 重连成功即清掉上一次的断线原因与重连计数
+        lastErrors: Map<String, String>.from(state.lastErrors)..remove(config.id),
+        reconnectAttempts: Map<String, int>.from(state.reconnectAttempts)
+          ..remove(config.id),
       );
+      _retryAttempts.remove(config.id);
+      _retryTimers.remove(config.id)?.cancel();
+
+      // 连接建立后才订阅：避免初始化阶段的失败被误判为"运行期断线"。
+      _watchDisconnect(config.id, client);
 
       return tools;
     } catch (e) {
@@ -254,6 +414,12 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
 
   /// 断开连接
   void disconnect(String serverId) {
+    // 先取消订阅：主动断开不该被记成"异常断线"
+    _disconnectSubs.remove(serverId)?.cancel();
+    // 主动断开＝用户要求停止：取消待触发的重连并清掉状态，避免它又被拉起来
+    _retryTimers.remove(serverId)?.cancel();
+    _retryAttempts.remove(serverId);
+    _configs.remove(serverId);
     final client = state.clients[serverId];
     if (client != null) {
       client.disconnect();
@@ -274,12 +440,18 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
     final newLocalProcesses = Map<String, LocalProcessLauncher>.from(
       state.localProcesses,
     )..remove(serverId);
+    final newLastErrors = Map<String, String>.from(state.lastErrors)
+      ..remove(serverId);
+    final newAttempts = Map<String, int>.from(state.reconnectAttempts)
+      ..remove(serverId);
 
     state = McpConnectionState(
       clients: newClients,
       statuses: newStatuses,
       toolsCache: newTools,
       localProcesses: newLocalProcesses,
+      lastErrors: newLastErrors,
+      reconnectAttempts: newAttempts,
     );
   }
 
@@ -296,26 +468,48 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
     return client.callTool(name, args);
   }
 
-  /// 获取所有已连接服务器的工具
+  /// 获取所有已连接服务器的工具（对外暴露名已按命名空间规则改写）
   List<Map<String, dynamic>> getAllConnectedTools() {
-    final allTools = <Map<String, dynamic>>[];
-    for (final entry in state.toolsCache.entries) {
-      if (state.statuses[entry.key] == McpConnectionStatus.connected) {
-        allTools.addAll(entry.value);
-      }
-    }
-    return allTools;
-  }
-
-  /// 查找工具所属的服务器 ID
-  String? findServerForTool(String toolName) {
+    final defsByKey = <String, Map<String, dynamic>>{};
     for (final entry in state.toolsCache.entries) {
       if (state.statuses[entry.key] != McpConnectionStatus.connected) continue;
-      final hasTool = entry.value.any((t) {
-        final fn = t['function'] as Map<String, dynamic>?;
-        return fn?['name'] == toolName;
-      });
-      if (hasTool) return entry.key;
+      for (final def in entry.value) {
+        final name = mcpToolDefName(def);
+        if (name != null) defsByKey['${entry.key}\u0000$name'] = def;
+      }
+    }
+
+    final result = <Map<String, dynamic>>[];
+    for (final route in getConnectedToolRoutes()) {
+      final def = defsByKey['${route.serverId}\u0000${route.toolName}'];
+      if (def == null) continue;
+      result.add(
+        route.namespaced ? renameMcpToolDef(def, route.exposedName) : def,
+      );
+    }
+    return result;
+  }
+
+  /// 已连接服务器的工具路由表（暴露名 → serverId + 原始工具名）。
+  ///
+  /// Agent 侧的工具列表与 ToolPipeline 的调用路由都必须来自这同一份计算，
+  /// 否则"模型看到的名字"和"实际要调用的名字"会漂移。
+  List<McpToolRoute> getConnectedToolRoutes() {
+    final connected = <String, List<Map<String, dynamic>>>{};
+    for (final entry in state.toolsCache.entries) {
+      if (state.statuses[entry.key] == McpConnectionStatus.connected) {
+        connected[entry.key] = entry.value;
+      }
+    }
+    return buildMcpToolRoutes(connected);
+  }
+
+  /// 查找工具所属的服务器 ID（[toolName] 可以是暴露名，也可以是原始名）
+  String? findServerForTool(String toolName) {
+    for (final route in getConnectedToolRoutes()) {
+      if (route.exposedName == toolName || route.toolName == toolName) {
+        return route.serverId;
+      }
     }
     return null;
   }
@@ -325,6 +519,16 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
   /// 才继续关闭流程；[dispose] 是 Riverpod 容器销毁时的同步兜底，不保证
   /// 异步 kill 已经完成 (进程终止信号已发出，但不等待其退出)。
   Future<void> disconnectAll() async {
+    for (final timer in _retryTimers.values) {
+      timer.cancel();
+    }
+    _retryTimers.clear();
+    _retryAttempts.clear();
+    _configs.clear();
+    for (final sub in _disconnectSubs.values) {
+      await sub.cancel();
+    }
+    _disconnectSubs.clear();
     for (final client in state.clients.values) {
       await client.disconnect();
     }
@@ -336,6 +540,16 @@ class McpConnectionsNotifier extends StateNotifier<McpConnectionState> {
 
   @override
   void dispose() {
+    for (final timer in _retryTimers.values) {
+      timer.cancel();
+    }
+    _retryTimers.clear();
+    _retryAttempts.clear();
+    _configs.clear();
+    for (final sub in _disconnectSubs.values) {
+      sub.cancel();
+    }
+    _disconnectSubs.clear();
     for (final client in state.clients.values) {
       client.disconnect();
     }

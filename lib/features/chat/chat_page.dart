@@ -18,6 +18,7 @@ import '../../core/memory/project_config.dart';
 import '../../core/models/file_attachment.dart';
 import '../../core/settings/app_settings.dart';
 import '../../core/skill/skill_model.dart';
+import '../../core/toolshell/budget.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/kb_provider.dart';
 import '../../core/mcp/mcp_registry.dart';
@@ -144,16 +145,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final db.ModelCard? defaultCard = await dao.getDefault();
     if (defaultCard == null) return; // 数据库中无卡片
 
-    final llmCard = ModelCard(
-      id: defaultCard.id,
-      name: defaultCard.name,
-      baseUrl: defaultCard.baseUrl,
-      apiKey: defaultCard.apiKey,
-      model: defaultCard.modelId,
-      logoPath: defaultCard.logoPath,
-      provider: defaultCard.provider,
-      contextWindow: defaultCard.contextWindow,
-    );
+    // 统一走 db.ModelCard.toLlmCard()，避免手抄字段时漏掉配置（例如
+    // maxOutputTokens 一漏，最大输出 token 就会悄悄回落到默认的 128K）。
+    final llmCard = defaultCard.toLlmCard();
     ref.read(activeModelCardProvider.notifier).state = llmCard;
   }
 
@@ -238,16 +232,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           // 避免其他页面切换默认模型时触发整个 chat_page rebuild。
           PopupMenuButton<db.ModelCard>(
             onSelected: (selected) {
-              final llmCard = ModelCard(
-                id: selected.id,
-                name: selected.name,
-                baseUrl: selected.baseUrl,
-                apiKey: selected.apiKey,
-                model: selected.modelId,
-                logoPath: selected.logoPath,
-                provider: selected.provider,
-                contextWindow: selected.contextWindow,
-              );
+              // 同样走统一映射，保证 maxOutputTokens 等字段不被漏掉
+              final llmCard = selected.toLlmCard();
               ref.read(chatProvider.notifier).switchModel(llmCard);
             },
             itemBuilder: (context) {
@@ -790,44 +776,57 @@ class _ChatInputState extends ConsumerState<_ChatInput> {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Toolbar: Slash / Skills / MCP / WorkDir / Memory / Search / Attach chips
-          Row(
-            children: [
-              _SlashCommandButton(
-                enabled: !widget.isLoading,
-                onInsert: _insertSlashCommand,
+          // 横向滚动，避免新增 Chip 后在窄窗口溢出。
+          // 必须显式撑满宽度：Column 默认居中对齐，横向 ScrollView 会按内容
+          // 收缩，导致工具栏整体被居中、最左侧出现空隙。
+          SizedBox(
+            width: double.infinity,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _SlashCommandButton(
+                    enabled: !widget.isLoading,
+                    onInsert: _insertSlashCommand,
+                  ),
+                  const SizedBox(width: 8),
+                  const _SkillsChip(),
+                  const SizedBox(width: 8),
+                  const _McpChip(),
+                  const SizedBox(width: 8),
+                  const _WorkDirChip(),
+                  const SizedBox(width: 8),
+                  const _RuntimeChip(),
+                  const SizedBox(width: 8),
+                  const _MemoryChip(),
+                  const SizedBox(width: 8),
+                  const _SearchChip(),
+                  const SizedBox(width: 8),
+                  const _KnowledgeBaseChip(),
+                  const SizedBox(width: 8),
+                  const _ImageAgentChip(),
+                  const SizedBox(width: 8),
+                  const _LoopChip(),
+                  const SizedBox(width: 8),
+                  ActionChip(
+                    avatar: const Icon(Icons.attach_file, size: 16),
+                    label: Text(
+                      context.s.chatAttachments,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onPressed: widget.isLoading ? null : _pickFiles,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              const _SkillsChip(),
-              const SizedBox(width: 8),
-              const _McpChip(),
-              const SizedBox(width: 8),
-              const _WorkDirChip(),
-              const SizedBox(width: 8),
-              const _RuntimeChip(),
-              const SizedBox(width: 8),
-              const _MemoryChip(),
-              const SizedBox(width: 8),
-              const _SearchChip(),
-              const SizedBox(width: 8),
-              const _KnowledgeBaseChip(),
-              const SizedBox(width: 8),
-              const _LoopChip(),
-              const SizedBox(width: 8),
-              ActionChip(
-                avatar: const Icon(Icons.attach_file, size: 16),
-                label: Text(
-                  context.s.chatAttachments,
-                  style: const TextStyle(fontSize: 12),
-                ),
-                onPressed: widget.isLoading ? null : _pickFiles,
-              ),
-            ],
+            ),
           ),
           // Attachment chips
           if (attachments.isNotEmpty) ...[
             const SizedBox(height: 8),
             _AttachmentChipsRow(attachments: attachments),
           ],
+          // 预算进度条：实时显示"已用工具轮 / 预算"，预算耗尽时提供追加预算入口
+          const _BudgetBar(),
           const SizedBox(height: 8),
           // Text field + expand/collapse + send button
           Row(
@@ -1512,6 +1511,8 @@ class _McpChip extends ConsumerWidget {
         color = Colors.green;
       case McpConnectionStatus.connecting:
         color = Colors.orange;
+      case McpConnectionStatus.reconnecting:
+        color = Colors.amber;
       case McpConnectionStatus.error:
         color = Colors.red;
       case McpConnectionStatus.disconnected:
@@ -1525,6 +1526,9 @@ class _McpChip extends ConsumerWidget {
       case McpConnectionStatus.connected:
         return context.s.chatConnected;
       case McpConnectionStatus.connecting:
+        return context.s.chatConnecting;
+      case McpConnectionStatus.reconnecting:
+        // 复用"连接中"文案：断线后正在自动重连，对用户是同一种等待语义
         return context.s.chatConnecting;
       case McpConnectionStatus.error:
         return context.s.chatConnectFailed;
@@ -2193,6 +2197,204 @@ class _KbSelectorSheetState extends ConsumerState<_KbSelectorSheet> {
   }
 }
 
+/// 子画图 Agent Chip —— 选择一张模型卡作为画图子 Agent。
+///
+/// 未选择 = 不注册 image_generate 工具；选中后 Agent 判断用户要画图时
+/// 优先调用该模型，失败自动用当前对话主模型兜底。
+class _ImageAgentChip extends ConsumerWidget {
+  const _ImageAgentChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selectedId = ref.watch(sessionImageAgentModelIdProvider);
+    final cards =
+        ref.watch(modelCardsProvider).valueOrNull ?? const <db.ModelCard>[];
+    db.ModelCard? selected;
+    for (final card in cards) {
+      if (card.id == selectedId) {
+        selected = card;
+        break;
+      }
+    }
+    final active = selectedId.isNotEmpty;
+    final label = selected != null
+        ? selected.name
+        : active
+        ? context.s.chatImageAgentMissing
+        : context.s.chatImageAgent;
+
+    return ActionChip(
+      avatar: Icon(
+        active ? Icons.auto_awesome : Icons.auto_awesome_outlined,
+        size: 16,
+        color: active ? colorScheme.primary : null,
+      ),
+      label: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 140),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 12),
+        ),
+      ),
+      tooltip: context.s.chatImageAgentHint,
+      onPressed: () => _showSheet(context, ref),
+    );
+  }
+
+  void _showSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.25,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (_, scrollController) => Consumer(
+          builder: (context, ref, _) {
+            final cards =
+                ref.watch(modelCardsProvider).valueOrNull ??
+                const <db.ModelCard>[];
+            final selectedId = ref.watch(sessionImageAgentModelIdProvider);
+            final fallbackToMain = ref.watch(
+              sessionImageFallbackToMainProvider,
+            );
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.s.chatImageAgentTitle,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      context.s.chatImageAgentHint,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView(
+                    controller: scrollController,
+                    children: [
+                      SwitchListTile(
+                        secondary: const Icon(Icons.swap_horiz, size: 20),
+                        title: Text(context.s.chatImageAgentFallbackMain),
+                        subtitle: Text(
+                          context.s.chatImageAgentFallbackMainDesc,
+                        ),
+                        value: fallbackToMain,
+                        onChanged: (value) {
+                          final fallbackNotifier = ref.read(
+                            sessionImageFallbackToMainProvider.notifier,
+                          );
+                          fallbackNotifier.state = value;
+                          // 持久化，重启应用后仍保留
+                          ref
+                              .read(settingsProvider.notifier)
+                              .updateImageAgentFallbackToMain(value);
+                          ref
+                              .read(chatProvider.notifier)
+                              .invalidateAgentContext();
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.block, size: 20),
+                        title: Text(context.s.chatImageAgentOff),
+                        subtitle: Text(context.s.chatImageAgentOffDesc),
+                        trailing: selectedId.isEmpty
+                            ? Icon(
+                                Icons.check_circle,
+                                color: Theme.of(context).colorScheme.primary,
+                              )
+                            : null,
+                        onTap: () => _select(ref, ctx, ''),
+                      ),
+                      const Divider(height: 1),
+                      if (cards.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Center(
+                            child: Text(
+                              context.s.chatImageAgentEmpty,
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        )
+                      else
+                        for (final card in cards)
+                          ListTile(
+                            leading: const Icon(Icons.image_outlined, size: 20),
+                            title: Text(
+                              card.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              '${card.provider} · ${card.modelId}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: selectedId == card.id
+                                ? Icon(
+                                    Icons.check_circle,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  )
+                                : null,
+                            onTap: () => _select(ref, ctx, card.id),
+                          ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _select(WidgetRef ref, BuildContext ctx, String id) {
+    ref.read(sessionImageAgentModelIdProvider.notifier).state = id;
+    // 持久化：下次启动仍使用这个子画图模型
+    ref.read(settingsProvider.notifier).updateImageAgentModelId(id);
+    // 工具集变化：让下一轮重建 AgentContext，注册/移除 image_generate
+    ref.read(chatProvider.notifier).invalidateAgentContext();
+    Navigator.pop(ctx);
+  }
+}
+
 /// Loop 模式 Chip
 class _LoopChip extends ConsumerWidget {
   const _LoopChip();
@@ -2203,17 +2405,24 @@ class _LoopChip extends ConsumerWidget {
     final chatState = ref.watch(chatProvider);
     final loopEnabled = chatState.loopEnabled;
     final loopRunning = chatState.loopRunning;
-    final loopIter = chatState.loopIteration;
-    final loopMax = chatState.loopMaxIterations;
+    final snapshot = chatState.budget;
 
+    // 实时显示"已用工具轮 / 预算"，而不是只显示一个静态的"最大轮次"
     final String label;
-    if (loopRunning) {
-      label = 'Loop $loopIter/$loopMax';
+    if (loopRunning && snapshot != null) {
+      label =
+          'Loop ${snapshot.roundText} · '
+          '${snapshot.usedToolCalls}/${snapshot.hardToolCalls}';
+    } else if (loopRunning) {
+      label = context.s.chatLoopRunning;
     } else if (loopEnabled) {
-      label = 'Loop ($loopMax)';
+      label =
+          '${context.s.chatBudgetTitle} · ${_tierName(context, chatState.budgetTier)}';
     } else {
       label = 'Loop';
     }
+
+    final limits = chatState.effectiveLimits;
 
     return ActionChip(
       avatar: Icon(
@@ -2232,10 +2441,10 @@ class _LoopChip extends ConsumerWidget {
           color: loopEnabled || loopRunning ? colorScheme.primary : null,
         ),
       ),
-      tooltip: loopRunning
-          ? context.s.chatLoopRunning
-          : loopEnabled
-          ? context.s.chatLoopEnabled
+      tooltip: loopRunning || loopEnabled
+          ? '${context.s.chatBudgetUsedRounds} ${snapshot?.roundText ?? "0/${limits.hardRounds}"}'
+                ' · ${context.s.chatBudgetUsedCalls} ${snapshot?.toolCallText ?? "0/${limits.hardToolCalls}"}'
+                '\n${limits.summary}'
           : context.s.chatLoopHint,
       side: loopEnabled || loopRunning
           ? BorderSide(color: colorScheme.primary.withValues(alpha: 0.5))
@@ -2244,19 +2453,33 @@ class _LoopChip extends ConsumerWidget {
     );
   }
 
-  void _showLoopConfig(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final chatNotifier = ref.read(chatProvider.notifier);
-    final initialState = ref.read(chatProvider);
-    var currentMax = initialState.loopMaxIterations.toDouble();
-    var loopOn = initialState.loopEnabled;
+  /// 档位显示名
+  static String _tierName(BuildContext context, AgentTaskTier tier) {
+    switch (tier) {
+      case AgentTaskTier.quick:
+        return context.s.chatBudgetTierQuick;
+      case AgentTaskTier.coding:
+        return context.s.chatBudgetTierCoding;
+      case AgentTaskTier.refactor:
+        return context.s.chatBudgetTierRefactor;
+      case AgentTaskTier.custom:
+        return context.s.chatBudgetTierCustom;
+    }
+  }
 
+  void _showLoopConfig(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
+      isScrollControlled: true,
+      builder: (ctx) => Consumer(
+        builder: (ctx, ref, _) {
+          final colorScheme = Theme.of(ctx).colorScheme;
+          final state = ref.watch(chatProvider);
+          final notifier = ref.read(chatProvider.notifier);
+          final limits = state.effectiveLimits;
+
+          return SafeArea(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2267,56 +2490,88 @@ class _LoopChip extends ConsumerWidget {
                       Icon(Icons.loop, size: 20, color: colorScheme.primary),
                       const SizedBox(width: 8),
                       Text(
-                        context.s.chatLoopTitle,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        ctx.s.chatLoopTitle,
+                        style: Theme.of(ctx).textTheme.titleMedium,
                       ),
                       const Spacer(),
                       Switch(
-                        value: loopOn,
-                        onChanged: (v) {
-                          setSheetState(() => loopOn = v);
-                          chatNotifier.toggleLoop();
-                        },
+                        value: state.loopEnabled,
+                        onChanged: (_) => notifier.toggleLoop(),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    context.s.chatLoopDesc,
+                    ctx.s.chatBudgetDesc,
                     style: TextStyle(fontSize: 13, color: colorScheme.outline),
                   ),
                   const SizedBox(height: 16),
-                  // 最大轮次 Slider
-                  Row(
-                    children: [
-                      Text(
-                        context.s.chatLoopMaxIter,
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${currentMax.round()}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: colorScheme.primary,
-                        ),
-                      ),
-                    ],
+                  // ─── 任务预算档位（替代"最大轮次"滑块）───
+                  _tierChip(
+                    ctx,
+                    state,
+                    notifier,
+                    AgentTaskTier.quick,
+                    ctx.s.chatBudgetTierQuick,
+                    ctx.s.chatBudgetTierQuickDesc,
                   ),
-                  Slider(
-                    value: currentMax,
-                    min: 10,
-                    max: 100,
-                    divisions: 18,
-                    label: '${currentMax.round()}',
-                    onChanged: (v) {
-                      setSheetState(() => currentMax = v);
-                      chatNotifier.setLoopMaxIterations(v.round());
-                    },
+                  const SizedBox(height: 8),
+                  _tierChip(
+                    ctx,
+                    state,
+                    notifier,
+                    AgentTaskTier.coding,
+                    ctx.s.chatBudgetTierCoding,
+                    ctx.s.chatBudgetTierCodingDesc,
                   ),
+                  const SizedBox(height: 8),
+                  _tierChip(
+                    ctx,
+                    state,
+                    notifier,
+                    AgentTaskTier.refactor,
+                    ctx.s.chatBudgetTierRefactor,
+                    ctx.s.chatBudgetTierRefactorDesc,
+                  ),
+                  const SizedBox(height: 8),
+                  _tierChip(
+                    ctx,
+                    state,
+                    notifier,
+                    AgentTaskTier.custom,
+                    ctx.s.chatBudgetTierCustom,
+                    '${limits.softRounds}/${limits.hardRounds} 轮 · '
+                    '${limits.hardToolCalls} 次调用',
+                  ),
+                  if (state.budgetTier == AgentTaskTier.custom) ...[
+                    const SizedBox(height: 12),
+                    _limitSlider(
+                      ctx,
+                      label: ctx.s.chatBudgetSoftRounds,
+                      value: limits.softRounds.toDouble(),
+                      min: 5,
+                      max: 400,
+                      onChanged: (v) => notifier.setCustomSoftRounds(v.round()),
+                    ),
+                    _limitSlider(
+                      ctx,
+                      label: ctx.s.chatBudgetHardRounds,
+                      value: limits.hardRounds.toDouble(),
+                      min: 10,
+                      max: 500,
+                      onChanged: (v) => notifier.setCustomHardRounds(v.round()),
+                    ),
+                    _limitSlider(
+                      ctx,
+                      label: ctx.s.chatBudgetToolCalls,
+                      value: limits.hardToolCalls.toDouble(),
+                      min: 10,
+                      max: 2000,
+                      onChanged: (v) => notifier.setCustomToolCalls(v.round()),
+                    ),
+                  ],
                   const SizedBox(height: 12),
-                  // 提示
+                  // 当前预算明细 + 软/硬上限说明
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
@@ -2325,32 +2580,174 @@ class _LoopChip extends ConsumerWidget {
                       ),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 16,
-                          color: colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            context.s.chatLoopAutoApproveHint,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: colorScheme.onSurface,
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.speed,
+                              size: 16,
+                              color: colorScheme.primary,
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                limits.summary,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              size: 16,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                ctx.s.chatBudgetDesc,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.bolt,
+                              size: 16,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                ctx.s.chatLoopAutoApproveHint,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
-            );
-          },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 档位单选项
+  Widget _tierChip(
+    BuildContext context,
+    ChatState state,
+    ChatNotifier notifier,
+    AgentTaskTier tier,
+    String title,
+    String desc,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = state.budgetTier == tier;
+    return InkWell(
+      onTap: () => notifier.setBudgetTier(tier),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+            width: selected ? 1.6 : 1,
+          ),
+          color: selected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.35)
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              size: 16,
+              color: selected ? colorScheme.primary : colorScheme.outline,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: selected ? colorScheme.primary : null,
+                    ),
+                  ),
+                  Text(
+                    desc,
+                    style: TextStyle(fontSize: 11, color: colorScheme.outline),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  /// 自定义档位的数值滑杆
+  Widget _limitSlider(
+    BuildContext context, {
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required ValueChanged<double> onChanged,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(label, style: const TextStyle(fontSize: 12)),
+            const Spacer(),
+            Text(
+              '${value.round()}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+        Slider(
+          value: value.clamp(min, max).toDouble(),
+          min: min,
+          max: max,
+          label: '${value.round()}',
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }
@@ -2751,5 +3148,101 @@ class _ThinkingBarState extends State<_ThinkingBar>
     final m = seconds ~/ 60;
     final s = seconds % 60;
     return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+/// 预算进度条 —— 把"还要跑多久"从黑箱变成可见的数字。
+///
+/// 显示四维用量（工具轮 / 工具调用 / 用时 / 重新规划），并在预算耗尽暂停时
+/// 提供「追加预算继续」入口（⑤：不静默换轮，而是给出可续跑的检查点）。
+class _BudgetBar extends ConsumerWidget {
+  const _BudgetBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(chatProvider);
+    final snapshot = state.budget;
+    final running = state.loopRunning || state.isLoading;
+    // 没有预算信息、且既不在跑也不是暂停态时不占位
+    if (snapshot == null || (!running && !state.budgetPaused)) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final paused = state.budgetPaused;
+    final color = paused
+        ? colorScheme.error
+        : (snapshot.hasBeenExtended ? Colors.orange : colorScheme.primary);
+    final labelStyle = TextStyle(fontSize: 11, color: colorScheme.outline);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                paused ? Icons.pause_circle_outline : Icons.speed,
+                size: 14,
+                color: color,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${context.s.chatBudgetUsedRounds} ${snapshot.roundText}',
+                style: labelStyle,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '${context.s.chatBudgetUsedCalls} ${snapshot.toolCallText}',
+                style: labelStyle,
+              ),
+              const SizedBox(width: 10),
+              Text(snapshot.elapsedText, style: labelStyle),
+              if (snapshot.planLimit > 0) ...[
+                const SizedBox(width: 10),
+                Text(
+                  '${context.s.chatBudgetPlanning} ${snapshot.planText}',
+                  style: labelStyle,
+                ),
+              ],
+              const Spacer(),
+              if (paused)
+                TextButton.icon(
+                  onPressed: () =>
+                      ref.read(chatProvider.notifier).extendLoopBudget(),
+                  icon: const Icon(Icons.add_circle_outline, size: 16),
+                  label: Text(
+                    context.s.chatBudgetExtend,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: snapshot.roundFraction,
+              minHeight: 4,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              color: color,
+            ),
+          ),
+          if (paused)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                context.s.chatBudgetPaused,
+                style: TextStyle(fontSize: 11, color: colorScheme.error),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

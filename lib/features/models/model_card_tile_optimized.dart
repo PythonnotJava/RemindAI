@@ -5,6 +5,7 @@ import '../../core/db/tables/model_cards.dart';
 import '../../core/l10n/l10n_ext.dart';
 import '../../providers/database_provider.dart';
 import '../../widgets/model_logo.dart';
+import '../chat/chat_provider.dart';
 import 'model_card_event_bus.dart';
 import 'model_cards_page.dart';
 
@@ -259,6 +260,15 @@ class _OptimizedModelCardTileState extends State<OptimizedModelCardTile> {
                 maxOutputTokens: maxOutputTokens,
               );
               container.read(modelCardsProvider.notifier).updateCard(updated);
+              // 改的是当前正在用的卡时，立刻刷新活跃卡快照并丢弃缓存的
+              // AgentContext/LlmClient。否则新配置（尤其最大输出 token）
+              // 要等到下次切换模型或重开会话才生效，用户会以为设置没生效。
+              final active = container.read(activeModelCardProvider);
+              if (active?.id == updated.id) {
+                container.read(activeModelCardProvider.notifier).state = updated
+                    .toLlmCard();
+                container.read(chatProvider.notifier).invalidateAgentContext();
+              }
             },
       ),
     );

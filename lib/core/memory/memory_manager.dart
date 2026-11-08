@@ -260,28 +260,31 @@ class MemoryManager {
     if (useQdrant) {
       try {
         final vector = await _embed(text);
-        await ensureCollection(collectionName, vectorSize: vector.length);
-
-        // ─── 软失效检测: 写入前标记语义高度重合的旧记忆为 superseded ───
-        if (supersedeThreshold != null && supersedeThreshold > 0) {
-          await _supersedeSimilar(
-            collectionName: collectionName,
-            vector: vector,
-            threshold: supersedeThreshold,
-          );
-        }
-
-        await _dio.put(
-          '/collections/$collectionName/points',
-          data: {
-            'points': [
-              {'id': int.parse(pointId), 'vector': vector, 'payload': payload},
-            ],
-          },
+        await _writePoint(
+          collectionName: collectionName,
+          pointId: pointId,
+          vector: vector,
+          payload: payload,
+          supersedeThreshold: supersedeThreshold,
         );
       } on VectorDimensionMismatch catch (e) {
-        // 维度不一致: 明确告警，提示重建。不静默吞错。
-        AppLogger.instance.log('[Qdrant] 跳过写入 — $e');
+        // 维度不一致 = 换过 embedding 模型。以前只是记一行日志跳过，
+        // 结果语义库从此永久失联（写入全跳过、召回全降级）。
+        // 现在自动从 SQLite 备份重建一次索引，再重试本次写入。
+        if (await _tryAutoRebuild(collectionName, e)) {
+          try {
+            final vector = await _embed(text);
+            await _writePoint(
+              collectionName: collectionName,
+              pointId: pointId,
+              vector: vector,
+              payload: payload,
+              supersedeThreshold: supersedeThreshold,
+            );
+          } catch (e2) {
+            AppLogger.instance.log('[Qdrant] 重建后仍写入失败: $e2');
+          }
+        }
       } on DioException catch (e) {
         AppLogger.instance.log(
           '[Qdrant] 插入失败 status=${e.response?.statusCode}, '
@@ -292,6 +295,35 @@ class MemoryManager {
     }
 
     return pointId;
+  }
+
+  /// 写入单条向量（含 ensureCollection 与软失效前置处理）。
+  Future<void> _writePoint({
+    required String collectionName,
+    required String pointId,
+    required List<double> vector,
+    required Map<String, dynamic> payload,
+    double? supersedeThreshold,
+  }) async {
+    await ensureCollection(collectionName, vectorSize: vector.length);
+
+    // ─── 软失效检测: 写入前标记语义高度重合的旧记忆为 superseded ───
+    if (supersedeThreshold != null && supersedeThreshold > 0) {
+      await _supersedeSimilar(
+        collectionName: collectionName,
+        vector: vector,
+        threshold: supersedeThreshold,
+      );
+    }
+
+    await _dio.put(
+      '/collections/$collectionName/points',
+      data: {
+        'points': [
+          {'id': int.parse(pointId), 'vector': vector, 'payload': payload},
+        ],
+      },
+    );
   }
 
   /// 软失效检测: 查找与新记忆语义高度重合的旧记忆，标记为 superseded。
@@ -422,41 +454,28 @@ class MemoryManager {
     // 优先尝试 Qdrant 语义搜索
     if (useQdrant) {
       try {
-        // 先检查 collection 是否存在
-        await _dio.get('/collections/$collectionName');
-
-        final queryVector = await _embed(query);
-        final resp = await _dio.post(
-          '/collections/$collectionName/points/search',
-          data: {
-            'vector': queryVector,
-            'limit': topK,
-            'score_threshold': scoreThreshold,
-            'with_payload': true,
-            // 过滤掉被软失效标记的旧记忆，避免过时结论污染检索结果
-            'filter': {
-              'must_not': [
-                {
-                  'key': 'superseded',
-                  'match': {'value': true},
-                },
-              ],
-            },
-          },
+        return await _recallFromQdrant(
+          query: query,
+          collectionName: collectionName,
+          topK: topK,
+          scoreThreshold: scoreThreshold,
         );
-
-        final results = (resp.data['result'] as List).map((item) {
-          final payload = item['payload'] as Map<String, dynamic>;
-          return {
-            ...payload,
-            'score': item['score'],
-            'source': 'qdrant', // 标注来源: 语义检索
-          };
-        }).toList();
-
-        if (results.isNotEmpty) return results;
-        // Qdrant 返回空则降级 SQLite
-        AppLogger.instance.log('[Memory] Qdrant 召回为空，降级 SQLite 关键词');
+      } on VectorDimensionMismatch catch (e) {
+        // 换过 embedding 模型：旧 collection 的向量维度与新模型不同。
+        // Qdrant 会直接 400，以前这里静默降级成 SQLite 关键词搜索，
+        // 语义检索等于永久失效。现在自动重建一次再重试。
+        if (await _tryAutoRebuild(collectionName, e)) {
+          try {
+            return await _recallFromQdrant(
+              query: query,
+              collectionName: collectionName,
+              topK: topK,
+              scoreThreshold: scoreThreshold,
+            );
+          } catch (e2) {
+            AppLogger.instance.log('[Memory] 重建后语义召回仍失败，降级 SQLite: $e2');
+          }
+        }
       } on DioException catch (e) {
         if (e.response?.statusCode != 404) {
           AppLogger.instance.log('[Memory] Qdrant 召回异常，降级 SQLite: $e');
@@ -477,6 +496,96 @@ class MemoryManager {
     }
 
     return [];
+  }
+
+  /// Qdrant 语义检索本体。
+  ///
+  /// 会先校验 collection 的向量维度与当前 embedding 输出维度是否一致：
+  /// 不一致直接抛 [VectorDimensionMismatch]，交给 [recall] 触发自动重建，
+  /// 而不是等 Qdrant 返回 400 再被当作"服务不可用"降级掉。
+  Future<List<Map<String, dynamic>>> _recallFromQdrant({
+    required String query,
+    required String collectionName,
+    required int topK,
+    required double scoreThreshold,
+  }) async {
+    // 先检查 collection 是否存在
+    final collectionInfo = await _dio.get('/collections/$collectionName');
+
+    final queryVector = await _embed(query);
+    final existing = _extractVectorSize(collectionInfo.data);
+    if (existing != null && existing != queryVector.length) {
+      throw VectorDimensionMismatch(
+        collection: collectionName,
+        existing: existing,
+        incoming: queryVector.length,
+      );
+    }
+
+    final resp = await _dio.post(
+      '/collections/$collectionName/points/search',
+      data: {
+        'vector': queryVector,
+        'limit': topK,
+        'score_threshold': scoreThreshold,
+        'with_payload': true,
+        // 过滤掉被软失效标记的旧记忆，避免过时结论污染检索结果
+        'filter': {
+          'must_not': [
+            {
+              'key': 'superseded',
+              'match': {'value': true},
+            },
+          ],
+        },
+      },
+    );
+
+    final results = (resp.data['result'] as List).map((item) {
+      final payload = item['payload'] as Map<String, dynamic>;
+      return {
+        ...payload,
+        'score': item['score'],
+        'source': 'qdrant', // 标注来源: 语义检索
+      };
+    }).toList();
+
+    if (results.isNotEmpty) return results;
+    // Qdrant 返回空则交给上层降级
+    AppLogger.instance.log('[Memory] Qdrant 召回为空，降级 SQLite 关键词');
+    return const [];
+  }
+
+  /// 已经自动重建过的 collection（进程级）。
+  ///
+  /// 重建是有代价的（逐条重新 embedding），且重建后仍然失败通常说明是
+  /// embedding 服务本身有问题——同一 collection 一次运行只尝试一次，
+  /// 避免每次写/读都触发一轮全量重建。
+  final Set<String> _rebuiltCollections = <String>{};
+
+  /// 维度不一致时尝试从 SQLite 备份重建索引；返回是否已重建。
+  Future<bool> _tryAutoRebuild(String collectionName, Object cause) async {
+    if (memoryDao == null) {
+      AppLogger.instance.log(
+        '[Memory] 向量维度已变化，但没有 SQLite 备份可用于重建: $cause',
+      );
+      return false;
+    }
+    if (!_rebuiltCollections.add(collectionName)) {
+      AppLogger.instance.log('[Memory] 本次运行已自动重建过，跳过重复重建: $cause');
+      return false;
+    }
+    try {
+      AppLogger.instance.log('[Memory] 检测到 embedding 维度变化，自动从 SQLite 重建索引: $cause');
+      final restored = await rebuildFromSqlite(collectionName);
+      AppLogger.instance.log(
+        '[Memory] 自动重建完成: $restored 条 (collection=$collectionName)',
+      );
+      return true;
+    } catch (e) {
+      AppLogger.instance.log('[Memory] 自动重建失败: $e');
+      return false;
+    }
   }
 
   // ─── 删除 ─────────────────────────────────────────────────

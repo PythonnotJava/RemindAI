@@ -68,15 +68,123 @@
     "type": "function",
     "function": {
       "name": "toolshell_exec",
-      "description": "执行Shell命令。支持 git/flutter/npm/pip/cargo 等任意CLI。Windows 上默认用 PowerShell(无则降级 cmd)，Linux/macOS 用 bash(无则降级 sh)。注意 Windows PowerShell 5.1 不支持 && 链式(会自动降级到 cmd 执行)。",
+      "description": "执行Shell命令。支持 git/flutter/npm/pip/cargo/adb/gradle 等任意CLI，没有命令白名单。Windows 上默认用 PowerShell(无则降级 cmd)，Linux/macOS 用 bash(无则降级 sh)。注意 Windows PowerShell 5.1 不支持 && 链式(会自动降级到 cmd 执行)。输出保留「开头 + 结尾」两段(中间过长部分省略)，所以构建/安装失败的根因通常在开头；超时会强制终止整棵进程树。长驻命令(日志跟踪/dev server/监听)请用 toolshell_exec_background，不要在这里等超时。多步任务把命令写进同一段脚本一次执行，比一步一轮更省预算。",
       "parameters": {
         "type": "object",
         "properties": {
           "command": {"type": "string", "description": "Shell命令"},
           "cwd": {"type": "string", "description": "工作目录(相对项目根)"},
-          "timeout": {"type": "integer", "default": 120, "description": "超时秒数"}
+          "timeout": {"type": "integer", "default": 120, "description": "超时秒数；到时会终止进程树"},
+          "env": {"type": "object", "additionalProperties": {"type": "string"}, "description": "本次命令额外的环境变量，如 {\"ANDROID_SERIAL\":\"xxxx\"}（多设备时指定目标机）"}
         },
         "required": ["command"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_exec_background",
+      "description": "在后台启动长驻命令（adb logcat、flutter run、npm run dev、本地服务、tail 日志等），立即返回 job_id，不阻塞对话。stdout/stderr 写入 <项目根>/.toolshell/jobs/<job_id>.log。之后用 toolshell_job_output 读输出尾部，toolshell_job_kill 结束，toolshell_job_list 看全部任务。一次性命令请用 toolshell_exec。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string", "description": "Shell命令"},
+          "cwd": {"type": "string", "description": "工作目录(相对项目根)"},
+          "env": {"type": "object", "additionalProperties": {"type": "string"}, "description": "额外环境变量，如 {\"ANDROID_SERIAL\":\"xxxx\"}"}
+        },
+        "required": ["command"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_job_output",
+      "description": "读取后台任务的当前状态与日志尾部。job_status=running 表示还在跑，exited 表示已自行退出（看 exit_code），killed 表示被终止。轮询间隔别太密（1~2 秒一次足够）。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {"type": "string", "description": "任务 id，如 job-1"},
+          "tail_bytes": {"type": "integer", "default": 16000, "description": "读取日志尾部的字节数，默认 16000"}
+        },
+        "required": ["job_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_job_kill",
+      "description": "终止后台任务（整棵进程树，含子进程）。任务已退出时返回 already_stopped。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {"type": "string", "description": "任务 id"}
+        },
+        "required": ["job_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "toolshell_job_list",
+      "description": "列出当前所有后台任务（含已退出的），用于确认有没有遗留进程。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "android_ui_dump",
+      "description": "读取 Android 设备当前屏幕上的可见控件（文本/描述/坐标/是否可点/是否可勾选），以文本返回。用于判断现在卡在哪个弹窗、该点哪里。截图是 PNG，模型看不了，这个能直接读。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "serial": {"type": "string", "description": "设备序列号（多设备时必填，adb devices 可查）"},
+          "max_nodes": {"type": "integer", "default": 80, "description": "最多返回多少个节点"}
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "android_tap",
+      "description": "点击 Android 设备上的控件：给 text/desc 会先读屏、按文案匹配、点它的中心点；也可直接给 x,y 坐标。找不到文案时会返回当前可见文本，方便换词重试。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "serial": {"type": "string", "description": "设备序列号"},
+          "text": {"type": "string", "description": "要点的控件文本（如「已了解风险」）"},
+          "desc": {"type": "string", "description": "控件的 content-desc（文本为空时用）"},
+          "x": {"type": "integer", "description": "直接点这个横坐标（需同时给 y）"},
+          "y": {"type": "integer", "description": "直接点这个纵坐标"}
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "android_install_apk",
+      "description": "安装 APK 并自动处理国产 ROM 的安装确认弹窗（vivo 的「风险检测结果 → 已了解风险」勾选框、小米「继续安装」等）：一边装一边读屏，自动勾选风险确认并点继续安装，直到 Success 或 Failure。返回 installed / output / steps（点了什么）。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {"type": "string", "description": "APK 路径（相对项目根或绝对路径）"},
+          "serial": {"type": "string", "description": "设备序列号（多设备时必填）"},
+          "auto_confirm": {"type": "boolean", "default": true, "description": "是否自动勾选/点继续安装"},
+          "timeout": {"type": "integer", "default": 180, "description": "总超时秒数"}
+        },
+        "required": ["path"]
       }
     }
   },
@@ -88,11 +196,13 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "content": {"type": "string", "description": "记忆内容"},
-          "type": {"type": "string", "enum": ["fact", "decision", "context", "error", "outcome"]},
-          "importance": {"type": "number", "description": "0.0~1.0"}
+          "content": {"type": "string", "description": "记忆内容（要记住的正文）"},
+          "type": {"type": "string", "enum": ["fact", "decision", "context", "error", "outcome"], "description": "记忆类型，默认 fact"},
+          "importance": {"type": "number", "description": "重要程度 0.0~1.0，默认 0.5"},
+          "source": {"type": "string", "description": "可选：来源（文件名/需求/对话主题等）"},
+          "tags": {"type": "array", "items": {"type": "string"}, "description": "可选：标签，便于后续检索"}
         },
-        "required": ["content", "type", "importance"]
+        "required": ["content"]
       }
     }
   },
@@ -105,7 +215,8 @@
         "type": "object",
         "properties": {
           "query": {"type": "string", "description": "检索查询"},
-          "limit": {"type": "integer", "default": 5}
+          "limit": {"type": "integer", "description": "返回条数，默认 5", "default": 5},
+          "threshold": {"type": "number", "description": "最低相似度 0~1，默认 0.7", "default": 0.7}
         },
         "required": ["query"]
       }
@@ -161,7 +272,7 @@
     "type": "function",
     "function": {
       "name": "toolshell_run_parallel",
-      "description": "在一次决策内并行发起多个互不依赖的子工具调用，避免逐个串行等待。仅适用于只读/查询类调用(如同时读取多个文件、同时搜索多个模式)。子调用中若包含写文件、删除、执行命令、跑Python/JS代码等需要确认的操作，或再次嵌套 toolshell_run_parallel，整批会被直接拒绝——这类操作请改为逐个串行调用。单次最多8个子调用。",
+      "description": "在一次决策内并行发起多个互不依赖的子工具调用，避免逐个串行等待。框架会自动分流：互不冲突的并发执行；需要用户确认的（normal 模式）与会互相影响的目标（同一文件的读/写/删除、同一条命令、同一段代码）自动串行，结果仍按调用顺序返回。响应里的 parallel_count / serial_count / serialized 会说明哪些被串行了。单次最多 8 个子调用；不允许嵌套 toolshell_run_parallel。",
       "parameters": {
         "type": "object",
         "properties": {

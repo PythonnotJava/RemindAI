@@ -10,6 +10,7 @@ import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import '../pet/pet_economy.dart';
 import '../toolshell/agent_loop.dart';
+import '../toolshell/budget.dart';
 import 'anthropic_proxy.dart';
 import 'api_server_config.dart';
 import 'server_session.dart';
@@ -450,13 +451,29 @@ class ApiServer {
           case AgentHtmlGenerated():
           case AgentSvgGenerated():
           case AgentVideoGenerated():
-            // 可视化文件生成事件，仅本地 UI 使用，API 不暴露
+          case AgentImageGenerated():
+            // 可视化/画图文件生成事件，仅本地 UI 使用，API 不暴露
             break;
           case AgentError(message: final m):
             sendChunk({'content': '\n[错误] $m'});
           case AgentLoopLimitReached(rounds: final rounds):
             sendChunk({
               'content': '\n[错误] 单轮对话内部工具调用次数达到上限($rounds)，未能收敛到最终回复',
+            });
+          case AgentBudgetTick():
+          case AgentBudgetExtended():
+            // 预算心跳/续预算提示只在本地 UI 展示
+            break;
+          case AgentBudgetStop(
+            reason: final reason,
+            snapshot: final snapshot,
+            checkpoint: final checkpoint,
+          ):
+            sendChunk({
+              'content':
+                  '\n[预算停止] ${reason.humanReason}\n'
+                  '${checkpoint.toMarkdown(reason: reason)}\n'
+                  '已用工具轮 ${snapshot.roundText}，工具调用 ${snapshot.toolCallText}',
             });
           case AgentDone():
             break;

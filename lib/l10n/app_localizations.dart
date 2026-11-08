@@ -682,7 +682,7 @@ abstract class S {
   /// No description provided for @chatSupportsTools.
   ///
   /// In zh, this message translates to:
-  /// **'让 AI 走出对话框，真正「上手」你的工作'**
+  /// **'希望「Remind AI」陪伴你每一次工作。'**
   String get chatSupportsTools;
 
   /// No description provided for @chatCreateWorkspace.
@@ -1384,13 +1384,13 @@ abstract class S {
   /// No description provided for @modelsMaxOutputTokensHelper.
   ///
   /// In zh, this message translates to:
-  /// **'留空默认 12800'**
+  /// **'留空默认 128K（上游拒绝时自动降档）'**
   String get modelsMaxOutputTokensHelper;
 
   /// No description provided for @modelsMaxOutputTokensTooltip.
   ///
   /// In zh, this message translates to:
-  /// **'最大输出 token 数限制\n留空则使用默认值 12800\n常见配置：\n  • DeepSeek V3: 8192\n  • Claude: 16384\n  • GPT-4: 8192'**
+  /// **'最大输出 token 数限制\n留空则使用默认值 128000 (128K)\n上游若不接受该值会自动降档重试\n常见配置：\n  • DeepSeek V3: 8192\n  • Claude: 16384\n  • GPT-4: 8192'**
   String get modelsMaxOutputTokensTooltip;
 
   /// No description provided for @modelsProtocolType.
@@ -2730,6 +2730,42 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'保存导出文件'**
   String get exportSaveTitle;
+
+  /// No description provided for @exportLongImageFormat.
+  ///
+  /// In zh, this message translates to:
+  /// **'长截图 (PNG)'**
+  String get exportLongImageFormat;
+
+  /// No description provided for @exportLongImagePreparing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在排版完整对话…'**
+  String get exportLongImagePreparing;
+
+  /// No description provided for @exportLongImageProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在渲染第 {current}/{total} 段…'**
+  String exportLongImageProgress(int current, int total);
+
+  /// No description provided for @exportLongImageParts.
+  ///
+  /// In zh, this message translates to:
+  /// **'内容较长，已保存 {count} 张图片'**
+  String exportLongImageParts(int count);
+
+  /// No description provided for @exportLongImageEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前对话没有可导出的内容'**
+  String get exportLongImageEmpty;
+
+  /// No description provided for @exportLongImageHtmlCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'交互式 HTML 图表（长截图无法呈现，请打开原文件查看）'**
+  String get exportLongImageHtmlCard;
 
   /// No description provided for @commonCancel.
   ///
@@ -6661,6 +6697,108 @@ abstract class S {
   /// **'Loop 模式下工具操作将自动执行，无需逐次确认。'**
   String get chatLoopAutoApproveHint;
 
+  /// No description provided for @chatBudgetTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务预算'**
+  String get chatBudgetTitle;
+
+  /// No description provided for @chatBudgetDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'按任务类型选档位：软上限到线先检查进展，有进展自动原地续预算，无进展才停下。'**
+  String get chatBudgetDesc;
+
+  /// No description provided for @chatBudgetTierQuick.
+  ///
+  /// In zh, this message translates to:
+  /// **'简单问答'**
+  String get chatBudgetTierQuick;
+
+  /// No description provided for @chatBudgetTierQuickDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'10～20 轮 · 30 次调用'**
+  String get chatBudgetTierQuickDesc;
+
+  /// No description provided for @chatBudgetTierCoding.
+  ///
+  /// In zh, this message translates to:
+  /// **'日常编码'**
+  String get chatBudgetTierCoding;
+
+  /// No description provided for @chatBudgetTierCodingDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'60～100 轮 · 320 次调用'**
+  String get chatBudgetTierCodingDesc;
+
+  /// No description provided for @chatBudgetTierRefactor.
+  ///
+  /// In zh, this message translates to:
+  /// **'大型重构'**
+  String get chatBudgetTierRefactor;
+
+  /// No description provided for @chatBudgetTierRefactorDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'150～200 轮 · 800 次调用'**
+  String get chatBudgetTierRefactorDesc;
+
+  /// No description provided for @chatBudgetTierCustom.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义'**
+  String get chatBudgetTierCustom;
+
+  /// No description provided for @chatBudgetSoftRounds.
+  ///
+  /// In zh, this message translates to:
+  /// **'软上限轮次'**
+  String get chatBudgetSoftRounds;
+
+  /// No description provided for @chatBudgetHardRounds.
+  ///
+  /// In zh, this message translates to:
+  /// **'硬上限轮次'**
+  String get chatBudgetHardRounds;
+
+  /// No description provided for @chatBudgetToolCalls.
+  ///
+  /// In zh, this message translates to:
+  /// **'工具调用上限'**
+  String get chatBudgetToolCalls;
+
+  /// No description provided for @chatBudgetUsedRounds.
+  ///
+  /// In zh, this message translates to:
+  /// **'工具轮'**
+  String get chatBudgetUsedRounds;
+
+  /// No description provided for @chatBudgetUsedCalls.
+  ///
+  /// In zh, this message translates to:
+  /// **'调用'**
+  String get chatBudgetUsedCalls;
+
+  /// No description provided for @chatBudgetPlanning.
+  ///
+  /// In zh, this message translates to:
+  /// **'规划'**
+  String get chatBudgetPlanning;
+
+  /// No description provided for @chatBudgetExtend.
+  ///
+  /// In zh, this message translates to:
+  /// **'追加预算继续'**
+  String get chatBudgetExtend;
+
+  /// No description provided for @chatBudgetPaused.
+  ///
+  /// In zh, this message translates to:
+  /// **'预算已用尽，已停在检查点'**
+  String get chatBudgetPaused;
+
   /// No description provided for @chatKnowledgeBase.
   ///
   /// In zh, this message translates to:
@@ -6966,6 +7104,60 @@ abstract class S {
   /// In zh, this message translates to:
   /// **'数据根目录 (.RemindAI)'**
   String get settingsRootPath;
+
+  /// No description provided for @chatImageAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'画图'**
+  String get chatImageAgent;
+
+  /// No description provided for @chatImageAgentTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'子画图 Agent'**
+  String get chatImageAgentTitle;
+
+  /// No description provided for @chatImageAgentOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭（不启用）'**
+  String get chatImageAgentOff;
+
+  /// No description provided for @chatImageAgentOffDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'不注册画图工具，Agent 不会主动生成图片'**
+  String get chatImageAgentOffDesc;
+
+  /// No description provided for @chatImageAgentHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'支持文生图、图生图和改图：直接上传图片说“把这张改成…”或说“基于上一张…”，Agent 会按意图选择对应模式；失败会先重试，只有开启「主模型兜底画图」且主模型支持图片输出时才用主模型兜底。'**
+  String get chatImageAgentHint;
+
+  /// No description provided for @chatImageAgentFallbackMain.
+  ///
+  /// In zh, this message translates to:
+  /// **'主模型也支持画图'**
+  String get chatImageAgentFallbackMain;
+
+  /// No description provided for @chatImageAgentFallbackMainDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认关闭。关闭时子模型失败会直接提示“主模型不支持画图”；只有主模型本身能出图时才开启兜底。'**
+  String get chatImageAgentFallbackMainDesc;
+
+  /// No description provided for @chatImageAgentEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有模型卡，请先到「模型」页面添加'**
+  String get chatImageAgentEmpty;
+
+  /// No description provided for @chatImageAgentMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'画图模型已删除'**
+  String get chatImageAgentMissing;
 
   /// No description provided for @galleryToolName.
   ///

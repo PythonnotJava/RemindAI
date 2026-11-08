@@ -9,8 +9,8 @@
         "properties": {
           "category": {
             "type": "string",
-            "enum": ["all", "runtime", "package_manager", "vcs", "build", "container", "search", "editor", "db", "network", "doc", "custom"],
-            "description": "探测类别。all=全量扫描, custom=按 tools 参数指定的名称探测",
+            "enum": ["all", "runtime", "package_manager", "vcs", "build", "container", "search", "editor", "db", "network", "doc", "android", "custom"],
+            "description": "探测类别。all=全量扫描, android=adb/emulator/SDK 环境与已连接设备, custom=按 tools 参数指定的名称探测",
             "default": "all"
           },
           "tools": {

@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import '../mcp/mcp_client.dart';
+import '../mcp/mcp_tool_names.dart';
+import '../memory/project_config.dart';
+import '../toolshell/budget.dart';
 import '../toolshell/executor.dart';
 import 'tool_middleware.dart';
 
@@ -20,29 +23,54 @@ class ToolPipeline {
   /// MCP 客户端映射
   final Map<String, McpClient> _mcpClients;
 
-  /// toolName → serverId 映射
-  final Map<String, String> _mcpToolMapping;
+  /// 暴露名 → MCP 调用目标（serverId + 原始工具名）
+  ///
+  /// 由 [McpToolRoute] 承载：暴露名可能被命名空间改写（`mcp__<serverId>__<name>`），
+  /// 调用 MCP 服务器时必须还原成原始工具名，否则同名工具会打错服务器。
+  final Map<String, McpToolRoute> _mcpRoutes;
 
   /// 自定义工具处理器 (如搜索工具)
   final Map<String, CustomToolHandler> _customHandlers;
+
+  /// 工具级进展追踪器（可选）
+  ///
+  /// 记录每次真实执行的 (工具名, 参数, 结果哈希)，用于判定"空转/无进展"。
+  /// 放在管线的唯一出口上，因此 MCP、自定义工具、内置工具、以及
+  /// toolshell_run_parallel 的每个子调用都会被记到同一份证据里。
+  final ToolProgressTracker? progressTracker;
 
   ToolPipeline({
     required this._executor,
     this._middlewares = const [],
     this._mcpClients = const {},
     Map<String, List<Map<String, dynamic>>> mcpToolsCache = const {},
+    List<McpToolRoute> mcpToolRoutes = const [],
     this._customHandlers = const {},
-  }) : _mcpToolMapping = _buildMapping(mcpToolsCache);
+    this.progressTracker,
+  }) : _mcpRoutes = _buildRoutes(mcpToolsCache, mcpToolRoutes);
 
-  static Map<String, String> _buildMapping(
+  /// 组装 MCP 路由表。
+  ///
+  /// 优先使用调用方传入的 [routes]（来自 McpConnectionsNotifier，已按命名空间
+  /// 规则算好暴露名）；只传了 [cache] 的老调用点，则退化为"原始名 → 所属服务器"，
+  /// 保持既有行为（同名歧义只能靠后来的覆盖，属于兼容路径）。
+  static Map<String, McpToolRoute> _buildRoutes(
     Map<String, List<Map<String, dynamic>>> cache,
+    List<McpToolRoute> routes,
   ) {
-    final mapping = <String, String>{};
+    if (routes.isNotEmpty) {
+      return {for (final r in routes) r.exposedName: r};
+    }
+    final mapping = <String, McpToolRoute>{};
     for (final entry in cache.entries) {
       for (final tool in entry.value) {
-        final fn = tool['function'] as Map<String, dynamic>?;
-        final name = fn?['name'] as String?;
-        if (name != null) mapping[name] = entry.key;
+        final name = mcpToolDefName(tool);
+        if (name == null) continue;
+        mapping[name] = McpToolRoute(
+          exposedName: name,
+          serverId: entry.key,
+          toolName: name,
+        );
       }
     }
     return mapping;
@@ -57,7 +85,10 @@ class ToolPipeline {
       final nextFn = chain;
       chain = (name, a) => mw.handle(name, a, nextFn);
     }
-    return chain(toolName, args);
+    final result = await chain(toolName, args);
+    // 进展追踪的唯一落点：只看最终结果，不看中间件细节。
+    progressTracker?.record(toolName, args, result);
+    return result;
   }
 
   /// 最终路由: run_parallel → Custom → MCP → ToolShell
@@ -77,14 +108,19 @@ class ToolPipeline {
     }
 
     // MCP 工具
-    final serverId = _mcpToolMapping[toolName];
-    if (serverId != null) {
-      final client = _mcpClients[serverId];
+    final mcpRoute = _mcpRoutes[toolName];
+    if (mcpRoute != null) {
+      final client = _mcpClients[mcpRoute.serverId];
       if (client != null && client.isConnected) {
         try {
           // 参数名自动修正：修复 Agent 常见的参数名混淆问题
-          final correctedArgs = _correctMcpArgs(toolName, args);
-          final result = await client.callTool(toolName, correctedArgs);
+          // （按原始工具名判断，暴露名可能被加了命名空间前缀）
+          final correctedArgs = _correctMcpArgs(mcpRoute.toolName, args);
+          // 关键：调用时用原始工具名，不能用暴露名
+          final result = await client.callTool(
+            mcpRoute.toolName,
+            correctedArgs,
+          );
           return jsonEncode({'status': 'ok', 'content': result});
         } catch (e) {
           return jsonEncode({
@@ -97,7 +133,7 @@ class ToolPipeline {
       return jsonEncode({
         'status': 'error',
         'code': 'MCP_DISCONNECTED',
-        'detail': 'MCP 服务器未连接: $serverId',
+        'detail': 'MCP 服务器未连接: ${mcpRoute.serverId}',
       });
     }
 
@@ -111,14 +147,14 @@ class ToolPipeline {
   ///
   /// 安全设计(经讨论确定的兜底规则):
   /// - 是否"可并行"由 LLM 自行判断依赖关系，框架不猜测调用意图。
-  /// - 框架只做资源冲突的安全兜底: 任意子调用命中
-  ///   [kApprovalRequiredTools](写/删/执行/跑代码)或再次嵌套
-  ///   `toolshell_run_parallel`，直接拒绝整批，要求改为逐个串行调用。
-  ///   这不仅是权限确认弹窗的 UX 问题——并发写同一文件、并发在同一
-  ///   cwd 跑命令本身就有资源竞态风险，所以在 normal/auto 模式下
-  ///   都一律拒绝，而不仅是 normal 模式才拦。
-  /// - 每个子调用通过 `run()` 递归发起，因此仍会完整走一遍中间件链
-  ///   (日志逐条记录)，只是本层已提前排除了需要权限确认的工具。
+  /// - 框架只做资源冲突的安全兜底，且**不再整批拒绝**（旧实现只要批次里出现
+  ///   写/删/执行就全拒，太粗：3 个读 + 1 个 `adb devices` 明明可以一起跑）：
+  ///   1. normal 模式下需要用户确认的工具 → 串行（一次一个弹窗）；
+  ///   2. 目标重叠的子调用（同路径的读/写/删、同一条命令、同一段代码）→ 串行，
+  ///      并保持它们在批次里的原始顺序（避免"读到的还是写之前的内容"）；
+  ///   3. 其余全部并发。
+  /// - 只有嵌套 `toolshell_run_parallel` 仍然直接拒绝（会放大并发数、失去预算约束）。
+  /// - 每个子调用通过 `run()` 递归发起，因此仍会完整走一遍中间件链（日志逐条记录）。
   Future<String> _runParallel(Map<String, dynamic> args) async {
     const maxCalls = 8;
 
@@ -191,145 +227,112 @@ class ToolPipeline {
       });
     }
 
-    // 检测资源冲突
-    final conflictCheck = _detectResourceConflict(calls);
-    if (conflictCheck != null) {
-      return jsonEncode({
-        'status': 'error',
-        'code': 'PARALLEL_NOT_ALLOWED',
-        'detail': conflictCheck,
-      });
+    // ─── 执行编排：能并发的并发，有冲突/需确认的自动串行 ───
+    //
+    // 旧实现是"批次里只要出现写/删/执行就整批拒绝"，太粗：
+    // 3 个读 + 1 个 `adb devices` 明明可以一起跑。现在改成自动分流，
+    // 不再整批失败：
+    // 1. normal 模式下需要确认的调用串行（一次一个弹窗，避免并发弹窗）；
+    // 2. 目标重叠的调用串行（同路径的读/写/删、同一条命令、同一段代码），
+    //    并保持原始顺序，避免"读到的还是写之前的内容"；
+    // 3. 其余全部并发。
+    final autoMode = _executor.permissionMode == PermissionMode.auto;
+    final serialIndexes = <int>{};
+
+    if (!autoMode) {
+      for (var i = 0; i < calls.length; i++) {
+        if (kApprovalRequiredTools.contains(calls[i].tool)) {
+          serialIndexes.add(i);
+        }
+      }
     }
 
-    final results = await Future.wait(
-      calls.map((c) async {
-        try {
-          final raw = await run(c.tool, c.args); // 递归走完整中间件链
-          return {
-            'tool': c.tool,
-            'args': c.args,
-            'result': _tryDecodeJson(raw),
-          };
-        } catch (e) {
-          return {'tool': c.tool, 'args': c.args, 'error': e.toString()};
-        }
-      }),
-    );
+    final byTarget = <String, List<int>>{};
+    for (var i = 0; i < calls.length; i++) {
+      final key = _targetKey(calls[i]);
+      if (key == null) continue;
+      byTarget.putIfAbsent(key, () => <int>[]).add(i);
+    }
+    for (final group in byTarget.values) {
+      if (group.length > 1) serialIndexes.addAll(group);
+    }
+
+    final results = List<Map<String, dynamic>?>.filled(calls.length, null);
+
+    Future<Map<String, dynamic>> execute(int index) async {
+      final c = calls[index];
+      try {
+        final raw = await run(c.tool, c.args); // 递归走完整中间件链
+        return {'tool': c.tool, 'args': c.args, 'result': _tryDecodeJson(raw)};
+      } catch (e) {
+        return {'tool': c.tool, 'args': c.args, 'error': e.toString()};
+      }
+    }
+
+    final parallelIndexes = <int>[
+      for (var i = 0; i < calls.length; i++)
+        if (!serialIndexes.contains(i)) i,
+    ];
+    final serializedIndexes = <int>[
+      for (var i = 0; i < calls.length; i++)
+        if (serialIndexes.contains(i)) i,
+    ];
+
+    if (parallelIndexes.isNotEmpty) {
+      final done = await Future.wait(parallelIndexes.map(execute));
+      for (var k = 0; k < parallelIndexes.length; k++) {
+        results[parallelIndexes[k]] = done[k];
+      }
+    }
+    for (final index in serializedIndexes) {
+      results[index] = await execute(index);
+    }
 
     return jsonEncode({
       'status': 'ok',
-      'count': results.length,
+      'count': calls.length,
+      'parallel_count': parallelIndexes.length,
+      'serial_count': serializedIndexes.length,
+      if (serializedIndexes.isNotEmpty)
+        'serialized': serializedIndexes.map((i) => calls[i].tool).toList(),
       'results': results,
     });
   }
 
-  /// 检测资源冲突
+  /// 资源键：同一键的子调用会被串行执行。
   ///
-  /// 检查并行调用中是否存在资源冲突：
-  /// 1. 写操作：多个写操作指向同一文件路径 → 冲突
-  /// 2. 删操作：多个删操作指向同一文件路径 → 冲突
-  /// 3. 写+删：同一文件同时被写入和删除 → 冲突
-  /// 4. 执行：多个 exec 执行相同命令 → 冲突
-  ///
-  /// 返回：
-  /// - null: 无冲突，允许并行
-  /// - String: 冲突描述，拒绝并行
-  String? _detectResourceConflict(List<_ParallelCall> calls) {
-    final writePaths = <String>[];
-    final deletePaths = <String>[];
-    final execCommands = <String>[];
-    final pythonScripts = <String>[];
-    final jsScripts = <String>[];
+  /// 覆盖"会互相影响"的目标：同一文件的读/写/删、同一条命令、同一段代码。
+  /// 只读且目标不同的调用（读 A、读 B、搜 C）键不同，仍然并发。
+  String? _targetKey(_ParallelCall call) {
+    final path = call.args['path'];
+    final command = call.args['command'];
+    final code = call.args['code'];
 
-    for (final call in calls) {
-      switch (call.tool) {
-        case 'toolshell_write':
-          final path = call.args['path'] as String?;
-          if (path == null || path.isEmpty) {
-            return 'toolshell_write 缺少 path 参数';
-          }
-          // 检测重复写入
-          if (writePaths.contains(path)) {
-            return '冲突: 多个写操作指向同一文件 "$path"';
-          }
-          // 检测写+删冲突
-          if (deletePaths.contains(path)) {
-            return '冲突: 文件 "$path" 同时被写入和删除';
-          }
-          writePaths.add(path);
-          break;
-
-        case 'toolshell_delete':
-          final path = call.args['path'] as String?;
-          if (path == null || path.isEmpty) {
-            return 'toolshell_delete 缺少 path 参数';
-          }
-          // 检测重复删除
-          if (deletePaths.contains(path)) {
-            return '冲突: 多个删除操作指向同一文件 "$path"';
-          }
-          // 检测删+写冲突
-          if (writePaths.contains(path)) {
-            return '冲突: 文件 "$path" 同时被写入和删除';
-          }
-          deletePaths.add(path);
-          break;
-
-        case 'toolshell_exec':
-          final command = call.args['command'] as String?;
-          if (command == null || command.isEmpty) {
-            return 'toolshell_exec 缺少 command 参数';
-          }
-          // 检测重复执行相同命令
-          if (execCommands.contains(command)) {
-            final preview = command.length > 50
-                ? '${command.substring(0, 50)}...'
-                : command;
-            return '冲突: 多个 exec 执行相同命令 "$preview"';
-          }
-          execCommands.add(command);
-          break;
-
-        case 'toolshell_run_python':
-          final code = call.args['code'] as String?;
-          if (code == null || code.isEmpty) {
-            return 'toolshell_run_python 缺少 code 参数';
-          }
-          // 检测重复执行相同代码
-          if (pythonScripts.contains(code)) {
-            return '冲突: 多个 run_python 执行相同代码';
-          }
-          pythonScripts.add(code);
-          break;
-
-        case 'toolshell_run_js':
-          final code = call.args['code'] as String?;
-          if (code == null || code.isEmpty) {
-            return 'toolshell_run_js 缺少 code 参数';
-          }
-          // 检测重复执行相同代码
-          if (jsScripts.contains(code)) {
-            return '冲突: 多个 run_js 执行相同代码';
-          }
-          jsScripts.add(code);
-          break;
-
-        // worktree 操作也需要权限，但通常不会并行调用，暂不检测
-        case 'toolshell_worktree_start':
-        case 'toolshell_worktree_finish':
-        case 'toolshell_worktree_revert':
-          // 这些操作涉及 git 状态修改，理论上不应该并行
-          // 但为了简单，允许（如果 LLM 真的尝试并行，让它自己承担后果）
-          break;
-
-        default:
-        // 其他工具（read, search 等）无需检测冲突
-      }
+    switch (call.tool) {
+      case 'toolshell_read':
+      case 'toolshell_write':
+      case 'toolshell_delete':
+      case 'office_word_read':
+      case 'office_excel_read':
+      case 'office_word_file':
+      case 'office_excel_file':
+        if (path is String && path.isNotEmpty) return 'path:$path';
+        return null;
+      case 'toolshell_exec':
+      case 'toolshell_exec_background':
+        if (command is String && command.isNotEmpty) return 'exec:$command';
+        return null;
+      case 'toolshell_run_python':
+        if (code is String && code.isNotEmpty) return 'py:$code';
+        return null;
+      case 'toolshell_run_js':
+        if (code is String && code.isNotEmpty) return 'js:$code';
+        return null;
+      default:
+        return null;
     }
-
-    // 无冲突
-    return null;
   }
+
 
   /// 子调用返回的是 JSON 字符串，尝试解成结构化对象方便汇总展示；
   /// 解析失败(非 JSON 的自定义/MCP 结果)则原样作为字符串保留。

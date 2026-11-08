@@ -21,6 +21,7 @@ class CombinedExecutor extends Executor {
     super.memoryCollection,
     super.readableExtraPaths,
     super.allowOutsideRoot,
+    super.autoInstallPython,
     required Map<String, McpClient> mcpClients,
     required Map<String, List<Map<String, dynamic>>> mcpToolsCache,
     this._toolSourceMapping = const {},

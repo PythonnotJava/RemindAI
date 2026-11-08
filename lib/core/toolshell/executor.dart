@@ -5,8 +5,14 @@ import 'package:fast_gbk/fast_gbk.dart';
 import 'package:path/path.dart' as p;
 
 import '../agent/tool_middleware.dart';
+import '../logger/app_logger.dart';
 import '../memory/memory_manager.dart';
 import '../memory/project_config.dart';
+import '../office/office_engine.dart';
+import '../python/python_bootstrap.dart';
+import 'android_executor.dart';
+import 'background_jobs.dart';
+import 'head_tail_output.dart';
 import 'schedule_executor.dart';
 import 'system_executor.dart';
 
@@ -47,8 +53,12 @@ class Executor {
   /// (越界写/删/执行仍由权限中间件逐次确认，受保护文件名仍被拦截)。
   final bool allowOutsideRoot;
 
+  /// 工作目录为 auto 模式时，缺少 Python 可自动安装（per-user，无需管理员）。
+  final bool autoInstallPython;
+
   late final ScheduleExecutor _scheduleExecutor;
   late final SystemExecutor _systemExecutor;
+  late final AndroidExecutor _androidExecutor;
 
   static const _protected = ['.git', 'node_modules', '.env', '.env.local'];
 
@@ -62,9 +72,11 @@ class Executor {
     this.memoryCollection,
     this.readableExtraPaths = const [],
     this.allowOutsideRoot = false,
+    this.autoInstallPython = false,
   }) {
     _scheduleExecutor = ScheduleExecutor(projectRoot: projectRoot);
     _systemExecutor = SystemExecutor();
+    _androidExecutor = AndroidExecutor();
     _initBundledTools();
   }
 
@@ -140,11 +152,29 @@ class Executor {
         'toolshell_delete' => await _delete(args),
         'toolshell_search' => await _search(args),
         'toolshell_exec' => await _exec(args),
+        'toolshell_exec_background' => await _execBackground(args),
+        'toolshell_job_output' => _jobOutput(args),
+        'toolshell_job_kill' => await _jobKill(args),
+        'toolshell_job_list' => _jobList(),
+        'android_ui_dump' => await _androidExecutor.run(toolName, args),
+        'android_tap' => await _androidExecutor.run(toolName, args),
+        'android_install_apk' => await _androidExecutor.run(toolName, args),
         'toolshell_run_python' => await _runPython(args),
         'toolshell_run_js' => await _runJs(args),
         'toolshell_memory_store' => await _memStore(args),
         'toolshell_memory_recall' => await _memRecall(args),
-        _ => _err('UNKNOWN_TOOL', toolName),
+        'office_word_read' => await _runOffice('word', 'read', args),
+        'office_word_create' => await _runOffice('word', 'create', args),
+        'office_word_edit' => await _runOffice('word', 'edit', args),
+        'office_word_file' => await _runOffice('word', 'file', args),
+        'office_excel_read' => await _runOffice('excel', 'read', args),
+        'office_excel_file' => await _runOffice('excel', 'file', args),
+        _ => _err(
+          'UNKNOWN_TOOL',
+          '$toolName（没有对应的执行器：内置工具名见 toolshell/tools.json；'
+          '技能 tools.json 里声明的自定义工具不会自动获得执行能力，'
+          '请在技能里改用 toolshell_exec / toolshell_run_python 运行脚本）',
+        ),
       };
     } catch (e) {
       return _err('EXCEPTION', e.toString());
@@ -238,7 +268,8 @@ class Executor {
     if (args.isEmpty) {
       return _err(
         'INVALID_ARGS',
-        'toolshell_write 参数为空（可能是内容过长导致参数传输失败）。\n'
+        'toolshell_write 缺少必需参数 path / content / mode'
+            '（参数为空，可能是内容过长导致参数传输失败）。\n'
             '建议：\n'
             '1. 如果要写入的内容很长，请先用 toolshell_exec 执行 echo/cat 命令写入\n'
             '2. 或者分多次写入（先 create 空文件，再 append 内容）\n'
@@ -443,7 +474,7 @@ class Executor {
 
       final fdStdout = _decodeBytes(result.stdout);
       if (result.exitCode != 0 && fdStdout.isEmpty) {
-        return _searchDart(pattern, scope, maxResults, null);
+        return await _searchDart(pattern, scope, maxResults, null);
       }
 
       final lines = fdStdout
@@ -626,8 +657,9 @@ class Executor {
 
     await Directory(cwd).create(recursive: true);
 
-    // 构建环境变量：将指定的解释器目录前置到 PATH，优先使用本次对话指定版本
-    final environment = _buildEnvironment();
+    // 构建环境变量：将指定的解释器目录前置到 PATH，优先使用本次对话指定版本；
+    // 再把调用方通过 `env` 参数传入的变量合并进去（多设备时传 ANDROID_SERIAL 等）。
+    final environment = _buildExecEnvironment(args['env']);
 
     // 解析使用的 shell (一次性缓存)。
     // Windows: pwsh > powershell > cmd; Unix: bash > sh。
@@ -649,44 +681,231 @@ class Executor {
     // 通过 rtk 包裹命令以压缩输出 (可用时)，降低 LLM token 消耗
     final effectiveCommand = _wrapWithRtk(command, active.kind);
     final invocation = _buildInvocation(active, effectiveCommand);
+    final wasWrapped = _rtkPath != null && effectiveCommand != command;
 
+    StreamSubscription<List<int>>? outSub;
+    StreamSubscription<List<int>>? errSub;
     try {
-      final result = await Process.run(
+      final proc = await Process.start(
         invocation.$1,
         invocation.$2,
         workingDirectory: cwd,
         environment: environment,
-        stdoutEncoding: null, // 原始字节，自行智能解码
-        stderrEncoding: null,
-      ).timeout(timeout);
-
-      final rawStdout = _decodeBytes(result.stdout);
-      final rawStderr = _decodeBytes(result.stderr);
-
-      // 打印执行完成后的输出规模，便于观察 rtk 压缩效果
-      final wasWrapped = _rtkPath != null && effectiveCommand != command;
-      print(
-        '[RTK] 执行完成 exit=${result.exitCode} '
-        '${wasWrapped ? "(经 rtk)" : "(未经 rtk)"} '
-        'stdout=${rawStdout.length}字符 stderr=${rawStderr.length}字符',
       );
 
-      final stdout = rawStdout.length > 8000
-          ? rawStdout.substring(rawStdout.length - 8000)
-          : rawStdout;
-      final stderr = rawStderr.length > 4000
-          ? rawStderr.substring(rawStderr.length - 4000)
-          : rawStderr;
+      // 头 + 尾各留一段：构建/安装失败的根因几乎都在输出开头，
+      // 老实现"只留最后 8000 字符"恰好把它截掉了。
+      final out = HeadTailCollector();
+      final err = HeadTailCollector();
+      final outDone = Completer<void>();
+      final errDone = Completer<void>();
+      outSub = proc.stdout.listen(
+        out.add,
+        onDone: outDone.complete,
+        onError: (_) => outDone.complete(),
+        cancelOnError: false,
+      );
+      errSub = proc.stderr.listen(
+        err.add,
+        onDone: errDone.complete,
+        onError: (_) => errDone.complete(),
+        cancelOnError: false,
+      );
+
+      int exitCode;
+      try {
+        exitCode = await proc.exitCode.timeout(timeout);
+      } on TimeoutException {
+        // `Process.run(...).timeout()` 只是"不再等"，子进程（adb/java/gradle）
+        // 会留在后台；这里连进程树一起终止，避免积累僵尸 adb 服务。
+        await _killProcessTree(proc.pid);
+        try {
+          exitCode = await proc.exitCode.timeout(const Duration(seconds: 3));
+        } catch (_) {
+          exitCode = -1;
+        }
+        await _drainStreams([outDone, errDone]);
+        final tail = out.text(_decodeBytes);
+        return _err(
+          'TIMEOUT',
+          '$command (>${timeout.inSeconds}s，已终止进程树，退出码 $exitCode)。'
+          '长驻命令请改用一次性形式（如 adb logcat -d -t 500）或重定向到文件后再读。'
+          '${tail.trim().isEmpty ? '' : '\n最后输出：\n$tail'}',
+        );
+      }
+
+      await _drainStreams([outDone, errDone]);
+
+      print(
+        '[RTK] 执行完成 exit=$exitCode '
+        '${wasWrapped ? "(经 rtk)" : "(未经 rtk)"} '
+        'stdout=${out.total}字节 stderr=${err.total}字节',
+      );
 
       return _ok({
-        'exit_code': result.exitCode,
-        'stdout': stdout,
-        'stderr': stderr,
-        'truncated': rawStdout.length > 8000 || rawStderr.length > 4000,
-        if (_rtkPath != null && effectiveCommand != command) 'optimized': true,
+        'exit_code': exitCode,
+        'stdout': out.text(_decodeBytes),
+        'stderr': err.text(_decodeBytes),
+        'truncated': out.truncated || err.truncated,
+        'stdout_total_bytes': out.total,
+        'stderr_total_bytes': err.total,
+        if (wasWrapped) 'optimized': true,
       });
-    } on TimeoutException {
-      return _err('TIMEOUT', '$command (>${timeout.inSeconds}s)');
+    } on ProcessException catch (e) {
+      return _err('EXEC_FAILED', '${e.message}（命令：$command）');
+    } finally {
+      await outSub?.cancel();
+      await errSub?.cancel();
+    }
+  }
+
+  // ─── 后台任务 ────────────────────────────────────────────────
+
+  /// 起一个长驻进程（logcat / dev server / 监听类命令）。
+  ///
+  /// 与 [_exec] 的区别：
+  /// - 不等退出，立刻返回 `job_id`；
+  /// - stdout/stderr 落盘到 `<root>/.toolshell/jobs/job-N.log`，可反复读尾部；
+  /// - **不经过 rtk 包裹**：rtk 会缓冲输出，长驻进程会一直看不到内容。
+  Future<String> _execBackground(Map<String, dynamic> args) async {
+    final command = args['command'];
+    if (command == null || command is! String || command.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_exec_background 缺少必需参数 command (String)。',
+      );
+    }
+    final cwd = _resolve(args['cwd'] ?? '.');
+    await Directory(cwd).create(recursive: true);
+    final environment = _buildExecEnvironment(args['env']);
+
+    final resolved = await _resolveShell();
+    var active = resolved;
+    if (resolved.kind == _ShellKind.powershell &&
+        !resolved.supportsChaining &&
+        _hasChaining(command)) {
+      active = const _ResolvedShell(
+        _ShellKind.cmd,
+        'cmd',
+        supportsChaining: true,
+      );
+    }
+    final invocation = _buildInvocation(active, command);
+
+    try {
+      final job = await BackgroundJobManager.instance.start(
+        executable: invocation.$1,
+        arguments: invocation.$2,
+        command: command,
+        cwd: cwd,
+        logDir: p.join(projectRoot, '.toolshell', 'jobs'),
+        environment: environment,
+      );
+      return _ok({
+        'job_id': job.id,
+        'pid': job.pid,
+        'job_status': 'running',
+        'log_file': job.logPath,
+        'hint':
+            '用 toolshell_job_output(job_id="${job.id}") 读输出；'
+            'toolshell_job_kill 结束；进程自己退出后 status 会变成 exited。',
+      });
+    } catch (e) {
+      return _err('BACKGROUND_START_FAILED', '$e');
+    }
+  }
+
+  String _jobOutput(Map<String, dynamic> args) {
+    final jobId = args['job_id'];
+    if (jobId is! String || jobId.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_job_output 缺少必需参数 job_id (String)。',
+      );
+    }
+    final tail = args['tail_bytes'] is int ? args['tail_bytes'] as int : 16000;
+    try {
+      return _ok(
+        BackgroundJobManager.instance.output(jobId, tailBytes: tail),
+      );
+    } catch (e) {
+      return _err('JOB_NOT_FOUND', '$e');
+    }
+  }
+
+  Future<String> _jobKill(Map<String, dynamic> args) async {
+    final jobId = args['job_id'];
+    if (jobId is! String || jobId.isEmpty) {
+      return _err(
+        'INVALID_ARGS',
+        'toolshell_job_kill 缺少必需参数 job_id (String)。',
+      );
+    }
+    try {
+      final killed = await BackgroundJobManager.instance.kill(jobId);
+      return _ok({
+        'job_id': jobId,
+        'killed': killed,
+        'job_status': killed ? 'killed' : 'already_stopped',
+      });
+    } catch (e) {
+      return _err('JOB_NOT_FOUND', '$e');
+    }
+  }
+
+  String _jobList() {
+    final jobs = BackgroundJobManager.instance.list();
+    return _ok({'count': jobs.length, 'jobs': jobs});
+  }
+
+  /// 合并解释器 PATH 前缀与调用方传入的 `env`。
+  Map<String, String>? _buildExecEnvironment(dynamic extraEnv) {
+    final environment = _buildEnvironment();
+    if (extraEnv is! Map || extraEnv.isEmpty) return environment;
+
+    final merged = Map<String, String>.from(
+      environment ?? Platform.environment,
+    );
+    for (final entry in extraEnv.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key is String && key.isNotEmpty && value is String) {
+        merged[key] = value;
+      }
+    }
+    return merged;
+  }
+
+  /// 等输出管道把最后的数据吐完（最多 3 秒，防止子进程没关管道时卡死）。
+  Future<void> _drainStreams(List<Completer<void>> completers) async {
+    try {
+      await Future.wait(
+        completers.map((c) => c.future),
+      ).timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // 拿不到剩余输出也没关系：结果里已经带上已收集部分。
+    }
+  }
+
+  /// 终止进程树（超时清理用）。
+  Future<void> _killProcessTree(int pid) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run(
+          'taskkill',
+          ['/PID', '$pid', '/T', '/F'],
+        ).timeout(const Duration(seconds: 8));
+      } else {
+        Process.killPid(pid, ProcessSignal.sigkill);
+        try {
+          await Process.run(
+            'pkill',
+            ['-9', '-P', '$pid'],
+          ).timeout(const Duration(seconds: 5));
+        } catch (_) {}
+      }
+    } catch (e) {
+      print('[Shell] 终止进程树失败 pid=$pid: $e');
     }
   }
 
@@ -799,11 +1018,23 @@ $code
 
     await scriptFile.writeAsString(patchedCode, encoding: utf8);
 
-    // 查找 Python 解释器
-    final pythonCmd = await _findPython();
+    // 查找 Python 解释器；auto 模式下允许自动安装。
+    var pythonCmd = await _findPython();
+    if (pythonCmd == null && autoInstallPython) {
+      try {
+        pythonCmd = await PythonBootstrap.instance.ensureInstalled();
+      } catch (e) {
+        AppLogger.instance.log('[PythonBootstrap] 自动安装失败: $e');
+      }
+    }
     if (pythonCmd == null) {
       await tmpDir.delete(recursive: true);
-      return _err('PYTHON_NOT_FOUND', '未找到 Python 解释器 (python3/python)');
+      return _err(
+        'PYTHON_NOT_FOUND',
+        autoInstallPython
+            ? '未找到 Python，自动安装也失败。请检查网络，或在「运行环境」里指定 Python。'
+            : '未找到 Python 解释器 (python3/python)。可在「运行环境」里指定，或在 auto 工作目录中自动安装。',
+      );
     }
 
     final environment = _buildEnvironment();
@@ -845,6 +1076,60 @@ $code
       await tmpDir.delete(recursive: true);
       return _err('TIMEOUT', 'Python 执行超时 (>${timeout.inSeconds}s)');
     }
+  }
+
+  /// 运行独立的 Word/Excel 引擎（Python 子进程，JSON stdin/stdout）。
+  Future<String> _runOffice(
+    String kind,
+    String action,
+    Map<String, dynamic> args,
+  ) async {
+    var python = await _findPython();
+    String? installError;
+    if (python == null && autoInstallPython) {
+      try {
+        python = await PythonBootstrap.instance.ensureInstalled();
+      } catch (e) {
+        installError = e.toString();
+        AppLogger.instance.log('[PythonBootstrap] 自动安装失败: $e');
+      }
+    }
+    if (python == null) {
+      return _err(
+        'PYTHON_NOT_FOUND',
+        installError != null
+            ? '自动安装 Python 失败: $installError'
+            : autoInstallPython
+            ? '未找到 Python，自动安装没有返回可用解释器。请检查网络，或在「运行环境」里指定 Python。'
+            : '未找到 Python 解释器。可在「运行环境」里指定，或在 auto 工作目录中自动安装。',
+      );
+    }
+
+    final script = kind == 'word'
+        ? OfficeEnginePaths.wordScript
+        : OfficeEnginePaths.excelScript;
+    if (script == null) {
+      return _err(
+        'OFFICE_ENGINE_NOT_FOUND',
+        '未找到 ${kind == 'word' ? 'Word' : 'Excel'} 引擎脚本；请确认 assets/office_engine 已随应用打包。',
+      );
+    }
+
+    if (autoInstallPython) {
+      try {
+        await PythonBootstrap.instance.ensureOfficeDeps(python);
+      } catch (e) {
+        return _err('OFFICE_DEPS_FAILED', '安装办公引擎依赖失败: $e');
+      }
+    }
+
+    return OfficeEngine.run(
+      python: python,
+      script: script,
+      action: action,
+      request: args,
+      workingDirectory: projectRoot,
+    );
   }
 
   /// 扫描输出目录，收集所有可视化文件
@@ -910,6 +1195,12 @@ $code
         if (await File(candidate).exists()) return candidate;
       }
     }
+
+    // 自动安装到应用支持目录的 Python（per-user，无需管理员）
+    try {
+      final installed = await PythonBootstrap.instance.installedPython();
+      if (installed != null) return installed;
+    } catch (_) {}
 
     // 在 PATH 中搜索
     final names = Platform.isWindows
@@ -1418,14 +1709,24 @@ if (_figCounter > 0) {
     if (memoryManager == null || memoryCollection == null) {
       return _err('MEMORY_DISABLED', '当前未启用长期记忆 (需配置 memory.json)');
     }
-    final text = args['text'] as String?;
-    if (text == null || text.trim().isEmpty) {
-      return _err('INVALID_ARGS', '缺少 text 参数');
+    // 兼容两种字段名：tools.json 里声明的是 content（与工具描述一致），
+    // 历史调用/内部代码用的是 text。两者都收，避免"声明与实现不一致"
+    // 导致模型按 schema 传参却被判为缺少参数。
+    final raw = args['content'] ?? args['text'];
+    final text = raw is String ? raw.trim() : '';
+    if (text.isEmpty) {
+      return _err('INVALID_ARGS', '缺少 content 参数（要记住的正文）');
     }
     try {
       final metadata = <String, dynamic>{};
-      if (args['source'] != null) metadata['source'] = args['source'];
-      if (args['tags'] != null) metadata['tags'] = args['tags'];
+      final type = args['type'];
+      if (type is String && type.isNotEmpty) metadata['type'] = type;
+      final importance = args['importance'];
+      if (importance is num) metadata['importance'] = importance.toDouble();
+      final source = args['source'];
+      if (source is String && source.isNotEmpty) metadata['source'] = source;
+      final tags = args['tags'];
+      if (tags is List && tags.isNotEmpty) metadata['tags'] = tags;
 
       final pointId = await memoryManager!.store(
         text: text,
@@ -1447,7 +1748,9 @@ if (_figCounter > 0) {
       return _err('INVALID_ARGS', '缺少 query 参数');
     }
     try {
-      final topK = args['top_k'] as int? ?? 5;
+      // 兼容 tools.json 的 limit 与内部的 top_k
+      final topKRaw = args['limit'] ?? args['top_k'];
+      final topK = topKRaw is num ? topKRaw.toInt() : 5;
       final threshold = (args['threshold'] as num?)?.toDouble() ?? 0.7;
 
       final results = await memoryManager!.recall(

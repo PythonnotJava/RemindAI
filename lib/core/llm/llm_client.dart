@@ -35,12 +35,18 @@ class StreamComplete extends StreamEvent {
   /// true 表示仅收到了部分数据，不能把本次响应当作正常完成。
   final bool isTruncated;
 
+  /// 提供方返回的真实用量（可能为 null：部分中转不回传 usage）。
+  ///
+  /// 用于把"估算 token"校正成实测值——上下文上限的自学习依赖它。
+  final UsageInfo? usage;
+
   StreamComplete({
     this.content,
     this.reasoningContent,
     this.toolCalls,
     required this.finishReason,
     this.isTruncated = false,
+    this.usage,
   });
 
   /// 转换为 assistant 消息 JSON (用于追加到 messages 历史)
@@ -62,6 +68,74 @@ class StreamComplete extends StreamEvent {
   }
 }
 
+/// 模型卡未配置「最大输出 Token」时使用的兜底值。
+///
+/// 三种协议共用同一个兜底（历史实现各写一份：OpenAI/Gemini 12800、
+/// Anthropic 只有 4096，导致同一个模型换协议就换一个输出预算）。
+///
+/// 这里只是"请求里声明的输出上限"，并非所有模型都接受这么大的
+/// `max_tokens`（多数模型的单次输出上限在 8K~64K，且要求
+/// `输入 + max_tokens` 不超过上下文窗口）。上游因此返回 4xx 时，
+/// 各客户端会按 [kMaxTokensDegradeLadder] 自动降档并重试，
+/// 不需要用户手动修改模型卡。
+const int kDefaultMaxOutputTokens = 128000;
+
+/// `max_tokens` 被上游拒绝时的自动降档梯度（从高到低）。
+///
+/// 只用于"被拒绝后往回收"，不会主动用来抬高用户配置的值。
+const List<int> kMaxTokensDegradeLadder = <int>[
+  128000,
+  64000,
+  32000,
+  16384,
+  8192,
+];
+
+/// 取 [current] 的下一档（比它小的第一档）；已经是最小档时返回 null。
+int? nextLowerMaxTokens(int current) {
+  for (final v in kMaxTokensDegradeLadder) {
+    if (v < current) return v;
+  }
+  return null;
+}
+
+/// 判断上游错误体是否为「max_tokens / max_output_tokens 不合法或超出上限」。
+///
+/// 覆盖三类常见报错：
+/// 1. 超过模型单次输出上限：`max_tokens: 128000 > 64000`、`too large`；
+/// 2. 输入+输出超过上下文窗口：`max_tokens too large given prompt`、
+///    `input length and max_tokens exceed context limit`；
+/// 3. 部分中转站直接回 `invalid max_tokens` / `不支持的 max_tokens`。
+///
+/// 必须同时命中"提到 max_tokens 类字段"与"超限/非法语义"，避免把无关的
+/// 400 误判成降档场景（降档本身是安全的，但会让错误信息变得难懂）。
+bool looksLikeMaxTokensRejected(String detail) {
+  final d = detail.toLowerCase();
+  final mentionsField =
+      d.contains('max_tokens') ||
+      d.contains('maxtokens') ||
+      d.contains('max_output_tokens') ||
+      d.contains('maxoutputtokens') ||
+      d.contains('max output tokens') ||
+      d.contains('maxoutputtoken');
+  if (!mentionsField) return false;
+  return d.contains('too large') ||
+      d.contains('too long') ||
+      d.contains('too big') ||
+      d.contains('exceed') ||
+      d.contains('greater than') ||
+      d.contains('maximum') ||
+      d.contains('out of range') ||
+      d.contains('must be') ||
+      d.contains('invalid') ||
+      d.contains('not support') ||
+      d.contains('unsupported') ||
+      d.contains('超出') ||
+      d.contains('上限') ||
+      d.contains('过大') ||
+      d.contains('不支持');
+}
+
 /// LLM 客户端抽象接口。
 ///
 /// 上层 (AgentLoop / chat_provider) 统一使用 OpenAI 风格的消息与工具格式，
@@ -81,9 +155,19 @@ abstract class LlmClient {
   }) {
     switch (provider) {
       case LlmProvider.anthropic:
-        return AnthropicClient(baseUrl: baseUrl, apiKey: apiKey, model: model);
+        return AnthropicClient(
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          model: model,
+          maxOutputTokens: maxOutputTokens,
+        );
       case LlmProvider.gemini:
-        return GeminiClient(baseUrl: baseUrl, apiKey: apiKey, model: model);
+        return GeminiClient(
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          model: model,
+          maxOutputTokens: maxOutputTokens,
+        );
       case LlmProvider.openai:
         return OpenAiClient(
           baseUrl: baseUrl,
@@ -100,10 +184,21 @@ abstract class LlmClient {
     List<Map<String, dynamic>>? tools,
   });
 
+  /// 本次请求实际使用的输出 token 预算。
+  ///
+  /// 来自模型卡的「最大输出 Token」；未配置时回落到 [kDefaultMaxOutputTokens]（128K）。
+  /// 若上游拒绝了该值，会先按 [kMaxTokensDegradeLadder] 自动降档（降档结果对
+  /// 本客户端实例常驻），所以这里返回的是"当前可用"的预算。
+  /// AgentLoop 在输出被长度上限截断时会按倍数抬高它做自愈。
+  int get outputTokenBudget;
+
   /// 完整流式调用 — 同时处理 content tokens 和 tool_calls
+  ///
+  /// [maxTokensOverride] 仅用于截断自愈时的临时抬高，不改变模型卡配置。
   Stream<StreamEvent> chatStreamFull(
     List<Map<String, dynamic>> messages, {
     List<Map<String, dynamic>>? tools,
+    int? maxTokensOverride,
   });
 }
 
@@ -116,6 +211,21 @@ bool _looksLikeMultimodalUnsupported(String detail) {
               d.contains("expected `text`") ||
               d.contains('expected text'))) ||
       (d.contains('image') && d.contains('not support'));
+}
+
+/// 判断错误体是否为「网关不认识 stream_options 字段」的典型 4xx。
+///
+/// 少数严格网关（或老版本 vLLM/Ollama 代理）会把未知字段当 400；
+/// 命中后我们会关掉该字段重试，保证"拿 usage"不会把对话打死。
+bool _looksLikeRejectedStreamOptions(String detail) {
+  final d = detail.toLowerCase();
+  return d.contains('stream_options') ||
+      d.contains('stream options') ||
+      d.contains('include_usage') ||
+      d.contains('unknown field') ||
+      d.contains('unrecognized field') ||
+      d.contains('unsupported parameter') ||
+      d.contains('extra fields not permitted');
 }
 
 /// 将消息列表中的多模态 content (image_url) 降级为纯文本。
@@ -251,28 +361,56 @@ class OpenAiClient implements LlmClient {
   /// chat/completions 完整绝对地址。
   String get _chatUrl => '$_base/chat/completions';
 
+  /// 网关是否接受 `stream_options.include_usage`
+  ///
+  /// 少数严格网关会把未知字段当 400，一旦被拒就永久关掉该字段并重试一次，
+  /// 避免"为了拿 usage 反而把整条链路打死"。
+  bool _streamUsageSupported = true;
+
   /// 获取最大输出 token 数
   ///
   /// 算法思想：
   /// 1. 优先使用用户配置的值（精确控制）
-  /// 2. 未配置时使用 12800 作为默认兜底值
+  /// 2. 未配置时使用 [kDefaultMaxOutputTokens]（128K）作为兜底
+  /// 3. 若上游拒绝过该值，则记住降档后的上限（[_maxTokensCeiling]）并用它
   ///
-  /// 为什么是 12800？
-  /// - 足够大：可以容纳大部分代码生成和长篇回答（约 9600 个中文字）
-  /// - 足够安全：配合 50% 压缩阈值，避免 "输入 + 输出" 超过上下文窗口
-  ///   例如：DeepSeek V3 (1M) → 压缩阈值 500K → 最大输入约 487K → 剩余 513K 可用于输出
-  /// - 适配主流模型：
-  ///   * DeepSeek V3 官方输出限制: 8K (可配置为 8192)
-  ///   * Claude 3.5: 支持 16K+ (可配置为 16384)
-  ///   * GPT-4: 通常 4K-8K (可配置为 8192)
+  /// 关于兜底值：输出预算越大，单轮能写的东西越多，但 `max_tokens` 只是
+  /// "声明"，并不保证上游接受——超出模型输出上限、或 `输入 + max_tokens`
+  /// 超过上下文窗口时上游会直接 400。这类 400 由 [looksLikeMaxTokensRejected]
+  /// 识别后自动降档重试，因此兜底值可以取得很大而不会把对话打死。
   int _getMaxTokens() {
     // 如果用户配置了值，使用用户值
-    if (maxOutputTokens > 0) {
-      return maxOutputTokens;
-    }
-    // 否则使用默认值 12800
-    return 12800;
+    final configured = maxOutputTokens > 0
+        ? maxOutputTokens
+        : kDefaultMaxOutputTokens;
+    // 降档学到的上限更小时，用更小的那个（避免每次请求都先撞一次 400）
+    final ceiling = _maxTokensCeiling;
+    return (ceiling != null && ceiling < configured) ? ceiling : configured;
   }
+
+  /// 上次被上游拒绝 `max_tokens` 后学到的上限（null = 还没被拒过）。
+  int? _maxTokensCeiling;
+
+  /// 把输出预算往下降一档；没有更小的档位时返回 false。
+  bool _degradeMaxTokens() {
+    final next = nextLowerMaxTokens(_getMaxTokens());
+    if (next == null) return false;
+    _maxTokensCeiling = next;
+    return true;
+  }
+
+  /// 把调用方传入的临时预算（截断自愈时抬高）夹到"上游接受过的上限"以内。
+  ///
+  /// 自愈抬高可能超过上游真实上限，夹一下可以省掉一次必然失败的 400：
+  /// 学到的上限是多少，最多就只能申请多少。
+  int _clampToCeiling(int value) {
+    final ceiling = _maxTokensCeiling;
+    return (ceiling != null && ceiling < value) ? ceiling : value;
+  }
+
+  /// 本模型当前请求使用的输出预算（供 AgentLoop 做截断自愈时按倍数抬高）。
+  @override
+  int get outputTokenBudget => _getMaxTokens();
 
   /// 非流式调用 (备用，简单场景)
   @override
@@ -301,6 +439,19 @@ class OpenAiClient implements LlmClient {
         } catch (_) {}
       }
       final status = e.response?.statusCode;
+      // 上游不接受声明的 max_tokens（超出模型输出上限 / 输入+输出超窗口）
+      // → 自动降档重试，对用户透明。每次降一档，最小档仍被拒才把错误抛出去。
+      if (status != null &&
+          status >= 400 &&
+          status < 500 &&
+          looksLikeMaxTokensRejected(detail) &&
+          _degradeMaxTokens()) {
+        AppLogger.instance.log(
+          '[LLM] max_tokens 被上游拒绝，已降档到 ${_getMaxTokens()} 并重试: '
+          '${detail.length > 160 ? '${detail.substring(0, 160)}…' : detail}',
+        );
+        return chat(messages, tools: tools);
+      }
       if (status == null) {
         final innerError = e.error?.toString() ?? '';
         final typeLabel = switch (e.type) {
@@ -375,16 +526,25 @@ class OpenAiClient implements LlmClient {
   Stream<StreamEvent> chatStreamFull(
     List<Map<String, dynamic>> messages, {
     List<Map<String, dynamic>>? tools,
+    int? maxTokensOverride,
   }) async* {
     // 预处理：对历史消息中的图片做降级（只保留最后一条用户消息的图片）。
     // 避免不支持视觉的模型看到历史图片后产生困惑回复。
     final processedMessages = _stripHistoryImages(messages);
 
+    // maxTokensOverride：截断自愈时临时抬高输出预算（不影响模型卡配置）。
+    final effectiveMaxTokens = _clampToCeiling(
+      maxTokensOverride ?? _getMaxTokens(),
+    );
+
     final body = <String, dynamic>{
       'model': model,
       'messages': processedMessages,
       'stream': true,
-      'max_tokens': _getMaxTokens(),
+      // 让 OpenAI 兼容网关在流末尾回传 usage（多数实现支持；
+      // 不支持的会忽略该字段，不影响正文）。自学习上下文上限依赖它。
+      if (_streamUsageSupported) 'stream_options': {'include_usage': true},
+      'max_tokens': effectiveMaxTokens,
       if (tools != null && tools.isNotEmpty) 'tools': tools,
       if (tools != null && tools.isNotEmpty) 'tool_choice': 'auto',
     };
@@ -396,7 +556,8 @@ class OpenAiClient implements LlmClient {
     final msgCount = processedMessages.length;
     AppLogger.instance.log(
       '[LLM Request] POST $_chatUrl | body=${(bodySize / 1024).toStringAsFixed(1)}KB '
-      '(messages=$msgCount, tools=$toolCount, model=$model)',
+      '(messages=$msgCount, tools=$toolCount, model=$model, '
+      'max_tokens=$effectiveMaxTokens)',
     );
 
     final Response response;
@@ -420,6 +581,42 @@ class OpenAiClient implements LlmClient {
         } catch (_) {}
       }
       final status = e.response?.statusCode;
+
+      // 上游不接受声明的 max_tokens → 自动降档重试（每次降一档）。
+      // 放在 stream_options 分支之前：这类 400 与 usage 无关，先解决输出预算。
+      // 注意降档后不再复用调用方传入的 maxTokensOverride（那个值只会更大）。
+      if (status != null &&
+          status >= 400 &&
+          status < 500 &&
+          looksLikeMaxTokensRejected(detail) &&
+          _degradeMaxTokens()) {
+        AppLogger.instance.log(
+          '[LLM Stream] max_tokens 被上游拒绝，已降档到 ${_getMaxTokens()} 并重试: '
+          '${detail.length > 160 ? '${detail.substring(0, 160)}…' : detail}',
+        );
+        yield* chatStreamFull(messages, tools: tools);
+        return;
+      }
+
+      // 网关不接受 stream_options → 关掉它并重试一次（拿不到 usage 不影响对话）
+      if (_streamUsageSupported &&
+          status != null &&
+          status >= 400 &&
+          status < 500 &&
+          _looksLikeRejectedStreamOptions(detail)) {
+        _streamUsageSupported = false;
+        AppLogger.instance.log(
+          '[LLM Stream] 网关不接受 stream_options，已关闭并重试: '
+          '${detail.length > 120 ? '${detail.substring(0, 120)}…' : detail}',
+        );
+        yield* chatStreamFull(
+          messages,
+          tools: tools,
+          maxTokensOverride: maxTokensOverride,
+        );
+        return;
+      }
+
       // 友好提示：纯文本模型收到图片等多模态内容时的常见 400
       // 自动降级历史中的图片并重试
       if (_looksLikeMultimodalUnsupported(detail)) {
@@ -461,6 +658,7 @@ class OpenAiClient implements LlmClient {
     final reasoningBuf = StringBuffer();
     final toolCallsMap = <int, _ToolCallAccumulator>{}; // index → accumulator
     String? finishReason;
+    UsageInfo? usageInfo;
     int chunkCount = 0;
     int tokenCount = 0;
     bool firstChunk = true;
@@ -510,13 +708,25 @@ class OpenAiClient implements LlmClient {
                   : reasoningBuf.toString(),
               toolCalls: calls,
               finishReason: finishReason ?? 'stop',
+              usage: usageInfo,
             );
             return;
           }
 
           try {
             final json = jsonDecode(data) as Map<String, dynamic>;
-            final choice = json['choices']?[0] as Map<String, dynamic>?;
+            // usage 可能出现在普通 chunk 或末尾的 usage-only chunk 里
+            if (json['usage'] != null && json['usage'] is Map) {
+              usageInfo = UsageInfo.fromJson(
+                (json['usage'] as Map).cast<String, dynamic>(),
+              );
+            }
+            // 部分 OpenAI 兼容网关会在末尾发一个 usage-only chunk：
+            // {"choices":[],"usage":{...}}。直接取 [0] 会抛 RangeError，
+            // 虽然不影响正文，但会污染日志并可能漏掉 usage/finish 信息。
+            final choices = json['choices'];
+            if (choices is! List || choices.isEmpty) continue;
+            final choice = choices[0] as Map<String, dynamic>?;
             if (choice == null) continue;
 
             // 更新 finishReason
@@ -603,6 +813,7 @@ class OpenAiClient implements LlmClient {
       toolCalls: calls,
       finishReason: finishReason ?? 'stream_incomplete',
       isTruncated: true,
+      usage: usageInfo,
     );
   }
 }

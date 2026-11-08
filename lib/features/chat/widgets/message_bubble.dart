@@ -23,6 +23,12 @@ class MessageBubble extends ConsumerWidget {
   final VoidCallback? onEdit;
   final int? messageIndex;
 
+  /// 是否显示底部的操作按钮行（复制 / 导出 / 重新生成 / 删除）。
+  ///
+  /// 默认 true，主界面行为完全不变。只有"导出长截图"这种离屏渲染场景会传
+  /// false：那里的气泡只需要可读内容，不该把一排操作图标也画进图片。
+  final bool showActions;
+
   const MessageBubble({
     super.key,
     required this.message,
@@ -30,6 +36,7 @@ class MessageBubble extends ConsumerWidget {
     this.onRegenerate,
     this.onEdit,
     this.messageIndex,
+    this.showActions = true,
   });
 
   @override
@@ -140,7 +147,7 @@ class MessageBubble extends ConsumerWidget {
                     : _buildAssistantContent(context, chatFont, chatFontSize),
               ),
             // 操作按钮行
-            if (hasText)
+            if (hasText && showActions)
               _MessageActions(
                 message: message,
                 onDelete: onDelete,

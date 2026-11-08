@@ -11,9 +11,10 @@ import '../l10n/l10n_ext.dart';
 import '../llm/models.dart';
 import '../logger/app_logger.dart';
 import '../models/file_attachment.dart';
+import 'conversation_image_exporter.dart';
 
 /// 导出格式
-enum ExportFormat { markdown, pdf, word, html }
+enum ExportFormat { markdown, pdf, word, html, longImage }
 
 extension ExportFormatExtension on ExportFormat {
   String get extension {
@@ -26,6 +27,8 @@ extension ExportFormatExtension on ExportFormat {
         return 'docx';
       case ExportFormat.html:
         return 'html';
+      case ExportFormat.longImage:
+        return 'png';
     }
   }
 
@@ -39,6 +42,9 @@ extension ExportFormatExtension on ExportFormat {
         return 'Word (.docx)';
       case ExportFormat.html:
         return 'HTML (.html)';
+      case ExportFormat.longImage:
+        // 界面上的显示文案走 l10n（exportLongImageFormat），这里只用于日志。
+        return 'PNG';
     }
   }
 }
@@ -215,6 +221,12 @@ class ConversationExporter {
     required ExportFormat format,
     required String pandocPath,
   }) async {
+    // 长截图不走这里（见 showExportMenu 的分支），传进来属于调用方写错。
+    assert(
+      format != ExportFormat.longImage,
+      'longImage 必须由 ConversationImageExporter 处理',
+    );
+
     // 清理文件名中的非法字符
     final safeFileName = fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
 
@@ -331,6 +343,35 @@ class ConversationExporter {
   }) async {
     final format = await _showFormatDialog(context);
     if (format == null) return;
+    // 底部弹窗是异步的，之后再用 context 前必须确认还挂在树上。
+    if (!context.mounted) return;
+
+    // 长截图：走 Flutter 渲染管线，和 Markdown + pandoc 那条路完全独立
+    // （不生成 markdown、不依赖 pandoc、也不弹"降级为 md"的兜底对话框）。
+    if (format == ExportFormat.longImage) {
+      final saved = await ConversationImageExporter.export(
+        context: context,
+        messages: messages,
+        title: title,
+      );
+      if (!context.mounted) return;
+      if (saved == null || saved.isEmpty) return;
+      if (saved.length == 1) {
+        _showSuccessSnackBar(context, saved.first);
+      } else {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              content: Text(
+                '${context.s.exportLongImageParts(saved.length)}\n${saved.first}',
+              ),
+            ),
+          );
+      }
+      return;
+    }
 
     // 显示加载指示器
     // ignore: use_build_context_synchronously
@@ -368,7 +409,9 @@ class ConversationExporter {
     required ChatMessage message,
     required String pandocPath,
   }) async {
-    final format = await _showFormatDialog(context);
+    // 单条消息的导出保持原样（Markdown/PDF/Word/HTML 走 pandoc），
+    // 长截图只对整段对话提供。
+    final format = await _showFormatDialog(context, includeLongImage: false);
     if (format == null) return;
 
     // ignore: use_build_context_synchronously
@@ -422,7 +465,13 @@ class ConversationExporter {
   }
 
   /// 显示格式选择对话框
-  static Future<ExportFormat?> _showFormatDialog(BuildContext context) async {
+  static Future<ExportFormat?> _showFormatDialog(
+    BuildContext context, {
+    bool includeLongImage = true,
+  }) async {
+    final formats = includeLongImage
+        ? ExportFormat.values
+        : ExportFormat.values.where((f) => f != ExportFormat.longImage);
     return showModalBottomSheet<ExportFormat>(
       context: context,
       builder: (context) {
@@ -437,10 +486,14 @@ class ConversationExporter {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
               ),
-              ...ExportFormat.values.map(
+              ...formats.map(
                 (format) => ListTile(
                   leading: Icon(_formatIcon(format)),
-                  title: Text(format.label),
+                  title: Text(
+                    format == ExportFormat.longImage
+                        ? context.s.exportLongImageFormat
+                        : format.label,
+                  ),
                   onTap: () => Navigator.pop(context, format),
                 ),
               ),
@@ -463,6 +516,8 @@ class ConversationExporter {
         return Icons.article_outlined;
       case ExportFormat.html:
         return Icons.code;
+      case ExportFormat.longImage:
+        return Icons.photo_size_select_actual_outlined;
     }
   }
 

@@ -115,6 +115,14 @@ class AppSettings {
   final double chatFontSize; // 交互字体大小
   final String enterAction; // 回车行为: 'send' / 'newline'
 
+  /// 画图子 Agent 选中的模型卡 ID。
+  /// 空字符串 = 未启用；持久化后重启应用仍保留。
+  final String imageAgentModelId;
+
+  /// 子画图模型失败时，是否用当前对话主模型兜底画图。
+  /// 只有主模型本身支持图片输出时才应为 true。
+  final bool imageAgentFallbackToMain;
+
   const AppSettings({
     required this.databasePath,
     required this.historyPath,
@@ -135,6 +143,8 @@ class AppSettings {
     this.chatFont = 'Noto Sans SC',
     this.chatFontSize = 14.0,
     this.enterAction = 'send',
+    this.imageAgentModelId = '',
+    this.imageAgentFallbackToMain = false,
   });
 
   /// 向后兼容: 返回当前选中的嵌入模型配置。
@@ -168,6 +178,8 @@ class AppSettings {
     String? chatFont,
     double? chatFontSize,
     String? enterAction,
+    String? imageAgentModelId,
+    bool? imageAgentFallbackToMain,
   }) {
     return AppSettings(
       databasePath: databasePath ?? this.databasePath,
@@ -189,6 +201,9 @@ class AppSettings {
       chatFont: chatFont ?? this.chatFont,
       chatFontSize: chatFontSize ?? this.chatFontSize,
       enterAction: enterAction ?? this.enterAction,
+      imageAgentModelId: imageAgentModelId ?? this.imageAgentModelId,
+      imageAgentFallbackToMain:
+          imageAgentFallbackToMain ?? this.imageAgentFallbackToMain,
     );
   }
 
@@ -212,6 +227,8 @@ class AppSettings {
     'chatFont': chatFont,
     'chatFontSize': chatFontSize,
     'enterAction': enterAction,
+    'imageAgentModelId': imageAgentModelId,
+    'imageAgentFallbackToMain': imageAgentFallbackToMain,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -262,6 +279,9 @@ class AppSettings {
       chatFont: json['chatFont'] as String? ?? 'Noto Sans SC',
       chatFontSize: (json['chatFontSize'] as num?)?.toDouble() ?? 14.0,
       enterAction: json['enterAction'] as String? ?? 'send',
+      imageAgentModelId: json['imageAgentModelId'] as String? ?? '',
+      imageAgentFallbackToMain:
+          json['imageAgentFallbackToMain'] as bool? ?? false,
     );
   }
 
@@ -317,6 +337,8 @@ class AppSettings {
         chatFont: settings.chatFont,
         chatFontSize: settings.chatFontSize,
         enterAction: settings.enterAction,
+        imageAgentModelId: settings.imageAgentModelId,
+        imageAgentFallbackToMain: settings.imageAgentFallbackToMain,
       );
     } catch (_) {
       return defaults;

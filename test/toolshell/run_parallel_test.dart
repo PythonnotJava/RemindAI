@@ -6,26 +6,23 @@ import 'package:remind_ai/core/agent/tool_pipeline.dart';
 import 'package:remind_ai/core/memory/project_config.dart';
 import 'package:remind_ai/core/toolshell/executor.dart';
 
-/// 验证 toolshell_run_parallel 的行为，按用户要求在
-/// C:\Users\25654\Desktop\test 目录下进行多轮测试。
+/// 验证 toolshell_run_parallel 的行为。
 ///
 /// 覆盖场景:
 /// 1. 正常并行成功 (多个 toolshell_read 同时读取不同文件)
 /// 2. 超过并行数量上限 (maxCalls=8) 被拒绝
-/// 3. 批次中含写类工具被整体拒绝 (PARALLEL_NOT_ALLOWED)
+/// 3. 混合批次自动分流：目标不同→并发；同目标/需确认→串行（不再整批拒绝）
 /// 4. 嵌套 toolshell_run_parallel 被拒绝
 /// 5. 非法参数格式被拒绝 (calls 非数组 / 缺少 tool 字段)
+///
+/// 注意：测试产物放在系统临时目录里，**不要**再硬编码桌面路径
+/// （以前写死 `C:\Users\25654\Desktop\test`，每次跑测试都会在桌面
+/// 留下一堆空文件夹）。
 void main() {
-  // 用户指定的沙箱测试目录，真实存在的目录，测试产物放子目录以保持整洁
-  const testRoot = r'C:\Users\25654\Desktop\test';
   late Directory workDir;
 
   setUpAll(() async {
-    workDir = Directory('$testRoot${Platform.pathSeparator}run_parallel_test');
-    if (await workDir.exists()) {
-      await workDir.delete(recursive: true);
-    }
-    await workDir.create(recursive: true);
+    workDir = await Directory.systemTemp.createTemp('remind_parallel_test_');
 
     // 准备三个用于并行读取验证的文件
     await File(
@@ -128,7 +125,7 @@ void main() {
       expect(res['code'], 'TOO_MANY_CALLS');
     });
 
-    test('场景3: 批次中含写类工具被整体拒绝', () async {
+    test('场景3: 读+写混合批次不再整批拒绝（目标不同 → 并发）', () async {
       final pipeline = buildPipeline();
       final res = await call(pipeline, 'toolshell_run_parallel', {
         'calls': [
@@ -139,7 +136,7 @@ void main() {
           {
             'tool': 'toolshell_write',
             'args': {
-              'path': 'should_not_exist.txt',
+              'path': 'mixed_ok.txt',
               'content': 'x',
               'mode': 'create',
             },
@@ -149,15 +146,106 @@ void main() {
 
       print('[场景3] 结果: ${jsonEncode(res)}');
 
-      expect(res['status'], 'error');
-      expect(res['code'], 'PARALLEL_NOT_ALLOWED');
-      expect(res['detail'].toString(), contains('toolshell_write'));
+      expect(res['status'], 'ok');
+      expect(res['count'], 2);
+      expect(res['parallel_count'], 2);
+      expect(res['serial_count'], 0);
 
-      // 确认写操作确实没有被执行 (整批拒绝，未执行任何子调用)
+      // 写操作确实执行了（旧实现会整批拒绝、文件不存在）
       final f = File(
-        '${workDir.path}${Platform.pathSeparator}should_not_exist.txt',
+        '${workDir.path}${Platform.pathSeparator}mixed_ok.txt',
       );
-      expect(await f.exists(), isFalse);
+      expect(await f.exists(), isTrue);
+      expect(await f.readAsString(), 'x');
+    });
+
+    test('场景3b: 同一文件写两次 → 自动串行，最终是后一次的内容', () async {
+      final pipeline = buildPipeline();
+      final res = await call(pipeline, 'toolshell_run_parallel', {
+        'calls': [
+          {
+            'tool': 'toolshell_write',
+            'args': {
+              'path': 'same_target.txt',
+              'content': 'first',
+              'mode': 'overwrite',
+            },
+          },
+          {
+            'tool': 'toolshell_write',
+            'args': {
+              'path': 'same_target.txt',
+              'content': 'second',
+              'mode': 'overwrite',
+            },
+          },
+        ],
+      });
+
+      expect(res['status'], 'ok');
+      expect(res['serial_count'], 2);
+      expect(res['serialized'], ['toolshell_write', 'toolshell_write']);
+      expect(
+        await File(
+          '${workDir.path}${Platform.pathSeparator}same_target.txt',
+        ).readAsString(),
+        'second',
+      );
+    });
+
+    test('场景3c: 读文件 + 执行命令 可以同批并发（用户报的 case）', () async {
+      final pipeline = buildPipeline();
+      final res = await call(pipeline, 'toolshell_run_parallel', {
+        'calls': [
+          {
+            'tool': 'toolshell_read',
+            'args': {'path': 'a.txt'},
+          },
+          {
+            'tool': 'toolshell_exec',
+            'args': {'command': 'echo parallel-ok'},
+          },
+        ],
+      });
+
+      expect(res['status'], 'ok');
+      expect(res['parallel_count'], 2);
+      expect(res['serial_count'], 0);
+
+      final results = res['results'] as List<dynamic>;
+      final execResult = results[1]['result'] as Map<String, dynamic>;
+      expect(execResult['exit_code'], 0);
+      expect('${execResult['stdout']}', contains('parallel-ok'));
+    });
+
+    test('场景3d: normal 模式下需要确认的工具自动串行', () async {
+      final executor = Executor(
+        projectRoot: workDir.path,
+        permissionMode: PermissionMode.normal,
+        onPermissionRequest: (tool, args) async => true,
+      );
+      final pipeline = ToolPipeline(executor: executor, middlewares: const []);
+
+      final res = await call(pipeline, 'toolshell_run_parallel', {
+        'calls': [
+          {
+            'tool': 'toolshell_read',
+            'args': {'path': 'a.txt'},
+          },
+          {
+            'tool': 'toolshell_exec',
+            'args': {'command': 'echo serial-ok'},
+          },
+        ],
+      });
+
+      expect(res['status'], 'ok');
+      expect(res['serial_count'], 1);
+      expect(res['serialized'], ['toolshell_exec']);
+
+      final results = res['results'] as List<dynamic>;
+      final execResult = results[1]['result'] as Map<String, dynamic>;
+      expect(execResult['exit_code'], 0);
     });
 
     test('场景4: 嵌套 toolshell_run_parallel 被拒绝', () async {

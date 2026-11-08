@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 
+import '../logger/app_logger.dart';
 import 'llm_client.dart';
 
 /// Anthropic (Claude) 原生客户端 — /v1/messages 协议。
@@ -21,7 +22,38 @@ class AnthropicClient implements LlmClient {
   final String model;
 
   /// Anthropic 要求显式 max_tokens。
+  ///
+  /// 默认值取 [kDefaultMaxOutputTokens]（128K），与 OpenAI/Gemini 客户端保持一致；
+  /// 上游若拒绝该值（超出模型输出上限，或 输入+max_tokens 超过上下文窗口），
+  /// [chat]/[chatStreamFull] 会自动按 [kMaxTokensDegradeLadder] 降档重试。
   final int maxTokens;
+
+  /// 模型卡配置的最大输出 token（0 = 未配置，回落到 maxTokens/默认值）。
+  final int maxOutputTokens;
+
+  /// 上次被上游拒绝 max_tokens 后学到的上限（null = 还没被拒过）。
+  int? _maxTokensCeiling;
+
+  @override
+  int get outputTokenBudget {
+    final configured = maxOutputTokens > 0 ? maxOutputTokens : maxTokens;
+    final ceiling = _maxTokensCeiling;
+    return (ceiling != null && ceiling < configured) ? ceiling : configured;
+  }
+
+  /// 把输出预算往下降一档；没有更小的档位时返回 false。
+  bool _degradeMaxTokens() {
+    final next = nextLowerMaxTokens(outputTokenBudget);
+    if (next == null) return false;
+    _maxTokensCeiling = next;
+    return true;
+  }
+
+  /// 把调用方传入的临时预算（截断自愈时抬高）夹到"上游接受过的上限"以内。
+  int _clampToCeiling(int value) {
+    final ceiling = _maxTokensCeiling;
+    return (ceiling != null && ceiling < value) ? ceiling : value;
+  }
 
   /// Anthropic API 版本头。
   static const _apiVersion = '2023-06-01';
@@ -30,7 +62,8 @@ class AnthropicClient implements LlmClient {
     required this.baseUrl,
     required this.apiKey,
     required this.model,
-    this.maxTokens = 4096,
+    this.maxTokens = kDefaultMaxOutputTokens,
+    this.maxOutputTokens = 0,
   }) : _endpointUrl = _normalizeEndpoint(baseUrl),
        _dio = Dio(
          BaseOptions(
@@ -230,12 +263,13 @@ class AnthropicClient implements LlmClient {
     List<Map<String, dynamic>> messages,
     List<Map<String, dynamic>>? tools, {
     required bool stream,
+    int? maxTokensOverride,
   }) {
     final converted = _convertMessages(messages);
     final anthropicTools = _convertTools(tools);
     return {
       'model': model,
-      'max_tokens': maxTokens,
+      'max_tokens': _clampToCeiling(maxTokensOverride ?? outputTokenBudget),
       'messages': converted.messages,
       // ignore: use_null_aware_elements
       if (converted.system != null) 'system': converted.system,
@@ -288,6 +322,20 @@ class AnthropicClient implements LlmClient {
         throw Exception('HTTP $status: API Key 无效或权限不足\n\n$detail');
       }
 
+      // 上游不接受声明的 max_tokens（超出模型输出上限，或 输入+max_tokens
+      // 超过上下文窗口）→ 自动降档重试，对用户透明。
+      if (status != null &&
+          status >= 400 &&
+          status < 500 &&
+          looksLikeMaxTokensRejected(detail) &&
+          _degradeMaxTokens()) {
+        AppLogger.instance.log(
+          '[Anthropic] max_tokens 被上游拒绝，已降档到 $outputTokenBudget 并重试: '
+          '${detail.length > 160 ? '${detail.substring(0, 160)}…' : detail}',
+        );
+        return chat(messages, tools: tools);
+      }
+
       throw Exception('HTTP ${status ?? '?'}: $detail');
     }
   }
@@ -321,8 +369,14 @@ class AnthropicClient implements LlmClient {
   Stream<StreamEvent> chatStreamFull(
     List<Map<String, dynamic>> messages, {
     List<Map<String, dynamic>>? tools,
+    int? maxTokensOverride,
   }) async* {
-    final body = _buildBody(messages, tools, stream: true);
+    final body = _buildBody(
+      messages,
+      tools,
+      stream: true,
+      maxTokensOverride: maxTokensOverride,
+    );
 
     final Response response;
     try {
@@ -374,6 +428,21 @@ class AnthropicClient implements LlmClient {
       // 401/403: 认证问题
       if (status == 401 || status == 403) {
         throw Exception('HTTP $status: API Key 无效或权限不足\n\n$detail');
+      }
+
+      // 上游不接受声明的 max_tokens → 自动降档重试（每次降一档）；
+      // 降档后不再复用调用方传入的 maxTokensOverride（那个值只会更大）。
+      if (status != null &&
+          status >= 400 &&
+          status < 500 &&
+          looksLikeMaxTokensRejected(detail) &&
+          _degradeMaxTokens()) {
+        AppLogger.instance.log(
+          '[Anthropic Stream] max_tokens 被上游拒绝，已降档到 $outputTokenBudget 并重试: '
+          '${detail.length > 160 ? '${detail.substring(0, 160)}…' : detail}',
+        );
+        yield* chatStreamFull(messages, tools: tools);
+        return;
       }
 
       throw Exception('HTTP ${status ?? '?'}: $detail');

@@ -22,8 +22,18 @@ const Set<String> kApprovalRequiredTools = {
   'toolshell_write',
   'toolshell_delete',
   'toolshell_exec',
+  'toolshell_exec_background',
+  'toolshell_job_kill',
+  // Android 装机/点屏会直接改动手机状态，normal 模式需要用户点头
+  'android_install_apk',
+  'android_tap',
   'toolshell_run_python',
   'toolshell_run_js',
+  // Office 写/改/文件删除需要确认；read 不需要。
+  'office_word_create',
+  'office_word_edit',
+  'office_word_file',
+  'office_excel_file',
   // finish(action=merge) 会把隔离分支合并进主分支、discard 会强删分支，
   // 均直接改动 git 历史，与写/删同级别，需要确认。start 本身无损(只加新
   // 分支+新目录)，但一并要求确认以保持"开始隔离"这个决策对用户可见。

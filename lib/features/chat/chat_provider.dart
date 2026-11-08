@@ -18,11 +18,14 @@ import '../../core/pet/pet_economy.dart';
 import '../../core/pet/pet_chat_service.dart';
 import '../../core/toolshell/agent_loop.dart';
 import '../../core/toolshell/autonomous_loop.dart';
+import '../../core/toolshell/budget.dart';
 import '../../core/toolshell/read_only_executor.dart';
 import '../../core/toolshell/sub_readers_orchestrator.dart';
 import '../../core/utils/file_processor.dart';
 import '../../core/pet/pet_observer.dart';
 import '../../providers/database_provider.dart';
+import '../../providers/mcp_provider.dart';
+import '../../providers/session_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/skills_provider.dart';
 export '../../providers/session_provider.dart';
@@ -149,6 +152,9 @@ class ChatState {
   final List<String> streamingSvgFiles;
   final List<String> streamingVideoFiles;
 
+  /// 画图子 Agent 本轮生成的图片路径（实时更新）
+  final List<String> streamingImageFiles;
+
   final String? error;
   final int? currentConversationId;
   final List<FileAttachment> attachments;
@@ -159,6 +165,18 @@ class ChatState {
   final int loopIteration;
   final int loopMaxIterations;
   final bool loopRunning;
+
+  /// 预算档位（任务分档：简单问答 / 日常编码 / 大型重构 / 自定义）
+  final AgentTaskTier budgetTier;
+
+  /// 自定义档位的执行预算（仅 [budgetTier] == custom 时生效）
+  final ExecutionLimits? customLimits;
+
+  /// 最近一次预算快照（UI 实时显示"已用工具轮 / 预算"）
+  final BudgetSnapshot? budget;
+
+  /// 是否因预算耗尽暂停（暂停时 UI 提供"追加预算继续"入口）
+  final bool budgetPaused;
 
   /// `/sub-readers` 当前运行状态；null 表示当前没有正在展示的 sub-readers 卡片
   final SubReadersRun? subReadersRun;
@@ -179,6 +197,7 @@ class ChatState {
     this.streamingHtmlFiles = const [],
     this.streamingSvgFiles = const [],
     this.streamingVideoFiles = const [],
+    this.streamingImageFiles = const [],
     this.error,
     this.currentConversationId,
     this.attachments = const [],
@@ -187,10 +206,27 @@ class ChatState {
     this.loopIteration = 0,
     this.loopMaxIterations = 20,
     this.loopRunning = false,
+    this.budgetTier = AgentTaskTier.coding,
+    this.customLimits,
+    this.budget,
+    this.budgetPaused = false,
     this.subReadersRun,
     this.hasMoreHistory = false,
     this.firstMessageId,
   });
+
+  /// 当前生效的执行预算
+  ExecutionLimits get effectiveLimits => budgetTier == AgentTaskTier.custom
+      ? (customLimits ?? ExecutionLimits.coding)
+      : ExecutionLimits.of(budgetTier);
+
+  /// 当前生效的任务分档策略
+  TaskTierPolicy get effectivePolicy => TaskTierPolicy.of(
+    budgetTier == AgentTaskTier.custom ? AgentTaskTier.coding : budgetTier,
+  ).withLimits(effectiveLimits);
+
+  /// 是否处于可"追加预算继续"的状态
+  bool get canExtendBudget => budgetPaused && budget != null;
 
   ChatState copyWith({
     List<ChatMessage>? messages,
@@ -202,7 +238,15 @@ class ChatState {
     List<String>? streamingHtmlFiles,
     List<String>? streamingSvgFiles,
     List<String>? streamingVideoFiles,
+    List<String>? streamingImageFiles,
     String? error,
+    /// 显式清除 [error]。
+    ///
+    /// 为什么需要这个开关：`String?` 参数无法区分"没传"和"传了 null"，
+    /// 早先这里是 `error: error`，导致任何没显式带上 error 的 copyWith
+    /// 都会把当前错误提示静默抹掉（错误刚显示就消失，且难排查）。
+    /// 现在语义是"不传则保留"，清错必须显式说 clearError。
+    bool clearError = false,
     int? currentConversationId,
     bool clearConversationId = false,
     List<FileAttachment>? attachments,
@@ -212,6 +256,11 @@ class ChatState {
     int? loopIteration,
     int? loopMaxIterations,
     bool? loopRunning,
+    AgentTaskTier? budgetTier,
+    ExecutionLimits? customLimits,
+    BudgetSnapshot? budget,
+    bool clearBudget = false,
+    bool? budgetPaused,
     SubReadersRun? subReadersRun,
     bool clearSubReadersRun = false,
     bool? hasMoreHistory,
@@ -226,7 +275,8 @@ class ChatState {
     streamingHtmlFiles: streamingHtmlFiles ?? this.streamingHtmlFiles,
     streamingSvgFiles: streamingSvgFiles ?? this.streamingSvgFiles,
     streamingVideoFiles: streamingVideoFiles ?? this.streamingVideoFiles,
-    error: error,
+    streamingImageFiles: streamingImageFiles ?? this.streamingImageFiles,
+    error: clearError ? null : (error ?? this.error),
     currentConversationId: clearConversationId
         ? null
         : (currentConversationId ?? this.currentConversationId),
@@ -238,6 +288,10 @@ class ChatState {
     loopIteration: loopIteration ?? this.loopIteration,
     loopMaxIterations: loopMaxIterations ?? this.loopMaxIterations,
     loopRunning: loopRunning ?? this.loopRunning,
+    budgetTier: budgetTier ?? this.budgetTier,
+    customLimits: customLimits ?? this.customLimits,
+    budget: clearBudget ? null : (budget ?? this.budget),
+    budgetPaused: budgetPaused ?? this.budgetPaused,
     subReadersRun: clearSubReadersRun
         ? null
         : (subReadersRun ?? this.subReadersRun),
@@ -289,6 +343,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
   /// 其他情况(如技能变化)由 _activeSkillSig 机制处理，不需要重建整个 context。
   AgentContext? _cachedAgentContext;
   AgentContextBuilder? _cachedContextBuilder;
+
+  /// ─── 预算续跑上下文（"追加预算继续"用）───
+  /// 预算耗尽时把规划预算与进展追踪器留下来，用户点"追加预算继续"后
+  /// 带着已用额度接着跑，而不是从零重开一遍任务。
+  PlanningBudget? _activePlanning;
+  ToolProgressTracker? _activeTracker;
 
   /// 流式 token 合并缓冲：每个 token 先入此缓冲，由 [_flushTimer] 周期性合并到
   /// state.streamingText，避免"每 token 一次 setState + 全量 rebuild + markdown 重解析"
@@ -349,10 +409,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
     // hooks: onSessionEnd
     await _fireSessionEnd();
     _agentMessages.clear();
+    _imageFiles.clear();
+    _imageNotices.clear();
+    _ref.read(sessionImageRegistryProvider).clear();
     _activeSkillSig = null;
     _projectSkillsDirMtime = null;
     _cachedAgentContext = null;
     _cachedContextBuilder = null;
+    // 「本会话始终允许」(approveAlways) 只对**当前**会话有效。
+    // 不复位的话，在 A 会话点过一次 auto，切到 B 会话后 B 也在无提示地
+    // 自动执行写/删/命令——用户完全没对新会话授权。
+    _sessionAutoApprove = false;
     state = const ChatState();
     // 刷新历史列表
     _ref.read(conversationsProvider.notifier).refresh();
@@ -362,10 +429,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
   Future<void> loadConversation(int conversationId) async {
     _subscription?.cancel();
     _agentMessages.clear();
+    _imageFiles.clear();
+    _imageNotices.clear();
     _activeSkillSig = null;
     _projectSkillsDirMtime = null;
     _cachedAgentContext = null;
     _cachedContextBuilder = null;
+    // 同 newConversation：换会话必须重新征求 auto 授权（见该方法注释）。
+    _sessionAutoApprove = false;
 
     // 进入加载状态，让 UI 显示过渡动画
     state = state.copyWith(isLoadingHistory: true);
@@ -401,6 +472,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final displayMessages = messages
         .where((m) => m.role != ChatRole.system)
         .toList();
+
+    // 从历史消息恢复图片注册表：用户附件 → A 编号，生成图附件 → G 编号。
+    // 这样应用重启/切换会话后，“上一张”仍然可以引用。
+    _restoreImageRegistry(displayMessages);
 
     state = ChatState(
       messages: displayMessages,
@@ -444,10 +519,39 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  /// 从历史消息重建图片注册表（按时间顺序重新分配 A/G 编号）。
+  ///
+  /// 图片 ID 不持久化，重启后重新生成；但图片路径来自消息附件，
+  /// 因此“上一张/刚才那张”在历史会话里仍然可用。
+  void _restoreImageRegistry(Iterable<ChatMessage> messages) {
+    final registry = _ref.read(sessionImageRegistryProvider);
+    registry.clear();
+    for (final message in messages) {
+      if (message.attachments.isEmpty) continue;
+      for (final attachment in message.attachments) {
+        if (!attachment.isImage) continue;
+        if (message.role == ChatRole.user) {
+          registry.restoreAttachment(attachment.path, label: attachment.name);
+        } else if (message.role == ChatRole.assistant) {
+          registry.restoreGenerated(attachment.path);
+        }
+      }
+    }
+  }
+
   /// 切换模型
   void switchModel(ModelCard modelCard) {
     _ref.read(activeModelCardProvider.notifier).state = modelCard;
     // 模型变了需要重建 LLM 客户端和可能的 system prompt(token 限制不同)
+    _cachedAgentContext = null;
+    _cachedContextBuilder = null;
+  }
+
+  /// 使当前缓存的 AgentContext 失效。
+  ///
+  /// 会话级工具集变化时调用（例如用户中途切换子画图模型），
+  /// 下一轮 sendMessage 会重新构建工具列表 / system prompt。
+  void invalidateAgentContext() {
     _cachedAgentContext = null;
     _cachedContextBuilder = null;
   }
@@ -586,6 +690,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         hasMoreHistory: hasMore,
         firstMessageId: newFirstMsgId,
       );
+      _restoreImageRegistry(updatedMessages);
     } catch (e) {
       AppLogger.instance.log('[加载历史消息失败] $e');
       state = state.copyWith(isLoadingHistory: false);
@@ -600,17 +705,168 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   /// 设置 Loop 最大迭代次数（10-100，步进 5）
+  ///
+  /// 兼容旧 UI：现在这个数字等价于"外层重新规划次数"，不再等同工具轮次。
   void setLoopMaxIterations(int max) {
     // 对齐到步进 5
     final aligned = ((max / 5).round() * 5).clamp(10, 100);
     state = state.copyWith(loopMaxIterations: aligned);
   }
 
+  /// 选择任务预算档位（简单问答 / 日常编码 / 大型重构 / 自定义）
+  ///
+  /// UI 从"最大轮次"改成"任务预算"预设：用户只需要说清这是哪类任务，
+  /// 具体数字（软/硬轮次、工具调用、墙钟、token）由档位给出。
+  void setBudgetTier(AgentTaskTier tier) {
+    final policy = TaskTierPolicy.of(
+      tier == AgentTaskTier.custom ? AgentTaskTier.coding : tier,
+    );
+    state = state.copyWith(
+      budgetTier: tier,
+      customLimits: tier == AgentTaskTier.custom
+          ? (state.customLimits ?? state.effectiveLimits)
+          : null,
+      loopMaxIterations: policy.maxPlans,
+    );
+  }
+
+  /// 自定义档位：软上限轮次
+  void setCustomSoftRounds(int rounds) => _updateCustomLimits((base) {
+    final soft = rounds.clamp(5, 400);
+    return base.copyWith(
+      softRounds: soft,
+      hardRounds: soft > base.hardRounds ? soft + 20 : base.hardRounds,
+    );
+  });
+
+  /// 自定义档位：硬上限轮次
+  void setCustomHardRounds(int rounds) => _updateCustomLimits((base) {
+    final hard = rounds.clamp(10, 500);
+    return base.copyWith(
+      hardRounds: hard,
+      softRounds: hard < base.softRounds ? hard : base.softRounds,
+    );
+  });
+
+  /// 自定义档位：工具调用硬上限
+  void setCustomToolCalls(int calls) => _updateCustomLimits((base) {
+    final hard = calls.clamp(10, 2000);
+    return base.copyWith(
+      hardToolCalls: hard,
+      softToolCalls: hard < base.softToolCalls ? hard : base.softToolCalls,
+    );
+  });
+
+  void _updateCustomLimits(
+    ExecutionLimits Function(ExecutionLimits base) update,
+  ) {
+    final base = state.customLimits ?? state.effectiveLimits;
+    state = state.copyWith(
+      budgetTier: AgentTaskTier.custom,
+      customLimits: update(base),
+    );
+  }
+
+  /// 预算耗尽后"继续追加预算"
+  ///
+  /// 语义：带着已用额度（轮次/调用/token/时长）继续，预算按比例放大，
+  /// 历史消息与工具记录全部保留，模型从中断点接着做——而不是从零重开。
+  Future<void> extendLoopBudget() async {
+    if (!state.budgetPaused) return;
+    final snapshot = state.budget;
+    if (snapshot == null) return;
+
+    final agentContext = _cachedAgentContext;
+    if (agentContext == null) {
+      _setError('会话上下文已失效，请重新发送消息');
+      return;
+    }
+
+    // 规划预算只属于 Loop 模式；普通模式的"追加预算"直接放大执行预算。
+    var planning = _activePlanning;
+    if (state.loopEnabled) {
+      planning ??= PlanningBudget(
+        maxPlans: state.effectivePolicy.maxPlans,
+        maxContinuations: state.effectivePolicy.maxContinuations,
+      );
+      if (!planning.consumeContinuation()) {
+        _setError('追加预算次数已用完，建议把任务拆小或新开一轮对话');
+        return;
+      }
+      planning.grantBonus(plans: 2, continuations: 2);
+      _activePlanning = planning;
+    }
+
+    // 必须以"当前真实生效的上限"（快照）为基准继续放大。
+    // 用 state.effectiveLimits 会退回分档基准：每次点都算出同一个上限，
+    // 已用额度却在继承 —— 第二、三次追加等于没加，最终一次点击会
+    // 在第 1 轮就被 token/时长硬上限立刻掐断。
+    final extended = snapshot.extendedLimits();
+    final budget = ExecutionBudget.resume(limits: extended, snapshot: snapshot);
+    AppLogger.instance.log(
+      '[ChatProvider] 追加预算：软 ${extended.softRounds}/硬 ${extended.hardRounds} 轮，'
+      '${extended.hardToolCalls} 次调用，${extended.wallClock.inMinutes} 分钟，'
+      'token 上限 ${extended.tokens}（原 ${snapshot.tokenLimit}），'
+      '继承已用 ${snapshot.usedRounds} 轮 / ${snapshot.usedToolCalls} 次调用 / '
+      '${snapshot.tokens} token / ${snapshot.elapsed.inMinutes} 分钟',
+    );
+
+    final notice = ChatMessage.assistant(
+      '─── 🔋 已追加预算：软 ${extended.softRounds} / 硬 ${extended.hardRounds} 轮 · '
+      '${extended.hardToolCalls} 次调用 · ${extended.wallClock.inMinutes} 分钟 ───',
+    );
+    state = state.copyWith(
+      messages: [...state.messages, notice],
+      budgetPaused: false,
+      isLoading: true,
+      clearError: true,
+    );
+    final conversationId = state.currentConversationId;
+    if (conversationId != null) {
+      _conversationsDao.saveMessage(conversationId, notice);
+    }
+
+    // 让模型知道"预算变了、从哪继续"，且不污染用户可见的聊天内容
+    _agentMessages.add({
+      'role': 'system',
+      'content':
+          '[预算追加] 执行预算已上调：软上限 ${extended.softRounds} 轮 / '
+          '硬上限 ${extended.hardRounds} 轮、工具调用 ${extended.hardToolCalls} 次、'
+          '${extended.wallClock.inMinutes} 分钟。请从中断点继续推进未完成的工作，'
+          '不要重复已经完成的步骤；互不依赖的操作尽量并行。',
+    });
+
+    const resumePrompt = '继续：预算已追加，从中断点接着推进未完成的工作（不要重复已完成的步骤）。';
+
+    if (state.loopEnabled) {
+      _launchLoop(
+        resumePrompt,
+        conversationId ?? 0,
+        budget: budget,
+        planning: planning,
+      );
+    } else {
+      final loop = agentContext.createLoop(
+        budget: budget,
+        tracker: _activeTracker,
+      );
+      _subscription = loop
+          .chat(resumePrompt)
+          .listen(
+            (event) => _handleEvent(event, conversationId ?? 0),
+            onError: (e, stackTrace) {
+              AppLogger.instance.log('[ChatProvider] 续跑 stream error: $e');
+              _setError(e.toString());
+            },
+          );
+    }
+  }
+
   /// 清除错误提示
   void clearError() {
     _errorTimer?.cancel();
     _errorTimer = null;
-    state = state.copyWith(error: null);
+    state = state.copyWith(clearError: true);
   }
 
   /// 设置错误提示，并在若干秒后自动消失（默认 6 秒）。
@@ -624,7 +880,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       _errorTimer = null;
       // 仅当当前显示的还是这条错误时才清除，避免覆盖新错误
       if (state.error == message) {
-        state = state.copyWith(error: null);
+        state = state.copyWith(clearError: true);
       }
     });
   }
@@ -672,7 +928,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     state = state.copyWith(
       messages: [...state.messages, userMsg],
       isLoading: true,
-      error: null,
+      clearError: true,
       subReadersRun: SubReadersRun(
         description: description,
         subtasks: const [],
@@ -799,11 +1055,35 @@ class ChatNotifier extends StateNotifier<ChatState> {
     // 快照附件并立即清空 UI 中的附件列表
     final pendingAttachments = List<FileAttachment>.from(state.attachments);
 
+    // ─── 图片注册：本轮附件分配 A 编号；如果启用了画图子 Agent，
+    // 把当前可用图片清单（A/G 编号）随用户消息一起发给 LLM，
+    // 让模型用 ID 精准引用“这张图/上一张图”，而不是复制磁盘路径。
+    final imageRegistry = _ref.read(sessionImageRegistryProvider);
+    var newImageIds = <String>[];
+    try {
+      newImageIds = imageRegistry.beginTurn(pendingAttachments);
+    } catch (e) {
+      AppLogger.instance.log('[ChatProvider] 登记本轮图片失败(忽略): $e');
+    }
+    var imageContext = '';
+    if (_ref.read(sessionImageAgentModelIdProvider).trim().isNotEmpty) {
+      try {
+        imageContext = imageRegistry.buildContextNote(
+          currentTurnIds: newImageIds.toSet(),
+        );
+      } catch (e) {
+        // 图片上下文只是增强信息，失败不应阻断正常对话。
+        AppLogger.instance.log('[ChatProvider] 构建图片上下文失败(忽略): $e');
+      }
+    }
+
     // ─── 立即更新 UI 状态 → 让按钮点击有即时视觉反馈，消除卡顿感 ───
     final userMsg = ChatMessage.user(input, attachments: pendingAttachments);
     _flushTimer?.cancel();
     _flushTimer = null;
     _streamBuffer.clear();
+    _imageFiles.clear();
+    _imageNotices.clear();
     state = state.copyWith(
       messages: [...state.messages, userMsg],
       isLoading: true,
@@ -812,9 +1092,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
       streamingHtmlFiles: [],
       streamingSvgFiles: [],
       streamingVideoFiles: [],
+      streamingImageFiles: [],
       activeToolCalls: [],
-      error: null,
+      clearError: true,
       attachments: [],
+      // 新的一轮对话：清掉上一次的"预算耗尽暂停"标志（进度显示保留到下次心跳）
+      budgetPaused: false,
     );
     PetObserver.instance.notifyUserMessage(
       preview: input.length > 30 ? '${input.substring(0, 30)}...' : input,
@@ -842,15 +1125,30 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     // 处理附件为 content parts
     List<Map<String, dynamic>>? contentParts;
-    if (hasAttachments) {
-      final fileParts = await FileProcessor.processAttachments(
-        pendingAttachments,
-      );
+    if (hasAttachments || imageContext.isNotEmpty) {
+      final fileParts = hasAttachments
+          ? await FileProcessor.processAttachments(pendingAttachments)
+          : const <Map<String, dynamic>>[];
       contentParts = [
         if (input.trim().isNotEmpty) {'type': 'text', 'text': input},
         ...fileParts,
+        if (imageContext.isNotEmpty) {'type': 'text', 'text': imageContext},
       ];
     }
+
+    // ─── MCP 连接变化检测：让"中途连上新服务器"立刻生效 ───
+    // AgentContext 构建时把 MCP 客户端和工具缓存拍了快照并随后一直复用，
+    // 于是用户在 MCP 页连上一台新服务器后，本会话里模型依然看不到它的工具
+    // （表现为"明明连上了，模型却说没有这个工具"），必须手动切会话才行。
+    // 这里用轻量签名（服务器 id + 工具数）比对，变了就作废缓存上下文。
+    final mcpSignature = _mcpToolsSignature();
+    if (_cachedAgentContext != null && mcpSignature != _mcpSignature) {
+      print('[MCP] 已连接 MCP 发生变化，重建 AgentContext');
+      AppLogger.instance.log('[ChatProvider] MCP 工具签名变化，作废缓存上下文');
+      _cachedAgentContext = null;
+      _cachedContextBuilder = null;
+    }
+    _mcpSignature = mcpSignature;
 
     // ─── 重扫项目级临时技能目录,感知中途变化 ───
     // 模型可能在上一轮用 toolshell_write 往工作目录的 .toolshell/skills/
@@ -999,33 +1297,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
     PetObserver.instance.notifyAiGenerating();
 
     if (state.loopEnabled) {
-      // ─── Loop 模式 ───
-      state = state.copyWith(loopRunning: true, loopIteration: 0);
-      final loopConfig = LoopConfig(
-        maxIterations: state.loopMaxIterations,
-        autoApprove: true,
-      );
-      final autonomousLoop = AutonomousLoop(
-        llm: agentContext.llm,
-        executor: agentContext.executor,
-        tools: agentContext.tools,
-        messages: _agentMessages,
-        config: loopConfig,
-        messagePipeline: agentContext.messagePipeline,
-        hooks: agentContext.hooks,
-        contextWindow: agentContext.contextWindow,
-      );
-      _subscription = autonomousLoop
-          .run(input)
-          .listen(
-            (event) => _handleLoopEvent(event, conversationId!),
-            onError: (e, stackTrace) {
-              AppLogger.instance.log('[ChatProvider] Loop stream error: $e');
-              PetObserver.instance.notifyAiError(error: e.toString());
-              state = state.copyWith(loopRunning: false);
-              _setError(e.toString());
-            },
-          );
+      // ─── Loop 模式（预算驱动）───
+      _launchLoop(input, conversationId);
     } else {
       // ─── 普通模式 ───
       final agentLoop = agentContext.createLoop();
@@ -1043,14 +1316,141 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  /// 上一次构建上下文时已连接的 MCP 服务器签名（见 [_mcpToolsSignature]）。
+  String _mcpSignature = '';
+
+  /// 当前已连接 MCP 的轻量签名：`serverId#工具数`，按 id 排序。
+  ///
+  /// 只读内存态，不触发任何 IO；用于判断"上下文里缓存的 MCP 工具是不是过期了"。
+  String _mcpToolsSignature() {
+    final mcpState = _ref.read(mcpConnectionsProvider);
+    final parts = <String>[];
+    for (final entry in mcpState.clients.entries) {
+      if (!entry.value.isConnected) continue;
+      final toolCount = mcpState.toolsCache[entry.key]?.length ?? 0;
+      parts.add('${entry.key}#$toolCount');
+    }
+    parts.sort();
+    return parts.join('|');
+  }
+
+  /// 启动/恢复 Loop 模式（预算驱动）
+  ///
+  /// [budget] / [planning] 传入时表示"带着已用额度续跑"。
+  void _launchLoop(
+    String input,
+    int conversationId, {
+    ExecutionBudget? budget,
+    PlanningBudget? planning,
+  }) {
+    final agentContext = _cachedAgentContext;
+    if (agentContext == null) {
+      _setError('会话上下文已失效，请重新发送消息');
+      return;
+    }
+
+    final policy = state.effectivePolicy;
+    final execBudget = budget ?? ExecutionBudget(limits: policy.limits);
+    final progression =
+        planning ??
+        PlanningBudget(
+          maxPlans: policy.maxPlans,
+          maxContinuations: policy.maxContinuations,
+        );
+    final tracker = agentContext.progressTracker ?? ToolProgressTracker();
+
+    _activePlanning = progression;
+    _activeTracker = tracker;
+
+    final loopConfig = LoopConfig(
+      tier: state.budgetTier,
+      limitsOverride: state.budgetTier == AgentTaskTier.custom
+          ? state.customLimits
+          : null,
+      maxPlansOverride: progression.maxPlans,
+      autoApprove: true,
+    );
+
+    state = state.copyWith(
+      loopRunning: true,
+      loopIteration: progression.plansUsed,
+      loopMaxIterations: progression.maxPlans,
+      budget: execBudget.snapshot(
+        plansUsed: progression.plansUsed,
+        planLimit: progression.maxPlans,
+      ),
+      budgetPaused: false,
+    );
+
+    final autonomousLoop = AutonomousLoop(
+      llm: agentContext.llm,
+      executor: agentContext.executor,
+      tools: agentContext.tools,
+      messages: _agentMessages,
+      config: loopConfig,
+      messagePipeline: agentContext.messagePipeline,
+      hooks: agentContext.hooks,
+      contextWindow: agentContext.contextWindow,
+    );
+
+    _subscription = autonomousLoop
+        .run(
+          input,
+          budget: execBudget,
+          planning: progression,
+          progress: tracker,
+        )
+        .listen(
+          (event) => _handleLoopEvent(event, conversationId),
+          onError: (e, stackTrace) {
+            AppLogger.instance.log('[ChatProvider] Loop stream error: $e');
+            PetObserver.instance.notifyAiError(error: e.toString());
+            state = state.copyWith(loopRunning: false);
+            _setError(e.toString());
+          },
+        );
+  }
+
   /// 处理 Loop 模式事件
   void _handleLoopEvent(LoopEvent event, int conversationId) {
     switch (event) {
-      case LoopIterStart(iteration: final iter, maxIterations: final max):
-        state = state.copyWith(loopIteration: iter);
-        // 添加一条分隔消息到 UI
+      case LoopPlanStart(
+        plan: final plan,
+        maxPlans: final max,
+        snapshot: final snapshot,
+      ):
+        state = state.copyWith(
+          loopIteration: plan,
+          loopMaxIterations: max,
+          budget: snapshot,
+        );
+        // 添加一条分隔消息到 UI（第 N 次规划 = 真正的"重新规划"，与工具轮无关）
+        final planMsg = ChatMessage.assistant('─── 第 $plan/$max 次规划 ───');
+        state = state.copyWith(messages: [...state.messages, planMsg]);
+      case LoopIterStart(
+        iteration: final iter,
+        maxIterations: final max,
+        snapshot: final snapshot,
+      ):
+        state = state.copyWith(
+          loopIteration: iter,
+          loopMaxIterations: max,
+          budget: snapshot,
+        );
         final iterMsg = ChatMessage.assistant('─── Loop 第 $iter/$max 轮 ───');
         state = state.copyWith(messages: [...state.messages, iterMsg]);
+      case LoopBudgetTick(snapshot: final snapshot):
+        // 预算心跳：只更新显示，不刷聊天记录
+        state = state.copyWith(budget: snapshot);
+      case LoopBudgetExtended(
+        snapshot: final snapshot,
+        grantedRounds: final granted,
+      ):
+        state = state.copyWith(budget: snapshot);
+        final extMsg = ChatMessage.assistant(
+          '─── 🔋 上一轮有进展，原地续预算 +$granted 轮（不占重新规划次数）───',
+        );
+        state = state.copyWith(messages: [...state.messages, extMsg]);
       case LoopAgentEvent(event: final agentEvent):
         // Loop 中间轮次的 AgentDone 不是整个会话完成，不能走普通完成逻辑
         // （否则会关闭 loading、发完成通知、结算奖励，让 UI 看起来第一轮已结束）。
@@ -1088,11 +1488,21 @@ class ChatNotifier extends StateNotifier<ChatState> {
             );
           }
         }
-      case LoopDone(totalIterations: final iters, summary: final summary):
+      case LoopDone(
+        totalIterations: final iters,
+        summary: final summary,
+        snapshot: final snapshot,
+      ):
         _flushStreamBuffer();
+        final usage = snapshot == null
+            ? ''
+            : '（已用 ${snapshot.usedRounds} 轮 / ${snapshot.usedToolCalls} 次调用）';
         final doneMsg = ChatMessage.assistant(
-          '─── ✅ Loop 完成 ($iters 轮) ───\n\n$summary',
+          '─── ✅ 任务完成（$iters 次规划$usage）───\n\n$summary',
+          attachments: _collectImageAttachments(),
         );
+        _imageFiles.clear();
+        _imageNotices.clear();
         state = state.copyWith(
           messages: [...state.messages, doneMsg],
           isLoading: false,
@@ -1100,9 +1510,23 @@ class ChatNotifier extends StateNotifier<ChatState> {
           activeToolCalls: [],
           loopRunning: false,
           loopIteration: 0,
+          budget: snapshot,
+          budgetPaused: false,
         );
         _conversationsDao.saveMessage(conversationId, doneMsg);
-        PetObserver.instance.notifyAiCompleted(summary: 'Loop 完成: $iters 轮');
+        // 触发 hooks: onAgentDone（记忆存储等后处理）。
+        // 之前这条链路只在普通模式（_handleEvent 的 AgentDone）里触发，
+        // Loop 模式下 onAgentDone 从来不跑 —— 等于 Loop 会话不写长期记忆。
+        Future.microtask(() async {
+          for (final hook in _activeHooks) {
+            try {
+              await hook.onAgentDone(summary, []);
+            } catch (e) {
+              AppLogger.instance.log('[ChatProvider] Loop onAgentDone 失败(忽略): $e');
+            }
+          }
+        });
+        PetObserver.instance.notifyAiCompleted(summary: '任务完成: $iters 次规划');
         // 宠物奖励
         if (_currentTokenCount > 0) {
           PetEconomy.instance.rewardForTokens(_currentTokenCount).then((
@@ -1112,12 +1536,25 @@ class ChatNotifier extends StateNotifier<ChatState> {
           });
           _currentTokenCount = 0;
         }
-      case LoopExhausted(maxIterations: final max, lastOutput: final output):
+      case LoopExhausted(
+        reason: final reason,
+        snapshot: final snapshot,
+        checkpoint: final checkpoint,
+        hadProgress: final hadProgress,
+      ):
+        // 预算耗尽不再"静默换轮"：给出检查点摘要 + 明确归因 + 追加预算入口
         _flushStreamBuffer();
         final exhaustedMsg = ChatMessage.assistant(
-          '─── ⚠️ Loop 达到最大轮次 ($max 轮)，自动停止 ───\n\n'
-          '最后输出：${output.length > 300 ? '${output.substring(0, 300)}...' : output}',
+          _buildBudgetStopMessage(
+            reason: reason,
+            checkpoint: checkpoint,
+            snapshot: snapshot,
+            hadProgress: hadProgress,
+          ),
+          attachments: _collectImageAttachments(),
         );
+        _imageFiles.clear();
+        _imageNotices.clear();
         state = state.copyWith(
           messages: [...state.messages, exhaustedMsg],
           isLoading: false,
@@ -1125,13 +1562,21 @@ class ChatNotifier extends StateNotifier<ChatState> {
           activeToolCalls: [],
           loopRunning: false,
           loopIteration: 0,
+          budget: snapshot,
+          budgetPaused: true,
         );
         _conversationsDao.saveMessage(conversationId, exhaustedMsg);
+        PetObserver.instance.notifyAiError(
+          error: '预算停止: ${_stopHeadline(reason)}',
+        );
       case LoopAbort(iteration: final iter, reason: final reason):
         _flushStreamBuffer();
         final abortMsg = ChatMessage.assistant(
           '─── ❌ Loop 放弃 (第 $iter 轮) ───\n\n原因：$reason',
+          attachments: _collectImageAttachments(),
         );
+        _imageFiles.clear();
+        _imageNotices.clear();
         state = state.copyWith(
           messages: [...state.messages, abortMsg],
           isLoading: false,
@@ -1144,28 +1589,80 @@ class ChatNotifier extends StateNotifier<ChatState> {
       case LoopError(iteration: final iter, message: final msg):
         state = state.copyWith(loopRunning: false, loopIteration: 0);
         _setError('Loop 第 $iter 轮出错: $msg');
-      case LoopStalled(iteration: final iter):
-        _flushStreamBuffer();
-        final stalledMsg = ChatMessage.assistant(
-          '─── ⚠️ Loop 检测到无进展 (第 $iter 轮)，自动停止 ───\n\n'
-          '连续两轮操作高度相似，可能陷入循环。请调整任务描述后重试。',
-        );
-        state = state.copyWith(
-          messages: [...state.messages, stalledMsg],
-          isLoading: false,
-          streamingText: '',
-          activeToolCalls: [],
-          loopRunning: false,
-          loopIteration: 0,
-        );
-        _conversationsDao.saveMessage(conversationId, stalledMsg);
+      case LoopStalled(
+        iteration: final iter,
+        checkpoint: _,
+        snapshot: final snapshot,
+      ):
+        // 只更新状态：紧跟其后的 LoopExhausted 会统一渲染检查点摘要，
+        // 避免同一次停止刷出两条重复消息。
+        AppLogger.instance.log('[ChatProvider] Loop 检测到无进展 (第 $iter 次规划)');
+        state = state.copyWith(loopRunning: false, budget: snapshot);
     }
   }
+
+  /// 预算停止时的"说人话"消息：为什么停 + 做了什么 + 怎么继续
+  String _buildBudgetStopMessage({
+    required BudgetStopReason reason,
+    required LoopCheckpoint checkpoint,
+    required BudgetSnapshot snapshot,
+    required bool hadProgress,
+  }) {
+    final headline = hadProgress
+        ? '─── 🔋 预算用尽，任务停在半途（仍在推进）───'
+        : '─── ⚠️ 已停止：${_stopHeadline(reason)} ───';
+    final buffer = StringBuffer()
+      ..writeln(headline)
+      ..writeln()
+      ..writeln(checkpoint.toMarkdown(reason: reason))
+      ..writeln()
+      ..writeln(
+        '**预算使用**：工具轮 ${snapshot.roundText} · '
+        '工具调用 ${snapshot.toolCallText} · '
+        '用时 ${snapshot.elapsedText}'
+        '${snapshot.planLimit > 0 ? ' · 重新规划 ${snapshot.planText}' : ''}',
+      );
+    if (snapshot.softExtensions > 0) {
+      buffer
+        ..writeln()
+        ..writeln('（过程中有 ${snapshot.softExtensions} 次"有进展→原地续预算"，未占用重新规划次数）');
+    }
+    buffer
+      ..writeln()
+      ..writeln('💡 **怎么继续**：')
+      ..writeln();
+    if (hadProgress) {
+      buffer.writeln('- 点下方「追加预算继续」，会带着已完成的进度接着跑；');
+    } else {
+      buffer.writeln('- 先补充一句方向（例如换个实现思路 / 指定文件），再点「追加预算继续」；');
+    }
+    buffer.writeln('- 或者把任务拆小一点，我按新预算重跑这一段。');
+    return buffer.toString().trim();
+  }
+
+  /// 预算停止原因的一句话标题
+  String _stopHeadline(BudgetStopReason reason) => switch (reason) {
+    BudgetStopReason.noProgress => '连续没有实质进展',
+    BudgetStopReason.repeatedOperations => '检测到空转（重复操作）',
+    BudgetStopReason.hardRounds => '工具轮次达到硬上限',
+    BudgetStopReason.toolCalls => '工具调用次数达到上限',
+    BudgetStopReason.wallClock => '执行时间达到预算上限',
+    BudgetStopReason.tokens => 'token 达到预算上限',
+    BudgetStopReason.planningBudget => '重新规划次数用完',
+    BudgetStopReason.userCancelled => '用户中断',
+    BudgetStopReason.none => '已停止',
+  };
 
   /// 可视化文件路径累积器
   final List<String> _htmlFiles = [];
   final List<String> _svgFiles = [];
   final List<String> _videoFiles = [];
+
+  /// 画图子 Agent 生成的图片路径累积器（本轮）
+  final List<String> _imageFiles = [];
+
+  /// 画图失败/兜底提示（本轮），最终附到助手消息正文末尾
+  final List<String> _imageNotices = [];
 
   void _handleEvent(AgentEvent event, int conversationId) {
     switch (event) {
@@ -1181,6 +1678,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         _videoFiles.add(path);
         // 实时更新流式状态
         state = state.copyWith(streamingVideoFiles: List.from(_videoFiles));
+      case AgentImageGenerated(path: final path):
+        _imageFiles.add(path);
+        state = state.copyWith(streamingImageFiles: List.from(_imageFiles));
       case AgentReasoningToken(text: final text):
         // 推理过程流式累积到 streamingThinking
         _currentTokenCount += ComputeService.estimateTokens(text);
@@ -1223,6 +1723,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
           activeToolCalls: [...state.activeToolCalls, toolCall],
         );
       case AgentToolResult(toolCallId: _, result: final result):
+        // 画图结果：记录失败/兜底提示，最终会以引用块形式写进助手消息，
+        // 避免工具卡片消失后用户看不到“子模型失败、主模型兜底”的信息。
+        final lastTool = state.activeToolCalls.isEmpty
+            ? null
+            : state.activeToolCalls.last;
+        if (lastTool?.name == 'image_generate') {
+          _collectImageNotice(result);
+        }
         final updated = state.activeToolCalls.map((tc) {
           if (tc == state.activeToolCalls.last &&
               tc.status == ToolCallStatus.executing) {
@@ -1243,17 +1751,22 @@ class ChatNotifier extends StateNotifier<ChatState> {
         // 如果最终 content 为空，使用之前流式累积的文本
         // (某些模型在 tool_call 后的回复轮次不返回 content)
         final finalContent = content.isNotEmpty ? content : state.streamingText;
+        final displayContent = _appendImageNotices(finalContent);
         final finalThinking = state.streamingThinking.isNotEmpty
             ? state.streamingThinking
             : null;
 
+        // 画图子 Agent 生成的图片：作为助手消息附件，随消息持久化并展示。
+        final imageAttachments = _collectImageAttachments();
+
         // 准备消息对象
         final assistantMsg = ChatMessage.assistant(
-          finalContent,
+          displayContent,
           thinkingContent: finalThinking,
           htmlFiles: List.from(_htmlFiles),
           svgFiles: List.from(_svgFiles),
           videoFiles: List.from(_videoFiles),
+          attachments: imageAttachments,
         );
         final toolMessages = state.activeToolCalls.map((tc) {
           return ChatMessage(
@@ -1275,6 +1788,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           streamingHtmlFiles: [],
           streamingSvgFiles: [],
           streamingVideoFiles: [],
+          streamingImageFiles: [],
           activeToolCalls: [],
         );
 
@@ -1282,6 +1796,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
         _htmlFiles.clear();
         _svgFiles.clear();
         _videoFiles.clear();
+        _imageFiles.clear();
+        _imageNotices.clear();
 
         // 异步：数据库保存和其他耗时操作（不阻塞UI）
         Future.microtask(() async {
@@ -1299,13 +1815,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
           if (notifyEnabled) {
             NotificationService.instance.notify(
               title: 'RemindAI 对话完成',
-              body: finalContent.isEmpty ? '助手已完成回复' : finalContent,
+              body: displayContent.isEmpty ? '助手已完成回复' : displayContent,
             );
           }
           PetObserver.instance.notifyAiCompleted(
-            summary: finalContent.length > 50
-                ? '${finalContent.substring(0, 50)}...'
-                : finalContent,
+            summary: displayContent.length > 50
+                ? '${displayContent.substring(0, 50)}...'
+                : displayContent,
           );
           // 宠物经济：根据 token 消耗奖励宠物币
           if (_currentTokenCount > 0) {
@@ -1462,6 +1978,62 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
           '[ChatProvider] AgentLoopLimitReached: $rounds，已保存总结消息',
         );
         PetObserver.instance.notifyAiError(error: '工具调用熔断: $rounds 次');
+      case AgentBudgetTick(snapshot: final snapshot):
+        // 预算心跳：实时更新"已用工具轮 / 预算"
+        state = state.copyWith(budget: snapshot);
+      case AgentBudgetExtended(
+        snapshot: final snapshot,
+        grantedRounds: final granted,
+      ):
+        state = state.copyWith(budget: snapshot);
+        AppLogger.instance.log('[ChatProvider] 有进展，原地续预算 +$granted 轮');
+      case AgentBudgetStop(
+        reason: final reason,
+        snapshot: final snapshot,
+        checkpoint: final checkpoint,
+        hadProgress: final hadProgress,
+      ):
+        // 普通对话模式下的预算耗尽：同样给检查点摘要 + 追加预算入口
+        _flushStreamBuffer();
+        _flushThinkingBuffer();
+
+        final hasThinkingContent = state.streamingThinking.isNotEmpty;
+        final stoppedToolCalls = state.activeToolCalls
+            .map(
+              (tc) => ChatToolCall(
+                id: tc.id,
+                name: tc.name,
+                arguments: tc.arguments,
+              ),
+            )
+            .toList();
+
+        final budgetMsg = ChatMessage.assistant(
+          _buildBudgetStopMessage(
+            reason: reason,
+            checkpoint: checkpoint,
+            snapshot: snapshot,
+            hadProgress: hadProgress,
+          ),
+          thinkingContent: hasThinkingContent ? state.streamingThinking : null,
+          toolCalls: stoppedToolCalls.isNotEmpty ? stoppedToolCalls : null,
+        );
+
+        state = state.copyWith(
+          messages: [...state.messages, budgetMsg],
+          streamingText: '',
+          streamingThinking: '',
+          activeToolCalls: [],
+          isLoading: false,
+          budget: snapshot,
+          budgetPaused: true,
+        );
+
+        _conversationsDao.saveMessage(conversationId, budgetMsg);
+        AppLogger.instance.log(
+          '[ChatProvider] AgentBudgetStop: ${reason.name}，已保存检查点摘要',
+        );
+        PetObserver.instance.notifyAiError(error: _stopHeadline(reason));
     }
   }
 
@@ -1504,6 +2076,7 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
       final content = partial.isNotEmpty
           ? partial
           : state.activeToolCalls.map((tc) => '[工具调用中] ${tc.name}').join('\n');
+      final displayContent = _appendImageNotices(content);
       final thinkingContent = state.streamingThinking.isNotEmpty
           ? state.streamingThinking
           : null;
@@ -1522,10 +2095,11 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
           .toList();
 
       final assistantMsg = ChatMessage.assistant(
-        content,
+        displayContent,
         interrupted: true,
         thinkingContent: thinkingContent,
         toolCalls: toolCalls.isNotEmpty ? toolCalls : null,
+        attachments: _collectImageAttachments(),
       );
 
       state = state.copyWith(
@@ -1533,6 +2107,7 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
         isLoading: false,
         streamingText: '',
         streamingThinking: '', // 清空 thinking 缓冲
+        streamingImageFiles: [],
         activeToolCalls: [],
         loopRunning: false, // ✅ 释放 loop 锁
         loopIteration: 0, // ✅ 重置迭代计数
@@ -1659,9 +2234,53 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
     // 在后续微任务中可能仍会往 _agentMessages 追加消息（比如 tool result 或
     // assistant(tool_calls)），导致消息链再次进入不合法状态。
     // 调度一个延迟微任务，在 generator 最终停止后做最后一遍 sanitize。
+    _imageFiles.clear();
+    _imageNotices.clear();
     Future<void>.delayed(const Duration(milliseconds: 50)).then((_) {
       if (mounted) _sanitizeAgentMessages();
     });
+  }
+
+  /// 把本轮生成的图片转成可持久化的消息附件。
+  List<FileAttachment> _collectImageAttachments() {
+    final result = <FileAttachment>[];
+    for (final path in _imageFiles) {
+      try {
+        final file = File(path);
+        if (file.existsSync()) {
+          result.add(FileAttachment.fromFile(file));
+        }
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  /// 解析画图工具结果，收集失败/兜底提示。
+  void _collectImageNotice(String result) {
+    try {
+      final decoded = jsonDecode(result);
+      if (decoded is! Map) return;
+      final warning = decoded['warning'];
+      if (warning is String && warning.trim().isNotEmpty) {
+        _imageNotices.add(warning.trim());
+        return;
+      }
+      if (decoded['status'] == 'error') {
+        final detail = decoded['detail'];
+        if (detail is String && detail.trim().isNotEmpty) {
+          _imageNotices.add('画图失败：${detail.trim()}');
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// 把画图提示以引用块附加到正文，随消息持久化。
+  String _appendImageNotices(String content) {
+    if (_imageNotices.isEmpty) return content;
+    final lines = _imageNotices
+        .map((text) => '> ⚠️ ${text.replaceAll('\n', ' ')}')
+        .join('\n');
+    return content.trim().isEmpty ? lines : '$content\n\n$lines';
   }
 
   /// 删除指定索引的消息
@@ -1671,6 +2290,7 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
     final updated = List<ChatMessage>.from(state.messages);
     updated.removeAt(index);
     state = state.copyWith(messages: updated);
+    _restoreImageRegistry(updated);
 
     // 同步删除数据库中的消息
     if (state.currentConversationId != null) {
@@ -1784,6 +2404,7 @@ ${hasContent ? '\n\n**以下是已完成的部分内容：**\n\n${state.streamin
     _agentMessages.clear();
     _activeSkillSig = null;
     _projectSkillsDirMtime = null;
+    _ref.read(sessionImageRegistryProvider).clear();
     state = const ChatState();
   }
 

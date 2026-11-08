@@ -138,9 +138,24 @@ class _McpCardTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final connState = ref.watch(mcpConnectionsProvider);
     final status =
-        ref.watch(mcpConnectionsProvider).statuses[server.id] ??
-        McpConnectionStatus.disconnected;
+        connState.statuses[server.id] ?? McpConnectionStatus.disconnected;
+    // 运行期意外断线（子进程崩溃 / SSE 断开）的原因，挂在状态点上做提示
+    final lastError = connState.lastErrors[server.id];
+    final retryAttempt = connState.reconnectAttempts[server.id] ?? 0;
+    final maxRetries = ref
+        .read(mcpConnectionsProvider.notifier)
+        .reconnectPolicy
+        .maxAttempts;
+    final statusHint = switch (status) {
+      McpConnectionStatus.reconnecting =>
+        '连接已断开，正在自动重连（第 $retryAttempt/$maxRetries 次）'
+            '${lastError == null ? '' : '：$lastError'}',
+      McpConnectionStatus.error when (lastError?.isNotEmpty ?? false) =>
+        '连接已断开：$lastError',
+      _ => null,
+    };
 
     return Material(
       color: colorScheme.surfaceContainerHighest,
@@ -164,7 +179,13 @@ class _McpCardTile extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  _statusDot(status),
+                  if (statusHint != null)
+                    Tooltip(
+                      message: statusHint,
+                      child: _statusDot(status),
+                    )
+                  else
+                    _statusDot(status),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -242,6 +263,16 @@ class _McpCardTile extends ConsumerWidget {
           width: 12,
           height: 12,
           child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      case McpConnectionStatus.reconnecting:
+        // 断线自动重连中：转圈 + 琥珀色，和"首次连接"区分开
+        return const SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation(Colors.amber),
+          ),
         );
       case McpConnectionStatus.error:
         return const Icon(Icons.circle, color: Colors.red, size: 12);

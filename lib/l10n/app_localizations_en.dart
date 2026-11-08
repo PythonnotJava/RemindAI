@@ -692,11 +692,12 @@ class SEn extends S {
   String get modelsMaxOutputTokensHint => 'e.g. 8192';
 
   @override
-  String get modelsMaxOutputTokensHelper => 'Default 12800 if left empty';
+  String get modelsMaxOutputTokensHelper =>
+      'Default 128K if left empty (auto-degrades if rejected)';
 
   @override
   String get modelsMaxOutputTokensTooltip =>
-      'Maximum output token limit\nDefault value is 12800 if left empty\nCommon configurations:\n  • DeepSeek V3: 8192\n  • Claude: 16384\n  • GPT-4: 8192';
+      'Maximum output token limit\nDefault value is 128000 (128K) if left empty\nAuto-degrades when the upstream rejects it\nCommon configurations:\n  • DeepSeek V3: 8192\n  • Claude: 16384\n  • GPT-4: 8192';
 
   @override
   String get modelsProtocolType => 'Protocol type';
@@ -1442,6 +1443,29 @@ class SEn extends S {
 
   @override
   String get exportSaveTitle => 'Save export file';
+
+  @override
+  String get exportLongImageFormat => 'Long screenshot (PNG)';
+
+  @override
+  String get exportLongImagePreparing => 'Laying out the whole conversation…';
+
+  @override
+  String exportLongImageProgress(int current, int total) {
+    return 'Rendering part $current/$total…';
+  }
+
+  @override
+  String exportLongImageParts(int count) {
+    return 'Long conversation — saved $count images';
+  }
+
+  @override
+  String get exportLongImageEmpty => 'Nothing to export in this conversation';
+
+  @override
+  String get exportLongImageHtmlCard =>
+      'Interactive HTML chart (not visible in a long screenshot — open the original file)';
 
   @override
   String get commonCancel => 'Cancel';
@@ -3612,6 +3636,58 @@ class SEn extends S {
       'In Loop mode, tool operations execute automatically without per-action confirmation.';
 
   @override
+  String get chatBudgetTitle => 'Task budget';
+
+  @override
+  String get chatBudgetDesc =>
+      'Pick a tier by task type: when the soft limit is hit, progress is checked first — with progress the budget extends in place, otherwise it stops.';
+
+  @override
+  String get chatBudgetTierQuick => 'Quick Q&A';
+
+  @override
+  String get chatBudgetTierQuickDesc => '10–20 rounds · 30 calls';
+
+  @override
+  String get chatBudgetTierCoding => 'Daily coding';
+
+  @override
+  String get chatBudgetTierCodingDesc => '60–100 rounds · 320 calls';
+
+  @override
+  String get chatBudgetTierRefactor => 'Large refactor';
+
+  @override
+  String get chatBudgetTierRefactorDesc => '150–200 rounds · 800 calls';
+
+  @override
+  String get chatBudgetTierCustom => 'Custom';
+
+  @override
+  String get chatBudgetSoftRounds => 'Soft round limit';
+
+  @override
+  String get chatBudgetHardRounds => 'Hard round limit';
+
+  @override
+  String get chatBudgetToolCalls => 'Tool call limit';
+
+  @override
+  String get chatBudgetUsedRounds => 'rounds';
+
+  @override
+  String get chatBudgetUsedCalls => 'calls';
+
+  @override
+  String get chatBudgetPlanning => 'plans';
+
+  @override
+  String get chatBudgetExtend => 'Add budget & continue';
+
+  @override
+  String get chatBudgetPaused => 'Budget exhausted — paused at checkpoint';
+
+  @override
   String get chatKnowledgeBase => 'Knowledge Base';
 
   @override
@@ -3790,6 +3866,36 @@ class SEn extends S {
 
   @override
   String get settingsRootPath => 'Data Root Directory (.RemindAI)';
+
+  @override
+  String get chatImageAgent => 'Image';
+
+  @override
+  String get chatImageAgentTitle => 'Image Sub-Agent';
+
+  @override
+  String get chatImageAgentOff => 'Off (disabled)';
+
+  @override
+  String get chatImageAgentOffDesc => 'No image tool is registered';
+
+  @override
+  String get chatImageAgentHint =>
+      'Supports text-to-image, image-to-image and editing: upload an image and say \"turn this into...\" or refer to \"the last one\"; the agent picks the right mode. Failures retry first; the main model is only used when \"Main model fallback\" is enabled and it supports image output.';
+
+  @override
+  String get chatImageAgentFallbackMain => 'Main model supports images';
+
+  @override
+  String get chatImageAgentFallbackMainDesc =>
+      'Off by default. When off, a failed sub-model simply reports that the main model does not support images; enable only if the main model itself can generate images.';
+
+  @override
+  String get chatImageAgentEmpty =>
+      'No model cards yet. Add one on the Models page.';
+
+  @override
+  String get chatImageAgentMissing => 'Image model deleted';
 
   @override
   String get galleryToolName => 'Gallery';

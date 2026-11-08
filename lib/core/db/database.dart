@@ -170,7 +170,7 @@ class DatabaseHelper {
       "INTEGER NOT NULL DEFAULT 0",
     );
     // Migration: add max_output_tokens for model cards
-    // 最大输出 token 限制，0 表示使用默认值 12800
+    // 最大输出 token 限制，0 表示使用默认值 128K
     //
     // 设计思想：
     // - 作为保护上限，防止输出过长导致 "输入+输出" 超过模型上下文窗口
@@ -179,7 +179,8 @@ class DatabaseHelper {
     //   * Claude 3.5: 支持 16384+
     //   * GPT-4: 通常 4096-8192
     // - 用户可以根据模型特性和使用场景自定义配置
-    // - 留空或 0 时，LlmClient 使用 12800 作为兜底（适配大部分场景）
+    // - 留空或 0 时，LlmClient 使用 128K 作为兜底；若上游不接受该值
+    //   （超出模型输出上限或 输入+输出 超窗口），会自动降档重试
     _migrateAddColumn(
       db,
       'model_cards',

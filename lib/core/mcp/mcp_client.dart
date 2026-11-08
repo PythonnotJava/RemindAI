@@ -16,6 +16,13 @@ class McpClient {
 
   bool get isConnected => _transport?.isConnected ?? false;
 
+  /// 断线通知。连接被对端关闭（子进程崩溃、SSE/HTTP 断开）时发出，载荷是原因。
+  ///
+  /// 必须由上层订阅并把 `status` 改成 error——否则进程已经死了，
+  /// UI 和 Agent 仍会以为工具可用，调用时才逐个失败。
+  /// 主动 [disconnect] 之前应先取消订阅，避免把"用户手动断开"误报为异常。
+  Stream<String>? get onDisconnected => _transport?.onDisconnected;
+
   /// 通过 stdio 连接 MCP 服务器
   Future<void> connectStdio({
     required String command,

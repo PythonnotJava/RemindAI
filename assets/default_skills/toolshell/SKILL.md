@@ -222,10 +222,45 @@ toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<
 > 或 `toolshell_run_python` 里用 Python 写文件（跨平台可靠）。
 
 ### 命令执行
-用 `toolshell_exec(command)`。它会自动选择 shell（Windows: pwsh > powershell > cmd；Linux/macOS: bash > sh）。
-- 长时间命令 (build, install) 提醒用户可能需要等待
-- 命令失败时把错误信息记进记忆 (type=error)
-- 输出会被内置 `rtk` 做 token 压缩，别指望看到完整日志；需要细节时用 `toolshell_read` 直接读日志文件
+用 `toolshell_exec(command, cwd?, timeout?, env?)`。它会自动选择 shell
+（Windows: pwsh > powershell > cmd；Linux/macOS: bash > sh）。
+
+- **没有命令白名单**：`adb` / `gradle` / `npm` / `ffmpeg` …… 只要能跑就直接跑。
+- **输出是「开头 + 结尾」两段**（中间过长处会标 `…[中间省略 N 字节]…`）。
+  构建/安装失败的根因通常在开头，先看第一处 `error`。
+- **超时会强杀整棵进程树**（退出码非 0），所以别用会一直跑的命令等超时：
+  日志跟踪用 `adb logcat -d -t 500`，大输出用 `... | Select-Object -Last 200`，
+  或重定向到文件后再 `toolshell_read`。
+- **多步任务写进一段脚本一次执行**（同一个 `toolshell_exec` 里串联），
+  比"命令 → 看结果 → 再命令"省好几轮预算。
+- 需要按次传环境变量时用 `env`（多设备时指定 `{"ANDROID_SERIAL": "xxxx"}`）。
+- 命令失败时把错误信息记进记忆 (type=error)。
+
+### 后台任务（长驻命令）
+`toolshell_exec_background(command)` 起进程后**立刻返回** `job_id`，输出写进
+`<项目根>/.toolshell/jobs/<job_id>.log`。适合 `adb logcat`（不带 `-d`）、
+`flutter run`、`npm run dev`、`tail -f`、本地服务、长时间监听。
+
+- 看输出：`toolshell_job_output(job_id, tail_bytes?)` → `job_status` 为
+  `running` / `exited`（带 `exit_code`）/ `killed`，附日志尾部。轮询间隔 1~2 秒，
+  别空转刷屏。
+- 结束：`toolshell_job_kill(job_id)`，整棵进程树一起杀。
+- 一次性命令仍用 `toolshell_exec`；同时最多 8 个后台任务，用完记得 kill。
+
+### Android 装机 / 调试（一条龙）
+1. `system_probe(category="android")` 看 adb、SDK 与设备；多设备时记下 serial，后续每条命令都带 `-s`。
+2. **装应用用 `android_install_apk(path=..., serial=...)`，不要用 `adb install` 干等**。
+   国产 ROM 会在手机上弹"安装确认"（vivo：风险检测结果 + 「已了解风险」勾选框 → 「继续安装」；
+   小米/OPPO 类似）。`adb install` 会被这个弹窗卡住直到超时；这个工具会边装边读屏，
+   自动勾选风险确认、点继续安装，返回 `installed` / `output` / `steps`。
+3. 卡住或想自己控制时：`android_ui_dump()` 读当前屏幕控件（文本 + 坐标 + 是否可勾选），
+   再 `android_tap(text="已了解风险")` 或 `android_tap(x=630, y=2100)` 点掉。
+   **不要靠截图判断**——截图是 PNG，你看不了；`android_ui_dump` 是文本，能直接读。
+4. 启动并确认前台：`adb shell am start -n <pkg>/.MainActivity`，
+   `adb shell dumpsys window | findstr mCurrentFocus`。
+5. 崩溃日志：`toolshell_exec_background("adb logcat")` → 复现 → `toolshell_job_output` →
+   `toolshell_job_kill`；一次性看历史用 `adb logcat -d -t 500`。
+6. 留证：`adb exec-out screencap -p > shot.png`（给人看，不是给模型看）。
 
 ### 文件删除
 用 `toolshell_delete`。normal 模式必须确认，auto 模式直接执行但请记进记忆。
@@ -284,7 +319,7 @@ toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<
 
 ## 并行子调用 (toolshell_run_parallel)
 
-当一次决策中需要发起**多个互不依赖**的只读/查询类调用时（例如同时读取几个不同文件、同时按不同模式搜索），使用 `toolshell_run_parallel` 一次性并发发起，而不是逐个串行调用等待。
+当一次决策中需要发起**多个互不依赖**的调用时（同时读几个文件、同时按不同模式搜索、读文件的同时跑一条只读命令），用 `toolshell_run_parallel` 一次并发发起，而不是逐个串行等待。
 
 ### 使用方式
 
@@ -293,16 +328,22 @@ toolshell_install_skill(source_dir="<staging 技能目录绝对路径>", name="<
   "calls": [
     {"tool": "toolshell_read", "args": {"path": "a.txt"}},
     {"tool": "toolshell_read", "args": {"path": "b.txt"}},
-    {"tool": "toolshell_search", "args": {"pattern": "*.dart"}}
+    {"tool": "toolshell_exec", "args": {"command": "adb shell pm list packages | findstr remind"}}
   ]
 }
 ```
 
+### 自动分流（框架负责，不用你操心）
+
+- **互不冲突**的子调用并发执行；
+- **需要用户确认的**（normal 模式下的写/删/执行）自动串行，一次一个弹窗；
+- **会互相影响的目标**自动串行并保持原始顺序：同一文件的读/写/删、同一条命令、同一段 Python/JS 代码；
+- 响应里的 `parallel_count` / `serial_count` / `serialized` 会告诉你哪些被串行了。
+
 ### 限制（必须遵守）
 
-- 单批最多 8 个子调用，超出会被整体拒绝(`TOO_MANY_CALLS`)
-- **只用于只读/查询类工具**（如 `toolshell_read`、`toolshell_search`、`toolshell_memory_recall` 等）
-- 批次中若包含任意写/删/执行/跑代码类工具（`toolshell_write`/`toolshell_delete`/`toolshell_exec`/`toolshell_run_python`/`toolshell_run_js`），或再次嵌套 `toolshell_run_parallel`，整批会被直接拒绝(`PARALLEL_NOT_ALLOWED`)——这是因为并发写同一资源、并发弹出多个权限确认框存在竞态和体验问题。遇到这类需求，请改为逐个串行调用。
+- 单批最多 8 个子调用，超出会被拒绝(`TOO_MANY_CALLS`)
+- 不允许嵌套 `toolshell_run_parallel`（会放大并发数、失去预算约束），否则整批拒绝(`PARALLEL_NOT_ALLOWED`)
 - 参数缺失或格式不对（如 `calls` 不是数组、某项缺少 `tool` 字段）会被拒绝(`INVALID_ARGS`)
 
 ### 返回格式

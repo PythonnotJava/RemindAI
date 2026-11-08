@@ -7,18 +7,16 @@ import 'package:remind_ai/core/memory/project_config.dart';
 import 'package:remind_ai/core/toolshell/executor.dart';
 
 /// 验证 toolshell_run_parallel 和子工具在参数缺失时的错误处理
+///
+/// 注意：测试产物放在系统临时目录，不再硬编码桌面路径
+/// （以前写死 `C:\Users\25654\Desktop\test`，每次跑测试都会在桌面留空文件夹）。
 void main() {
-  const testRoot = r'C:\Users\25654\Desktop\test';
   late Directory workDir;
 
   setUpAll(() async {
-    workDir = Directory(
-      '$testRoot${Platform.pathSeparator}parallel_error_test',
+    workDir = await Directory.systemTemp.createTemp(
+      'remind_parallel_error_test_',
     );
-    if (await workDir.exists()) {
-      await workDir.delete(recursive: true);
-    }
-    await workDir.create(recursive: true);
 
     // 创建测试文件
     await File(

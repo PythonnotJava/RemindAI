@@ -449,6 +449,27 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     state = AsyncData(updated);
   });
 
+  /// 持久化当前选中的子画图模型卡 ID（重启后仍保留）。
+  Future<void> updateImageAgentModelId(String id) => _serialized(() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    if (current.imageAgentModelId == id) return;
+    final updated = current.copyWith(imageAgentModelId: id);
+    await updated.save();
+    state = AsyncData(updated);
+  });
+
+  /// 持久化「子画图模型失败时是否用主模型兜底」开关。
+  Future<void> updateImageAgentFallbackToMain(bool enabled) =>
+      _serialized(() async {
+        final current = state.valueOrNull;
+        if (current == null) return;
+        if (current.imageAgentFallbackToMain == enabled) return;
+        final updated = current.copyWith(imageAgentFallbackToMain: enabled);
+        await updated.save();
+        state = AsyncData(updated);
+      });
+
   /// 新增或更新一个嵌入式模型配置。
   /// 若 [config].id 已存在则更新，否则追加。
   /// 列表中首个加入的配置会自动设为选中。

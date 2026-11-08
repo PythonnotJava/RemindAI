@@ -8,10 +8,14 @@ import 'package:path/path.dart' as p;
 import '../settings/app_settings.dart';
 import '../db/daos/memory_dao.dart';
 import '../db/daos/worktree_sessions_dao.dart';
+import '../image/image_agent_capability.dart';
+import '../image/image_agent_service.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import '../logger/app_logger.dart';
+import '../llm/context_capacity.dart';
 import '../llm/models.dart';
+import '../mcp/mcp_tool_names.dart';
 import '../memory/memory_manager.dart';
 import '../memory/project_config.dart';
 import '../memory/qdrant_service.dart';
@@ -20,9 +24,11 @@ import '../skill/skill_injector.dart';
 import '../skill/skill_model.dart';
 import '../skill/skill_registry.dart';
 import '../toolshell/agent_loop.dart';
+import '../toolshell/budget.dart';
 import '../toolshell/executor.dart';
 import '../toolshell/git_availability.dart';
 import '../toolshell/worktree_manager.dart';
+import '../tools/builtin_tool_names.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/experts_provider.dart';
 import '../../providers/kb_provider.dart';
@@ -45,6 +51,39 @@ import 'middleware/logging_middleware.dart';
 import 'middleware/permission_middleware.dart';
 import 'transformers/context_compactor.dart';
 
+/// 「降低每轮消耗」的工具使用策略。
+///
+/// 放在 system prompt 的稳定前缀里：执行预算有限，能不能跑完取决于单轮的
+/// 信息密度——并行调用、批量读取、一次定位，比"多轮试探"划算得多。
+const String kToolEfficiencyGuidance = '''
+
+# 工具使用效率
+- 互不依赖的多个操作放进同一次回复：一轮可以带多个 tool_call，也可以用
+  toolshell_run_parallel 一次发起一批（读文件、搜代码、查资料尤其适合）。
+  不要"读一个文件 → 等结果 → 再读一个"这样一问一答地消耗轮次。
+- 批量读取：一次读多个文件/多段内容，优先只取需要的片段，避免整文件反复全量读。
+- 探索性检索（大范围搜代码、试错验证、对比多个方案）先精确定位，再把读取压成
+  一次并行批（toolshell_run_parallel 里放多个 search/read 子调用），
+  不要"读一个 → 猜一个"地反复试探。
+- 执行预算是有限的：工具轮、工具调用总量、墙钟、token 四个维度都在计数；
+  重复调用同一个工具且结果不变会被判定为空转并直接终止。
+
+# 自主执行
+- 用户给了目标就直接动手做完：能调工具解决的一律先做，不要把"你可以在终端执行 X"
+  当成交付。只有用户明确说"只讲步骤 / 别动手"时才只给方案。
+- 不要问"需要我执行吗""要不要继续"：默认继续推进，直到任务完成或被真实阻塞。
+- 只有这三种情况先停下来问用户：①不可逆且会丢数据（删库、格式化、
+  `git reset --hard`、恢复出厂设置）；②缺少只有用户才能提供的东西
+  （密码、验证码、账号，或必须在手机上人工点"允许"）；③要花钱或对外发消息。
+- 缺信息时先用工具自己查（`system_probe`、读文件、`命令 --help`），不要靠猜或反问。
+  例如装 Android 应用前先 `system_probe(category="android")` 看设备与 SDK，别硬猜路径。
+- 多步流程写成**一段脚本一次跑完**（一次 `toolshell_exec` 里串起多条命令），
+  "命令 → 看结果 → 再命令"一步一轮会烧光预算。
+- 长驻/持续输出类命令（日志跟踪、起服务）必须用一次性形式：
+  `adb logcat -d -t 500`、`... | Select-Object -Last 200`，或重定向到文件后再
+  `toolshell_read`，否则会一直等到超时（超时会强杀进程树，拿不到中途输出）。
+''';
+
 /// Agent 执行上下文 — 封装一次对话所需的全部运行时资源
 ///
 /// 由 [AgentContextBuilder] 构建,将 chat_provider 中散落的
@@ -66,6 +105,9 @@ class AgentContext {
   final List<Map<String, dynamic>> messages;
   final MessagePipeline messagePipeline;
 
+  /// 工具级进展追踪器（与 ToolPipeline 共用同一实例）
+  final ToolProgressTracker? progressTracker;
+
   /// 模型的上下文窗口大小（token 数）
   final int contextWindow;
 
@@ -79,19 +121,33 @@ class AgentContext {
     this.skillsSection = '',
     required this.messages,
     this.messagePipeline = const MessagePipeline(),
+    this.progressTracker,
     this.contextWindow = 0,
   });
 
   /// 创建 AgentLoop 实例
-  AgentLoop createLoop() => AgentLoop(
-    llm: llm,
-    executor: _PipelineAsExecutor(pipeline),
-    tools: tools,
-    messages: messages,
-    messagePipeline: messagePipeline,
-    hooks: hooks,
-    contextWindow: contextWindow,
-  );
+  ///
+  /// 普通对话同样受执行预算保护（四维计数 + 软上限看进展），
+  /// 不再是"闷头跑满 50 轮"。
+  AgentLoop createLoop({
+    ExecutionBudget? budget,
+    ToolProgressTracker? tracker,
+  }) {
+    final execBudget =
+        budget ?? ExecutionBudget(limits: ExecutionLimits.coding);
+    return AgentLoop(
+      llm: llm,
+      executor: _PipelineAsExecutor(pipeline),
+      tools: tools,
+      messages: messages,
+      messagePipeline: messagePipeline,
+      hooks: hooks,
+      contextWindow: contextWindow,
+      budget: execBudget,
+      progressTracker: tracker ?? progressTracker,
+      maxToolCallRounds: execBudget.limits.hardRounds,
+    );
+  }
 
   /// 获取 Executor 实例（用于 AutonomousLoop 等外部消费）
   Executor get executor => _PipelineAsExecutor(pipeline);
@@ -252,7 +308,7 @@ class AgentContextBuilder {
     final toolSourceMapping = _lastSourceMapping;
 
     // ─── 可插拔能力 (Capabilities) ───
-    final capabilities = _collectCapabilities();
+    final capabilities = await _collectCapabilities();
     final customHandlers = <String, CustomToolHandler>{};
 
     // 技能安装工具 (toolshell_install_skill): 把工作目录里临时做好的技能
@@ -326,15 +382,25 @@ class AgentContextBuilder {
     // 便于会话中途技能变化时只刷新技能区，保护 prompt cache。
     // 传入 effectiveRoot（而非原始 workDir）确保 worktree 隔离生效时
     // 模型看到的"当前工作目录"与 Executor 实际使用的根目录一致。
-    final systemPromptPrefix = await _buildSystemPromptPrefix(
-      workDirOverride: effectiveRoot,
-    );
+    final systemPromptPrefix =
+        '${await _buildSystemPromptPrefix(workDirOverride: effectiveRoot)}$kToolEfficiencyGuidance';
+    // Capability 自带的系统提示（如画图引导）。放在稳定前缀之后、用户技能区
+    // 之前，保证技能区刷新时不会把它冲掉。
+    final capabilityPrompt = capabilities
+        .where((cap) => cap.isActive)
+        .map((cap) => cap.systemPromptExtension)
+        .whereType<String>()
+        .where((text) => text.trim().isNotEmpty)
+        .join('\n\n');
+    final stablePrompt = capabilityPrompt.isEmpty
+        ? systemPromptPrefix
+        : '$systemPromptPrefix\n\n$capabilityPrompt';
     final skillsSection = await _buildSkillsSection(
       userInput: userInput,
       existingMessages: existingMessages,
       memoryManager: memoryManager,
     );
-    final systemPrompt = '$systemPromptPrefix$skillsSection';
+    final systemPrompt = '$stablePrompt$skillsSection';
 
     // ─── 初始化消息历史 ───
     if (existingMessages.isEmpty) {
@@ -362,6 +428,7 @@ class AgentContextBuilder {
       pythonPath: pythonPath,
       npmPath: npmPath,
       permissionMode: PermissionMode.auto, // 权限由中间件管理
+      autoInstallPython: effectiveMode == PermissionMode.auto,
       memoryManager: memoryManager,
       memoryCollection: memoryCollection,
       readableExtraPaths: activeSkillPaths,
@@ -370,6 +437,12 @@ class AgentContextBuilder {
       allowOutsideRoot: true,
     );
 
+    // ─── 工具级进展追踪（预算判定"有没有进展"的唯一证据源）───
+    // 与 ToolPipeline 共用实例：管线是唯一执行出口，记录即覆盖全部工具。
+    // workspaceRoot：只把工作区内的文件算作"产物"，避免把系统里本来就有
+    // 的 python.exe / node.exe 之类误判成进展（历史 bug：检查点列出 20 个 exe）。
+    final progressTracker = ToolProgressTracker(workspaceRoot: effectiveRoot);
+
     // ─── ToolPipeline ───
     final mcpState = _ref.read(mcpConnectionsProvider);
     final pipeline = ToolPipeline(
@@ -377,7 +450,9 @@ class AgentContextBuilder {
       middlewares: middlewares,
       mcpClients: mcpState.clients,
       mcpToolsCache: mcpState.toolsCache,
+      mcpToolRoutes: _lastMcpRoutes,
       customHandlers: customHandlers,
+      progressTracker: progressTracker,
     );
 
     // ─── Hooks ───
@@ -415,9 +490,10 @@ class AgentContextBuilder {
       hooks: hooks,
       tools: tools,
       systemPrompt: systemPrompt,
-      systemPromptPrefix: systemPromptPrefix,
+      systemPromptPrefix: stablePrompt,
       skillsSection: skillsSection,
       messages: existingMessages,
+      progressTracker: progressTracker,
       contextWindow: modelCard.contextWindow,
       messagePipeline: MessagePipeline([
         if (effectiveStore && memoryManager != null && memoryCollection != null)
@@ -429,6 +505,18 @@ class AgentContextBuilder {
             // contextWindow 为 0 时，ContextCompactor 用 128K 兜底
             contextWindow: modelCard.contextWindow,
             modelName: modelCard.model,
+            // 输出预留跟模型卡走：否则用户把最大输出改大后阈值仍按 12.8K 算，
+            // 触发点偏晚，最后直接撞上游上限。
+            maxOutputTokens: modelCard.maxOutputTokens,
+            // 自学习：按 (baseUrl, model) 记住"这条通道实际能装多少"
+            capacityKey: ContextCapacityRegistry.keyOf(
+              modelCard.baseUrl,
+              modelCard.model,
+            ),
+            autoCapacity: ContextCapacityRegistry.instance.resolveCapForKey(
+              ContextCapacityRegistry.keyOf(modelCard.baseUrl, modelCard.model),
+              modelCard.contextWindow,
+            ),
           ),
       ]),
     );
@@ -437,6 +525,10 @@ class AgentContextBuilder {
   // ─── 工具加载 (从 chat_provider 提取) ───
 
   Map<String, String> _lastSourceMapping = {};
+
+  /// 上一次 [_loadTools] 算出的 MCP 工具路由（暴露名 → serverId + 原始名）。
+  /// 与工具列表同源，供 ToolPipeline 还原真实调用目标。
+  List<McpToolRoute> _lastMcpRoutes = const [];
 
   /// 自定义工具 `toolshell_install_skill` 的执行体。
   ///
@@ -851,42 +943,92 @@ class AgentContextBuilder {
         sourceMapping[(t['function'] as Map)['name'] as String] = '元技能:System';
       }
       tools.addAll(sysTools);
+
+      // office（Word/Excel 底层引擎）
+      final officeJson = await rootBundle.loadString(
+        'assets/default_skills/office/tools.json',
+      );
+      final officeTools = (jsonDecode(officeJson) as List)
+          .cast<Map<String, dynamic>>();
+      for (final t in officeTools) {
+        sourceMapping[(t['function'] as Map)['name'] as String] = '元技能:Office';
+      }
+      tools.addAll(officeTools);
     }
 
     // 用户技能 (全局 + 项目级临时技能)
+    //
+    // 技能 tools.json 只是**声明**，真正执行要靠 Executor 的 switch、自定义
+    // handler 或 Capability。声明了却没有执行者的工具名，注入给模型只会换来
+    // 一次必然失败的 UNKNOWN_TOOL，所以这里做两道过滤：
+    // ① 与已加载工具同名 → 跳过（重复定义会让模型困惑该信哪个 schema）；
+    // ② 名字没有任何执行者 → 丢弃并告警，提示改用 toolshell_exec 跑脚本。
     final registry = _ref.read(skillRegistryProvider);
     final skills = _collectAllSkills();
     final allSkillNames = skills
         .map((s) => '${s.name}(${s.isActive ? "激活" : "未启用"})')
         .toList();
     print('[SKILL] 技能列表(共${skills.length}): ${allSkillNames.join(", ")}');
+    final knownToolNames = <String>{
+      for (final t in tools)
+        if (toolDefName(t) != null) toolDefName(t)!,
+    };
+    final dudTools = <String, List<String>>{}; // 技能名 → 无执行者的工具名
     for (final skill in skills) {
       if (!skill.isActive) continue;
       final skillTools = await registry.loadSkillTools(skill);
-      final toolNames = skillTools
-          .map((t) => (t['function'] as Map)['name'])
-          .join(", ");
-      print(
-        '[SKILL] ✓ 加载技能「${skill.name}」工具(${skillTools.length}个): $toolNames',
-      );
+      final accepted = <Map<String, dynamic>>[];
+      final duplicates = <String>[];
       for (final t in skillTools) {
-        sourceMapping[(t['function'] as Map)['name'] as String] =
-            '技能:${skill.name}';
+        final name = toolDefName(t);
+        if (name == null) continue;
+        if (knownToolNames.contains(name)) {
+          duplicates.add(name);
+          continue;
+        }
+        if (!isKnownBuiltinTool(name)) {
+          (dudTools[skill.name] ??= <String>[]).add(name);
+          continue;
+        }
+        accepted.add(t);
+        knownToolNames.add(name);
+        sourceMapping[name] = '技能:${skill.name}';
       }
-      tools.addAll(skillTools);
+      if (duplicates.isNotEmpty) {
+        AppLogger.instance.log(
+          '[SKILL] 技能「${skill.name}」的 ${duplicates.length} 个工具与已加载工具同名，'
+          '已跳过: ${duplicates.join(", ")}',
+        );
+      }
+      final loadedNames = accepted
+          .map((t) => toolDefName(t))
+          .whereType<String>()
+          .join(", ");
+      print('[SKILL] ✓ 加载技能「${skill.name}」工具(${accepted.length}个): $loadedNames');
+      tools.addAll(accepted);
+    }
+    if (dudTools.isNotEmpty) {
+      // 只告警、不阻断：技能正文（SKILL.md）仍会注入，模型可改用
+      // toolshell_exec / toolshell_read 完成同样的工作。
+      final detail = dudTools.entries
+          .map((e) => '「${e.key}」: ${e.value.join(", ")}')
+          .join('；');
+      AppLogger.instance.log(
+        '[SKILL] ⚠ 以下技能工具没有执行者，已从工具列表剔除'
+        '（请在 SKILL.md 里改用 toolshell_exec 运行技能脚本）: $detail',
+      );
+      print('[SKILL] ⚠ 无执行者的技能工具已跳过: $detail');
     }
 
-    // MCP 工具
+    // MCP 工具（暴露名与路由表同源：可能被命名空间改写为 mcp__<server>__<tool>）
     final mcpConnections = _ref.read(mcpConnectionsProvider.notifier);
+    final mcpRoutes = mcpConnections.getConnectedToolRoutes();
     final mcpTools = mcpConnections.getAllConnectedTools();
-    final mcpState = _ref.read(mcpConnectionsProvider);
-    for (final entry in mcpState.toolsCache.entries) {
-      for (final t in entry.value) {
-        sourceMapping[(t['function'] as Map)['name'] as String] =
-            'MCP:${entry.key}';
-      }
+    for (final route in mcpRoutes) {
+      sourceMapping[route.exposedName] = 'MCP:${route.serverId}';
     }
     tools.addAll(mcpTools);
+    _lastMcpRoutes = mcpRoutes;
 
     _lastSourceMapping = sourceMapping;
     AppLogger.instance.log('[AgentContext] 已加载 ${tools.length} 个工具');
@@ -931,10 +1073,19 @@ class AgentContextBuilder {
     // 无论有无工作目录、有无领域专家，system prompt 最前面始终声明身份。
     // 这解决了 DeepSeek 等蒸馏模型在缺乏身份指令时自称"Claude"的问题——
     // 没有明确锚定时，模型会复述训练语料中频率最高的身份自称。
+    //
+    // 另外要显式压掉"把能力文档当身份"的倾向：下文会注入 ToolShell / Office /
+    // Schedule 等技能文档，模型容易顺着它们自称"ToolShell 里的 AI 编程助手"。
     parts.add(
-      '你是 RemindAI 智能助手，由用户通过 RemindAI 应用接入。'
-      '你不是 ChatGPT、Claude、Gemini 或其他 AI 助手——'
-      '无论你的底层模型是什么，在本次对话中你的身份是 RemindAI 助手。\n\n',
+      '# 身份（最高优先级，优先于下文所有技能/能力文档）\n'
+      '你是 **Remind AI** 智能助手，由 Remind AI 应用提供。\n'
+      '- 用户问「你是谁 / 你叫什么 / 你是什么模型」时，回答“我是 Remind AI 智能助手”；'
+      '需要时可补一句“底层模型由用户自己配置”。\n'
+      '- 不要自称 ChatGPT、Claude、Gemini、DeepSeek、ToolShell、'
+      '“AI 编程助手”、“工具外壳”或“某某里的助手”。\n'
+      '- 下文出现的 ToolShell / Office / Schedule / System 等都是**你可以调用的能力**，'
+      '不是你的身份；不要因为正在用这些工具就把自己描述成它们的助手。\n'
+      '- 品牌写法是 “Remind AI”（中间有空格），不要写成其它形式。\n\n',
     );
 
     // ─── 当前日期/时间注入 ───
@@ -969,7 +1120,8 @@ class AgentContextBuilder {
       final tsPrompt = await rootBundle.loadString(
         'assets/default_skills/toolshell/SKILL.md',
       );
-      parts.add(tsPrompt);
+      // 加一句框定：这是"能力说明"，避免模型把它当成自我身份来源。
+      parts.add('\n\n---\n# 能力说明: ToolShell（你的文件/命令执行能力，不是你的身份）\n$tsPrompt');
 
       final schPrompt = await rootBundle.loadString(
         'assets/default_skills/schedule/SKILL.md',
@@ -980,6 +1132,11 @@ class AgentContextBuilder {
         'assets/default_skills/system/SKILL.md',
       );
       parts.add('\n\n---\n# 元技能: System\n$sysPrompt');
+
+      final officePrompt = await rootBundle.loadString(
+        'assets/default_skills/office/SKILL.md',
+      );
+      parts.add('\n\n---\n# 元技能: Office\n$officePrompt');
     } else {
       parts.add(
         '当前处于全局模式（无工作目录），'
@@ -1087,7 +1244,7 @@ class AgentContextBuilder {
   ///
   /// 新增能力时只需在此方法中追加实例化即可，
   /// AgentContextBuilder.build() 无需修改。
-  List<AgentCapability> _collectCapabilities() {
+  Future<List<AgentCapability>> _collectCapabilities() async {
     final capabilities = <AgentCapability>[];
 
     // 搜索能力
@@ -1103,9 +1260,64 @@ class AgentContextBuilder {
       );
     }
 
+    // 画图子 Agent — 用户选中一张模型卡后注册 image_generate 工具。
+    // 选择为空 = 关闭；选中的卡被删除时仍保留能力，直接用主模型兜底。
+    final imageAgentId = _ref.read(sessionImageAgentModelIdProvider).trim();
+    if (imageAgentId.isNotEmpty) {
+      try {
+        final cachedCards = _ref.read(modelCardsProvider).valueOrNull;
+        final cards =
+            cachedCards ?? await _ref.read(modelCardsDaoProvider).getAll();
+        ImageModelSpec? subSpec;
+        for (final card in cards) {
+          if (card.id == imageAgentId) {
+            subSpec = ImageModelSpec(
+              id: card.id,
+              name: card.name,
+              baseUrl: card.baseUrl,
+              apiKey: card.apiKey,
+              provider: card.provider,
+              modelId: card.modelId,
+            );
+            break;
+          }
+        }
+        // 默认不拿主模型兜底画图：纯文本主模型（DeepSeek/Claude 等）
+        // 只能返回文本，强行调用只会产生“chat/completions 未返回图片”。
+        // 只有用户明确知道主模型支持图片输出时才开启这个开关。
+        final allowMainFallback = _ref.read(sessionImageFallbackToMainProvider);
+        final mainCard = allowMainFallback
+            ? _ref.read(activeModelCardProvider)
+            : null;
+        final mainSpec = mainCard == null
+            ? null
+            : ImageModelSpec(
+                id: mainCard.id,
+                name: mainCard.name,
+                baseUrl: mainCard.baseUrl,
+                apiKey: mainCard.apiKey,
+                provider: mainCard.provider,
+                modelId: mainCard.model,
+              );
+        if (subSpec != null || mainSpec != null) {
+          capabilities.add(
+            ImageAgentCapability(
+              subCard: subSpec,
+              mainCard: mainSpec,
+              workDir: _ref.read(workingDirectoryProvider),
+              registry: _ref.read(sessionImageRegistryProvider),
+              unavailableReason: subSpec == null ? '子画图模型已被删除或不可用' : null,
+            ),
+          );
+        }
+      } catch (e) {
+        // 画图能力装配失败不应阻断整个对话，记录后跳过。
+        AppLogger.instance.log('[AgentContext] 画图能力装配失败(已跳过): $e');
+      }
+    }
+
     // 未来新能力在此追加:
     // capabilities.add(SandboxCapability(...));
-    // capabilities.add(ImageGenCapability(...));
     // capabilities.add(RAGCapability(...));
 
     return capabilities;

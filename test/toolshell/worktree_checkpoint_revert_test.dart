@@ -24,7 +24,7 @@ void main() {
     await git(['config', 'user.email', 'test@example.com']);
     await git(['config', 'user.name', 'Test']);
     await File(
-      p.join(projectRoot, 'README.md'),
+      p.join(projectRoot, 'README_long.md'),
     ).writeAsString('# demo\n初始内容\n');
     await git(['add', '-A']);
     await git(['commit', '-m', 'init']);
@@ -191,7 +191,7 @@ void main() {
 
       await File(p.join(worktreePath, 'new_file.txt')).writeAsString('hello');
       await File(
-        p.join(worktreePath, 'README.md'),
+        p.join(worktreePath, 'README_long.md'),
       ).writeAsString('# changed\n');
       // 需要 add 才能让 diff 看到新文件(对比的是 base..worktree 工作目录)
       await git(['add', '-A'], cwd: worktreePath);
@@ -202,7 +202,7 @@ void main() {
       expect(result['mode'], 'stat');
       final diffText = result['diff'] as String;
       expect(diffText, contains('new_file.txt'));
-      expect(diffText, contains('README.md'));
+      expect(diffText, contains('README_long.md'));
 
       await manager.finish(worktreePath: worktreePath, action: 'discard');
     });
@@ -214,7 +214,7 @@ void main() {
 
       // 使用纯 ASCII 内容避免 Windows git diff 输出中文乱码导致断言失败
       await File(
-        p.join(worktreePath, 'README.md'),
+        p.join(worktreePath, 'README_long.md'),
       ).writeAsString('# brand-new content\ncompletely replaced\n');
       await git(['add', '-A'], cwd: worktreePath);
 
